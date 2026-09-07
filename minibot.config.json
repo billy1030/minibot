@@ -1,8 +1,8 @@
 {
   "llm": {
-    "baseUrl": "https://api.minimaxi.com/v1",
-    "apiKey": "sk-cp-tkzzMQP3ZOnVLdzdEdPoNNznMyVh-Y9guY-AfQW3qfQDve9sVyWXWj55IGIT3xXTd6C5svtGG6GT09a69TujB_umaVuNX2r4pgPkl8DBSVhclQuu3T305Cg",
-    "model": "MiniMax-M3",
+    "baseUrl": "http://127.0.0.1:8045/v1",
+    "apiKey": "sk-970c6a9e1184491f9be4eef33382a713",
+    "model": "gemini-3.8-flash-low",
     "temperature": 0.7,
     "maxTokens": 10240
   },
