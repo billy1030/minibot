@@ -39,6 +39,9 @@ import {
   Sliders,
   Mic,
   MicOff,
+  Copy,
+  ClipboardCheck,
+  ClipboardPaste,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
@@ -175,6 +178,7 @@ export function App() {
   const [showMermaidMenu, setShowMermaidMenu] = useState<boolean>(false);
   const mermaidMenuRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
   // 🎨 是否顯示 Mermaid 圖表頂部操作列按鈕群組 (預設 false 隱藏，遵循 SLS hide-mermaid-tools 設計)
   const [showMermaidTools, setShowMermaidTools] = useState<boolean>(() => {
@@ -2953,39 +2957,95 @@ export function App() {
                             </span>
                           )}
 
-                          <button
-                            onClick={() => {
-                              const title = m.content.slice(0, 40).replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, "-") || "Answer";
-                              const html = generateStandaloneExportHtml(m.content, title);
-                              downloadHtmlFile(html, `${title}.html`);
-                            }}
-                            title="Export this specific answer as standalone HTML"
-                            style={{
-                              marginLeft: "auto",
-                              background: "transparent",
-                              border: "1px solid var(--border-color)",
-                              borderRadius: 4,
-                              padding: "2px 8px",
-                              fontSize: 10,
-                              fontWeight: 600,
-                              color: "var(--text-muted)",
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 4,
-                              transition: "all 0.15s ease",
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = "var(--accent)";
-                              e.currentTarget.style.color = "var(--accent)";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = "var(--border-color)";
-                              e.currentTarget.style.color = "var(--text-muted)";
-                            }}
-                          >
-                            <Download size={11} /> Export HTML
-                          </button>
+                          <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                // Extract clean text content (stripping thought tag for clean output)
+                                const cleanText = m.content.replace(/<think>[\s\S]*?<\/think>/i, "").trim() || m.content;
+                                try {
+                                  await navigator.clipboard.writeText(cleanText);
+                                  setCopiedMessageId(m.id);
+                                  setTimeout(() => setCopiedMessageId(null), 2000);
+                                } catch (err) {
+                                  console.error("Failed to copy output:", err);
+                                }
+                              }}
+                              title="Copy full response text"
+                              style={{
+                                background: "transparent",
+                                border: "1px solid var(--border-color)",
+                                borderRadius: 4,
+                                padding: "2px 8px",
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: copiedMessageId === m.id ? "#10b981" : "var(--text-muted)",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (copiedMessageId !== m.id) {
+                                  e.currentTarget.style.borderColor = "var(--accent)";
+                                  e.currentTarget.style.color = "var(--accent)";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (copiedMessageId !== m.id) {
+                                  e.currentTarget.style.borderColor = "var(--border-color)";
+                                  e.currentTarget.style.color = "var(--text-muted)";
+                                }
+                              }}
+                            >
+                              {copiedMessageId === m.id ? (
+                                <>
+                                  <ClipboardCheck size={11} color="#10b981" />
+                                  <span style={{ color: "#10b981" }}>Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy size={11} />
+                                  <span>Copy Output</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const title = m.content.slice(0, 40).replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, "-") || "Answer";
+                                const html = generateStandaloneExportHtml(m.content, title);
+                                downloadHtmlFile(html, `${title}.html`);
+                              }}
+                              title="Export this specific answer as standalone HTML"
+                              style={{
+                                background: "transparent",
+                                border: "1px solid var(--border-color)",
+                                borderRadius: 4,
+                                padding: "2px 8px",
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: "var(--text-muted)",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = "var(--accent)";
+                                e.currentTarget.style.color = "var(--accent)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = "var(--border-color)";
+                                e.currentTarget.style.color = "var(--text-muted)";
+                              }}
+                            >
+                              <Download size={11} /> Export HTML
+                            </button>
+                          </div>
                         </div>
                       </>
                     );
@@ -3348,7 +3408,7 @@ export function App() {
                 background: isListening ? "rgba(239, 68, 68, 0.05)" : "var(--bg-card)",
                 border: isListening ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
                 borderRadius: 8,
-                padding: "12px 16px",
+                padding: "12px 42px 12px 16px",
                 color: "var(--text-main)",
                 fontSize: 14,
                 outline: "none",
@@ -3356,6 +3416,50 @@ export function App() {
                 boxSizing: "border-box",
               }}
             />
+            {/* Quick Paste from Clipboard Action */}
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const clipText = await navigator.clipboard.readText();
+                  if (clipText) {
+                    setInputPrompt((prev) => (prev ? prev + "\n" + clipText : clipText));
+                    setTimeout(() => chatInputRef.current?.focus(), 50);
+                  }
+                } catch (err) {
+                  console.warn("Clipboard paste failed or denied:", err);
+                  // Focus input to let user press Ctrl+V
+                  chatInputRef.current?.focus();
+                }
+              }}
+              title="Paste from clipboard into input"
+              style={{
+                position: "absolute",
+                right: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "4px",
+                borderRadius: 6,
+                color: "var(--text-muted)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "var(--accent)";
+                e.currentTarget.style.background = "var(--bg-secondary)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "var(--text-muted)";
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <ClipboardPaste size={16} />
+            </button>
             {sttStatusText && (
               <div
                 style={{

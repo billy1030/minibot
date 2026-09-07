@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Brain, ChevronDown, ChevronRight } from "lucide-react";
+import { Brain, ChevronDown, ChevronRight, Copy, Check } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
 interface ThoughtBlockProps {
@@ -14,6 +14,7 @@ export const ThoughtBlock: React.FC<ThoughtBlockProps> = ({
   defaultExpanded = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState<boolean>(defaultExpanded);
+  const [copied, setCopied] = useState<boolean>(false);
 
   if (!thoughtText || viewMode === "hide") {
     return null;
@@ -89,7 +90,47 @@ export const ThoughtBlock: React.FC<ThoughtBlockProps> = ({
         </div>
 
         {viewMode === "full" && (
-          <div style={{ display: "flex", alignItems: "center", color: "var(--text-muted)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text-muted)" }}>
+            <button
+              type="button"
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await navigator.clipboard.writeText(thoughtText);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                } catch (err) {
+                  console.error("Failed to copy thought text:", err);
+                }
+              }}
+              title="Copy thinking process"
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "2px 6px",
+                borderRadius: 4,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 11,
+                fontWeight: 600,
+                color: copied ? "#10b981" : "var(--text-muted)",
+                transition: "color 0.15s ease",
+              }}
+            >
+              {copied ? (
+                <>
+                  <Check size={12} color="#10b981" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy size={12} />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </div>
         )}
