@@ -105,6 +105,10 @@ export const ThoughtBlock: React.FC<ThoughtBlockProps> = ({
             color: "var(--text-main)",
             maxHeight: 280,
             overflowY: "auto",
+            overflowX: "hidden",
+            wordBreak: "break-word",
+            overflowWrap: "anywhere",
+            minWidth: 0,
             backgroundColor: "rgba(168, 85, 247, 0.02)",
             borderTop: "none",
           }}

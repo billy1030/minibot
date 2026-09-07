@@ -3,7 +3,6 @@ import {
   Send,
   Cpu,
   Globe,
-  Settings,
   Activity,
   ChevronDown,
   ChevronRight,
@@ -37,6 +36,7 @@ import {
   GripVertical,
   GitBranch,
   Palette,
+  Sliders,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
@@ -747,6 +747,7 @@ export function App() {
         style={{
           width: 370,
           minWidth: 350,
+          flexShrink: 0,
           background: "var(--bg-secondary)",
           borderRight: "1px solid var(--border-color)",
           display: "flex",
@@ -1070,7 +1071,7 @@ export function App() {
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
-            flex: showPastSessions ? 1 : "0 0 auto",
+            flex: 1,
             minHeight: showPastSessions ? 140 : "auto",
             transition: "flex 0.2s ease, min-height 0.2s ease",
           }}
@@ -1602,7 +1603,8 @@ export function App() {
             background: "var(--bg-card)",
             borderRadius: 8,
             border: "1px solid var(--border-color)",
-            marginBottom: 12,
+            marginBottom: 0,
+            marginTop: "auto",
             overflow: "hidden",
             transition: "flex 0.2s ease",
             display: "flex",
@@ -1763,29 +1765,10 @@ export function App() {
             </div>
           )}
         </div>
-
-        <button
-          onClick={() => setShowConfig(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "10px 14px",
-            borderRadius: 6,
-            background: "var(--bg-card)",
-            color: "var(--text-main)",
-            border: "1px solid var(--border-color)",
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 500,
-          }}
-        >
-          <Settings size={16} /> Configure LLM & AI Skills
-        </button>
       </div>
 
       {/* Main Chat & Loop Trace Area */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", minWidth: 0, overflow: "hidden", position: "relative" }}>
         {/* Header */}
         <header
           style={{
@@ -2117,6 +2100,38 @@ export function App() {
               <Download size={15} />
             </button>
 
+            {/* ⚙️ Parameters & AI Configuration Icon Button */}
+            <button
+              onClick={() => setShowConfig(true)}
+              title="Parameters & AI Configuration (Max Loop Iterations, Temperature, Max Tokens, Model, MCP)"
+              style={{
+                width: 32,
+                height: 32,
+                padding: 0,
+                borderRadius: 8,
+                background: showConfig ? "rgba(2, 132, 199, 0.15)" : "var(--bg-card)",
+                border: showConfig ? "1px solid var(--accent, #0284c7)" : "1px solid var(--border-color)",
+                color: showConfig ? "var(--accent, #0284c7)" : "var(--text-muted)",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--accent)";
+                e.currentTarget.style.color = "var(--accent)";
+              }}
+              onMouseLeave={(e) => {
+                if (!showConfig) {
+                  e.currentTarget.style.borderColor = "var(--border-color)";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }
+              }}
+            >
+              <Sliders size={15} />
+            </button>
+
             {/* Separator */}
             <div style={{ width: 1, height: 20, background: "var(--border-color)" }} />
 
@@ -2405,69 +2420,100 @@ export function App() {
         </header>
 
         {/* Message Thread */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "24px 30px", display: "flex", flexDirection: "column", gap: 20 }}>
-          {messages.map((m, mIdx) => {
-            const isUser = m.role === "user";
-            // Calculate a display turn index if not present
-            const turnNumber = m.turnIndex || Math.floor(mIdx / 2) + 1;
-            const timeString = m.timestamp
-              ? new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-              : "";
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            overflowX: "hidden",
+            padding: "24px 20px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          {/* Constrained 80% Content Column: Takes 80% of (Screen Width - Left Menu Bar) */}
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "calc((100vw - 370px) * 0.8)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 20,
+              minWidth: 0,
+              boxSizing: "border-box",
+            }}
+          >
+            {messages.map((m, mIdx) => {
+              const isUser = m.role === "user";
+              // Calculate a display turn index if not present
+              const turnNumber = m.turnIndex || Math.floor(mIdx / 2) + 1;
+              const timeString = m.timestamp
+                ? new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                : "";
 
-            return (
-              <div
-                key={m.id}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: isUser ? "flex-end" : "flex-start",
-                }}
-              >
-                {/* Header Tag: Turn Number & Time */}
-                {m.id !== "welcome" && (
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 11,
-                      color: "var(--text-muted)",
-                      marginBottom: 5,
-                      padding: "0 4px",
-                    }}
-                  >
-                    <span
+              return (
+                <div
+                  key={m.id}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: isUser ? "flex-end" : "flex-start",
+                    width: "100%",
+                    minWidth: 0,
+                  }}
+                >
+                  {/* Header Tag: Turn Number & Time */}
+                  {m.id !== "welcome" && (
+                    <div
                       style={{
-                        padding: "1px 7px",
-                        borderRadius: 10,
-                        background: isUser ? "rgba(31, 111, 235, 0.15)" : "rgba(16, 185, 129, 0.15)",
-                        color: isUser ? "var(--accent)" : "#10b981",
-                        fontWeight: 700,
-                        fontSize: 10,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        fontSize: 11,
+                        color: "var(--text-muted)",
+                        marginBottom: 5,
+                        padding: "0 4px",
                       }}
                     >
-                      #{turnNumber} {isUser ? "User" : "Response"}
-                    </span>
-                    {timeString && <span>• {timeString}</span>}
-                  </div>
-                )}
+                      <span
+                        style={{
+                          padding: "1px 7px",
+                          borderRadius: 10,
+                          background: isUser ? "rgba(31, 111, 235, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                          color: isUser ? "var(--accent)" : "#10b981",
+                          fontWeight: 700,
+                          fontSize: 10,
+                        }}
+                      >
+                        #{turnNumber} {isUser ? "User" : "Response"}
+                      </span>
+                      {timeString && <span>• {timeString}</span>}
+                    </div>
+                  )}
 
-                {isUser ? (
-                  <div
-                    style={{
-                      background: "#1f6feb",
-                      color: "#fff",
-                      padding: "12px 18px",
-                      borderRadius: "16px 16px 2px 16px",
-                      maxWidth: "75%",
-                      fontSize: 14,
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    <MarkdownRenderer content={m.content} />
-                  </div>
-                ) : (
-                  <div style={{ maxWidth: "96%", width: "100%" }}>                  {/* Tool Invocations Section governed by mcpViewMode */}
+                  {isUser ? (
+                    <div
+                      style={{
+                        background: "linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%)",
+                        color: "#0369a1",
+                        border: "1px solid #bae6fd",
+                        boxShadow: "0 2px 6px rgba(186, 230, 253, 0.35)",
+                        padding: "12px 18px",
+                        borderRadius: "16px 16px 2px 16px",
+                        maxWidth: "85%",
+                        fontSize: 14,
+                        lineHeight: 1.5,
+                        wordBreak: "break-word",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      <MarkdownRenderer content={m.content} />
+                    </div>
+                  ) : (
+                    <div style={{ maxWidth: "100%", width: "100%", minWidth: 0 }}>
+                      {/* Tool Invocations Section governed by mcpViewMode */}
                   {m.toolCalls && m.toolCalls.length > 0 && mcpViewMode !== "hide" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
                       {/* If Minimize mode: show a compact summary bar */}
@@ -2618,6 +2664,11 @@ export function App() {
                       padding: "16px 20px",
                       color: "var(--text-main)",
                       boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                      minWidth: 0,
+                      maxWidth: "100%",
+                      wordBreak: "break-word",
+                      overflowWrap: "anywhere",
+                      overflow: "hidden",
                     }}
                   >
                     {m.content ? (() => {
@@ -2734,20 +2785,33 @@ export function App() {
             </div>
           );
         })}
-        <div ref={chatEndRef} />
-      </div>
+            <div ref={chatEndRef} />
+          </div>
+        </div>
 
         {/* Input Bar */}
         <div
           style={{
-            padding: "16px 30px",
+            padding: "16px 20px",
             borderTop: "1px solid var(--border-color)",
             background: "var(--bg-secondary)",
             display: "flex",
-            gap: 12,
-            alignItems: "center",
+            justifyContent: "center",
+            width: "100%",
+            boxSizing: "border-box",
           }}
         >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "calc((100vw - 370px) * 0.8)",
+              display: "flex",
+              gap: 12,
+              alignItems: "center",
+              minWidth: 0,
+              boxSizing: "border-box",
+            }}
+          >
           <button
             type="button"
             onClick={() => setShowDocModal(true)}
@@ -3059,10 +3123,12 @@ export function App() {
               fontWeight: 600,
               boxShadow: loading ? "none" : "0 2px 4px rgba(31, 111, 235, 0.25)",
               transition: "background 0.2s, box-shadow 0.2s",
+              flexShrink: 0,
             }}
           >
             <Send size={16} /> Send
           </button>
+          </div>
         </div>
       </div>
 
@@ -3219,6 +3285,104 @@ export function App() {
                     >
                       {showApiKey ? <EyeOff size={16} color="var(--accent)" /> : <Eye size={16} />}
                     </button>
+                  </div>
+                </div>
+
+                {/* Loop Execution & Model Parameters (Guardrail & Limits) */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, background: "var(--bg-primary)", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                  <div>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                      <Activity size={12} /> Max Loop Steps
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={config.maxLoopIterations ?? 10}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          maxLoopIterations: Math.max(1, parseInt(e.target.value, 10) || 10),
+                        })
+                      }
+                      style={{
+                        width: "100%",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border-color)",
+                        padding: "6px 8px",
+                        borderRadius: 6,
+                        color: "var(--text-main)",
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}
+                    />
+                    <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
+                      Guardrail limit (default: 10). Increase to 20-30 for multi-step MCP tasks.
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                      <Sparkles size={12} color="#a855f7" /> Temperature
+                    </label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min={0}
+                      max={2}
+                      value={config.llm.temperature ?? 0.7}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          llm: { ...config.llm, temperature: parseFloat(e.target.value) || 0 },
+                        })
+                      }
+                      style={{
+                        width: "100%",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border-color)",
+                        padding: "6px 8px",
+                        borderRadius: 6,
+                        color: "var(--text-main)",
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}
+                    />
+                    <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
+                      Randomness (0 = precise, 1 = creative).
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                      <Cpu size={12} color="#10b981" /> Max Tokens
+                    </label>
+                    <input
+                      type="number"
+                      step="512"
+                      min={512}
+                      max={65536}
+                      value={config.llm.maxTokens ?? 4096}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          llm: { ...config.llm, maxTokens: parseInt(e.target.value, 10) || 4096 },
+                        })
+                      }
+                      style={{
+                        width: "100%",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border-color)",
+                        padding: "6px 8px",
+                        borderRadius: 6,
+                        color: "var(--text-main)",
+                        fontSize: 13,
+                        fontWeight: 600,
+                      }}
+                    />
+                    <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
+                      Max completion tokens per call.
+                    </div>
                   </div>
                 </div>
 
