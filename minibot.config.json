@@ -1,10 +1,10 @@
 {
   "llm": {
     "baseUrl": "http://127.0.0.1:8045/v1",
-    "apiKey": "sk-22aa6ad3edcc4e8aba9b3f03bdda8e1c",
+    "apiKey": "sk-970c6a9e1184491f9be4eef33382a713",
     "model": "gemini-3.8-flash-low",
     "temperature": 0.7,
-    "maxTokens": 4096
+    "maxTokens": 10240
   },
   "prompts": {
     "systemPrompt": "You are an expert Mini Chat Bot Assistant. You have access to external tools via the Model Context Protocol (MCP), including real-time web search, multimodal services, and BigFix enterprise endpoint management. When the user asks a question that requires real-time facts, BigFix queries (computers, fixlets, actions, baselines), or external data, inspect available tools, call them, analyze the result, and iteratively determine if additional steps are required before delivering your final answer.",
@@ -45,5 +45,5 @@
       "description": "Enterprise BigFix Platform Endpoint Management MCP Server (Computers, Fixlets, Actions, Relevance Query)"
     }
   },
-  "maxLoopIterations": 10
+  "maxLoopIterations": 40
 }
