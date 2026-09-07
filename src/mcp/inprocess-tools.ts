@@ -79,6 +79,38 @@ async function performSearch(query: string, maxResults = 5): Promise<string> {
   }
 }
 
+function isPrivateOrReservedHost(hostname: string): boolean {
+  const cleanHost = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  
+  // Localhost and loopback
+  if (cleanHost === "localhost" || cleanHost === "127.0.0.1" || cleanHost === "::1" || cleanHost === "0.0.0.0") {
+    return true;
+  }
+  // Cloud metadata endpoint (AWS/GCP/Azure)
+  if (cleanHost === "169.254.169.254") {
+    return true;
+  }
+  // IPv4 Private subnets
+  const ipMatch = cleanHost.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (ipMatch) {
+    const b0 = parseInt(ipMatch[1], 10);
+    const b1 = parseInt(ipMatch[2], 10);
+    // 10.0.0.0/8
+    if (b0 === 10) return true;
+    // 172.16.0.0/12
+    if (b0 === 172 && b1 >= 16 && b1 <= 31) return true;
+    // 192.168.0.0/16
+    if (b0 === 192 && b1 === 168) return true;
+    // 127.0.0.0/8
+    if (b0 === 127) return true;
+    // 169.254.0.0/16 (Link Local)
+    if (b0 === 169 && b1 === 254) return true;
+    // 0.0.0.0/8
+    if (b0 === 0) return true;
+  }
+  return false;
+}
+
 async function fetchPage(targetUrl: string): Promise<string> {
   let finalUrl = targetUrl;
   if (targetUrl.includes("github.com") && targetUrl.includes("/blob/")) {
@@ -88,12 +120,24 @@ async function fetchPage(targetUrl: string): Promise<string> {
   }
 
   try {
+    const parsed = new URL(finalUrl);
+    // Only allow http and https protocols
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return `Failed to fetch URL: Protocol "${parsed.protocol}" is not supported or prohibited for security.`;
+    }
+
+    // SSRF Guard: block access to private, loopback, and metadata IPs
+    if (isPrivateOrReservedHost(parsed.hostname)) {
+      return `Access to local, private, or metadata network addresses (${parsed.hostname}) is restricted for security.`;
+    }
+
     const res = await fetch(finalUrl, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "text/html,text/plain,application/xhtml+xml;q=0.9,*/*;q=0.8",
       },
+      signal: AbortSignal.timeout(10000), // 🛡️ Prevent lingering sockets or timeout exhaustion
     });
     if (!res.ok) {
       return `Failed to fetch URL ${targetUrl}: HTTP ${res.status}`;

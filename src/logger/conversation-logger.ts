@@ -460,17 +460,28 @@ export function listConversationLogs(workspace: string = "default", baseDir: str
     }
   }
 
-  // Precompute fork levels for efficient tree presentation
+  // Precompute fork levels for efficient tree presentation (iterative with safety cap)
   const filenameToSummary = new Map<string, ConversationSummary>();
   results.forEach((r) => filenameToSummary.set(r.filename, r));
 
-  const computeDepth = (summary: ConversationSummary, visited = new Set<string>()): number => {
-    if (visited.has(summary.filename)) return 0;
-    visited.add(summary.filename);
-    if (!summary.clonedFrom?.parentFilename) return 0;
-    const parent = filenameToSummary.get(summary.clonedFrom.parentFilename);
-    if (!parent) return 1;
-    return 1 + computeDepth(parent, visited);
+  const computeDepth = (startSummary: ConversationSummary): number => {
+    let depth = 0;
+    let current: ConversationSummary | undefined = startSummary;
+    const visited = new Set<string>();
+
+    while (current && current.clonedFrom?.parentFilename && depth < 50) {
+      if (visited.has(current.filename)) break;
+      visited.add(current.filename);
+
+      const parent = filenameToSummary.get(current.clonedFrom.parentFilename);
+      if (!parent) {
+        depth += 1;
+        break;
+      }
+      depth += 1;
+      current = parent;
+    }
+    return depth;
   };
 
   results.forEach((r) => {

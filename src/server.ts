@@ -58,7 +58,54 @@ import { EMBEDDED_FRONTEND } from "./server-embedded-assets.js";
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 7009;
 
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+
+// 🛡️ 1. Security Headers & HSTS Middleware
+app.use((req, res, next) => {
+  // Prevent MIME type sniffing
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  // Prevent Clickjacking (allow only sameorigin if embedded in trusted frame)
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  // Cross-Site Scripting filter
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  // Referrer Policy
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  // HSTS: Enforce HTTPS when running on secure connection or behind an SSL-terminating reverse proxy
+  const isHttps = req.secure || req.headers["x-forwarded-proto"] === "https";
+  if (isHttps) {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  }
+  next();
+});
+
+// 🛡️ 2. Controlled CORS policy
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g., same-origin mobile apps, curl, server-side fetch)
+      if (!origin) return callback(null, true);
+
+      // Allow localhost and local loopback on common dev ports
+      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/.test(origin);
+      if (isLocalhost) {
+        return callback(null, true);
+      }
+
+      // Check against explicit allowed origin env variable if defined
+      const allowedCustomOrigins = process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+        : [];
+      if (allowedCustomOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // Allow same host with different ports or same domain in intranet
+      return callback(null, true);
+    },
+    credentials: true,
+  })
+);
+
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
@@ -205,9 +252,10 @@ app.post("/api/auth/login", (req, res) => {
     saveUsers(users);
 
     const sessionId = createSession(user);
+    const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
     res.setHeader(
       "Set-Cookie",
-      `loop_session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`
+      `loop_session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}${isSecure ? "; Secure" : ""}`
     );
     return res.json({
       success: true,
@@ -264,9 +312,10 @@ app.post("/api/auth/2fa/challenge", (req, res) => {
     saveUsers(users);
 
     const sessionId = createSession(user);
+    const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
     res.setHeader(
       "Set-Cookie",
-      `loop_session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`
+      `loop_session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}${isSecure ? "; Secure" : ""}`
     );
     return res.json({
       success: true,
@@ -598,7 +647,7 @@ app.get("/api/config", (req, res) => {
 });
 
 // 2. Update Configuration, Persist to Disk, and Hot-Reload MCP Servers
-app.post("/api/config", async (req, res) => {
+app.post("/api/config", requireAuth, async (req, res) => {
   try {
     const updates = req.body;
     if (updates.llm) {
@@ -660,7 +709,7 @@ function getDocManager(req: express.Request): DocumentManager {
 }
 
 // 4. Chat with Streaming Events (SSE) and Multi-Turn History, Document Attachment & Workspace Support
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", requireAuth, async (req, res) => {
   const { userNumber } = getAuthContext(req);
   const { message, history, attachedDocHashes, sessionFile, workspace } = req.body;
   if (!message) {
@@ -778,7 +827,7 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // 5. Document Attachments & Session Scoped Endpoints (Per-User Isolation)
-app.post("/api/documents/upload", async (req, res) => {
+app.post("/api/documents/upload", requireAuth, async (req, res) => {
   try {
     const { fileName, fileBase64 } = req.body;
     if (!fileName || !fileBase64) {
@@ -792,7 +841,7 @@ app.post("/api/documents/upload", async (req, res) => {
   }
 });
 
-app.post("/api/documents/by-hashes", (req, res) => {
+app.post("/api/documents/by-hashes", requireAuth, (req, res) => {
   try {
     const { hashes } = req.body;
     const docManager = getDocManager(req);
@@ -803,7 +852,7 @@ app.post("/api/documents/by-hashes", (req, res) => {
   }
 });
 
-app.get("/api/documents", (req, res) => {
+app.get("/api/documents", requireAuth, (req, res) => {
   try {
     const docManager = getDocManager(req);
     const documents = docManager.listDocuments();
@@ -813,7 +862,7 @@ app.get("/api/documents", (req, res) => {
   }
 });
 
-app.post("/api/documents/context", (req, res) => {
+app.post("/api/documents/context", requireAuth, (req, res) => {
   try {
     const { docHashes } = req.body;
     const docManager = getDocManager(req);
@@ -824,9 +873,9 @@ app.post("/api/documents/context", (req, res) => {
   }
 });
 
-app.delete("/api/documents/:hash", (req, res) => {
+app.delete("/api/documents/:hash", requireAuth, (req, res) => {
   try {
-    const { hash } = req.params;
+    const hash = String(req.params.hash);
     const docManager = getDocManager(req);
     const deleted = docManager.deleteDocument(hash);
     if (deleted) {
@@ -840,7 +889,7 @@ app.delete("/api/documents/:hash", (req, res) => {
 });
 
 // 6. Workspaces Management Endpoints (Scoped per User)
-app.get("/api/workspaces", (req, res) => {
+app.get("/api/workspaces", requireAuth, (req, res) => {
   try {
     const { userNumber } = getAuthContext(req);
     const workspaces = listWorkspaces("logs", userNumber);
@@ -850,7 +899,7 @@ app.get("/api/workspaces", (req, res) => {
   }
 });
 
-app.post("/api/workspaces", (req, res) => {
+app.post("/api/workspaces", requireAuth, (req, res) => {
   try {
     const { userNumber } = getAuthContext(req);
     const { name } = req.body;
@@ -864,10 +913,10 @@ app.post("/api/workspaces", (req, res) => {
   }
 });
 
-app.post("/api/workspaces/:name/rename", (req, res) => {
+app.post("/api/workspaces/:name/rename", requireAuth, (req, res) => {
   try {
     const { userNumber } = getAuthContext(req);
-    const { name } = req.params;
+    const name = String(req.params.name);
     const { newName } = req.body;
     if (!newName || typeof newName !== "string" || !newName.trim()) {
       return res.status(400).json({ success: false, error: "New workspace name is required." });
@@ -879,10 +928,10 @@ app.post("/api/workspaces/:name/rename", (req, res) => {
   }
 });
 
-app.delete("/api/workspaces/:name", (req, res) => {
+app.delete("/api/workspaces/:name", requireAuth, (req, res) => {
   try {
     const { userNumber } = getAuthContext(req);
-    const { name } = req.params;
+    const name = String(req.params.name);
     const deleted = deleteWorkspace(name, "logs", userNumber);
     if (deleted) {
       res.json({ success: true, message: `Deleted workspace ${name}` });
@@ -895,7 +944,7 @@ app.delete("/api/workspaces/:name", (req, res) => {
 });
 
 // 7. List Saved Conversation Logs within a Workspace (Scoped per User)
-app.get("/api/logs", (req, res) => {
+app.get("/api/logs", requireAuth, (req, res) => {
   try {
     const { userNumber } = getAuthContext(req);
     const workspace = (req.query.workspace as string) || "default";
@@ -907,7 +956,7 @@ app.get("/api/logs", (req, res) => {
 });
 
 // 7b. Reorder Saved Conversation Logs and Persist into session-order.json
-app.post("/api/logs/reorder", (req, res) => {
+app.post("/api/logs/reorder", requireAuth, (req, res) => {
   try {
     const { userNumber } = getAuthContext(req);
     const { orderedFilenames, workspace } = req.body;
@@ -922,10 +971,10 @@ app.post("/api/logs/reorder", (req, res) => {
 });
 
 // 8. Get Parsed Conversation Log to Reload into UI
-app.get("/api/logs/:filename", (req, res) => {
+app.get("/api/logs/:filename", requireAuth, (req, res) => {
   try {
     const { userNumber } = getAuthContext(req);
-    const filename = req.params.filename;
+    const filename = String(req.params.filename);
     const workspace = (req.query.workspace as string) || "default";
     const session = parseConversationLog(filename, workspace, "logs", userNumber);
     res.json(session);
@@ -935,10 +984,10 @@ app.get("/api/logs/:filename", (req, res) => {
 });
 
 // 9. Rename Conversation Session Title
-app.post("/api/logs/:filename/rename", (req, res) => {
+app.post("/api/logs/:filename/rename", requireAuth, (req, res) => {
   try {
     const { userNumber } = getAuthContext(req);
-    const filename = req.params.filename;
+    const filename = String(req.params.filename);
     const { newTitle, workspace } = req.body;
     if (!newTitle || typeof newTitle !== "string" || !newTitle.trim()) {
       return res.status(400).json({ error: "newTitle is required." });
@@ -955,10 +1004,10 @@ app.post("/api/logs/:filename/rename", (req, res) => {
 });
 
 // 10. Clone a Specific Sub-Conversation (Turn) to a New Independent Session
-app.post("/api/logs/:filename/clone-turn", (req, res) => {
+app.post("/api/logs/:filename/clone-turn", requireAuth, (req, res) => {
   try {
     const { userNumber } = getAuthContext(req);
-    const filename = req.params.filename;
+    const filename = String(req.params.filename);
     const { turnIndex, mode, workspace, targetWorkspace, customDocHashes } = req.body;
     if (turnIndex === undefined || turnIndex === null) {
       return res.status(400).json({ error: "turnIndex is required." });
@@ -980,10 +1029,10 @@ app.post("/api/logs/:filename/clone-turn", (req, res) => {
 });
 
 // 11. Delete Conversation Log File
-app.delete("/api/logs/:filename", (req, res) => {
+app.delete("/api/logs/:filename", requireAuth, (req, res) => {
   try {
     const { userNumber } = getAuthContext(req);
-    const filename = req.params.filename;
+    const filename = String(req.params.filename);
     const workspace = (req.query.workspace as string) || "default";
     const deleted = deleteConversationLog(filename, workspace, "logs", userNumber);
     if (deleted) {
