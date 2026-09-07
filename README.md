@@ -41,6 +41,10 @@ When a standard LLM lacks real-time facts or external abilities, it enters an au
   - Web page scraper (`fetch_page`) with **GitHub blob-to-raw URL rewriting** to bypass HTTP 429 rate limits.
 - **MiniMax Multimodal MCP Server**:
   - Seamless bridge to `mmx-cli` for image generation, speech synthesis, and search.
+- **100% Server-Side LLM Proxying & Zero-CORS Architecture**:
+  - All model interactions, reasoning loops, and API calls are handled strictly server-side, completely shielding upstream keys and eliminating browser-side CORS failures.
+  - Dedicated backend completions proxy (`POST /api/llm/completions`) and health test endpoint (`GET /api/llm/test`).
+  - Hardened dynamic CORS preflight caching (`OPTIONS *` returning HTTP 204) and cross-origin credential verification (`credentials: "include"`).
 - **Safety Guardrails**:
   - Configurable iteration limits (`maxLoopIterations`), socket timeouts, stream guards (`!res.writableEnded`), and token estimation metrics.
 
@@ -144,6 +148,7 @@ Comprehensive architecture specifications, engineering post-mortems, and protoco
 | **[15. Cross-Platform Session Deletion & Performance](./tech-docs/15-cross-platform-session-deletion-and-performance.md)** | WebKit vs. Chromium DOM teardown, Happy Eyeballs fallback, dual-stack IPv4/IPv6, parallel sync. |
 | **[16. Security Hardening, SSRF Defense & HSTS](./tech-docs/16-security-hardening-and-ssrf-defense.md)** | HTTP security headers, HSTS, dynamic CORS origin verification, SSRF defense, and route auth. |
 | **[17. Voice Recognition & Copy-Paste Ergonomics](./tech-docs/17-voice-recognition-and-copy-paste-ergonomics.md)** | Web Speech API STT (Cantonese/Mandarin/English), floating status pill, copy output/code/thought buttons. |
+| **[18. Server-Side LLM Proxy & CORS Architecture](./tech-docs/18-server-side-llm-proxy-and-cors-architecture.md)** | 100% server-side LLM proxying, preflight OPTIONS caching, dynamic origin reflection, cross-origin credentials. |
 
 ---
 

@@ -23,6 +23,7 @@ Welcome to the **MiniBot** technical documentation. This directory provides in-d
 | [15. Cross-Platform Session Deletion & Performance Optimization Architecture](./15-cross-platform-session-deletion-and-performance.md) | Technical autopsy of macOS Chrome/WebKit vs. Windows Chromium DOM/SVG teardown, IPv6 Happy Eyeballs fallback delay, APFS file lock patterns, real-time deletion spinner, dual-stack `::` listening, and silent parallel sync. |
 | [16. Security Hardening, SSRF Defense, HSTS & API Authorization Architecture](./16-security-hardening-and-ssrf-defense.md) | Comprehensive security posture: HTTP security headers, conditional HSTS, dynamic CORS origin verification, Secure session cookies, SSRF host filters, and route-level `requireAuth` guards. |
 | [17. Voice Recognition (STT), Copy-Paste Ergonomics & Interactive UI Enhancement](./17-voice-recognition-and-copy-paste-ergonomics.md) | Web Speech API STT integration (Cantonese, Mandarin, English), floating transcript pill, pulsing mic animation, output copy buttons, code-block copy icons, and prompt paste button. |
+| [18. Server-Side LLM Proxy & Cross-Origin (CORS) Security Architecture](./18-server-side-llm-proxy-and-cors-architecture.md) | Rationale and implementation for moving 100% of LLM operations server-side, preflight OPTIONS caching, dynamic CORS origin handling, and cross-origin fetch credentials. |
 
 ---
 
