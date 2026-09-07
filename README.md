@@ -141,6 +141,9 @@ Comprehensive architecture specifications, engineering post-mortems, and protoco
 | **[12. Workspace & Sub-Conversation Tree Architecture](./tech-docs/12-workspace-and-conversation-tree-architecture.md)** | Zero-database disk hierarchy, folder-based workspaces, recursive multi-tier fork tree. |
 | **[13. Multi-User System, Folder Isolation & 2FA](./tech-docs/13-multi-user-system-and-2fa-architecture.md)** | Enterprise multi-tenant isolation, Scrypt hashing, RFC 6238 TOTP 2FA, emergency recovery codes. |
 | **[14. Outlook Interface Design Architecture](./tech-docs/14-outlook-interface-design-architecture.md)** | Native Segoe UI design tokens, layout hierarchy, and inline editing data grids. |
+| **[15. Cross-Platform Session Deletion & Performance](./tech-docs/15-cross-platform-session-deletion-and-performance.md)** | WebKit vs. Chromium DOM teardown, Happy Eyeballs fallback, dual-stack IPv4/IPv6, parallel sync. |
+| **[16. Security Hardening, SSRF Defense & HSTS](./tech-docs/16-security-hardening-and-ssrf-defense.md)** | HTTP security headers, HSTS, dynamic CORS origin verification, SSRF defense, and route auth. |
+| **[17. Voice Recognition & Copy-Paste Ergonomics](./tech-docs/17-voice-recognition-and-copy-paste-ergonomics.md)** | Web Speech API STT (Cantonese/Mandarin/English), floating status pill, copy output/code/thought buttons. |
 
 ---
 

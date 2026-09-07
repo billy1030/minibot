@@ -21,6 +21,8 @@ Welcome to the **MiniBot** technical documentation. This directory provides in-d
 | [13. Multi-User System, Folder Isolation & 2FA Architecture](./13-multi-user-system-and-2fa-architecture.md) | Enterprise multi-tenant isolation, Scrypt hashing, RFC 6238 TOTP 2FA, emergency recovery codes, and rate-limiting lockout. |
 | [14. Outlook-Style Interface & Visual Design Architecture](./14-outlook-interface-design-architecture.md) | Visual design tokens, layout hierarchy, native Segoe UI typography, SLS-style user dropdown popover, and inline editing data grids. |
 | [15. Cross-Platform Session Deletion & Performance Optimization Architecture](./15-cross-platform-session-deletion-and-performance.md) | Technical autopsy of macOS Chrome/WebKit vs. Windows Chromium DOM/SVG teardown, IPv6 Happy Eyeballs fallback delay, APFS file lock patterns, real-time deletion spinner, dual-stack `::` listening, and silent parallel sync. |
+| [16. Security Hardening, SSRF Defense, HSTS & API Authorization Architecture](./16-security-hardening-and-ssrf-defense.md) | Comprehensive security posture: HTTP security headers, conditional HSTS, dynamic CORS origin verification, Secure session cookies, SSRF host filters, and route-level `requireAuth` guards. |
+| [17. Voice Recognition (STT), Copy-Paste Ergonomics & Interactive UI Enhancement](./17-voice-recognition-and-copy-paste-ergonomics.md) | Web Speech API STT integration (Cantonese, Mandarin, English), floating transcript pill, pulsing mic animation, output copy buttons, code-block copy icons, and prompt paste button. |
 
 ---
 
