@@ -254,6 +254,7 @@ export function App() {
       await fetch("/api/logs/reorder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           orderedFilenames,
           workspace: currentWorkspace,
@@ -266,7 +267,10 @@ export function App() {
 
   const fetchWorkspaces = async () => {
     try {
-      const res = await fetch("/api/workspaces", { signal: AbortSignal.timeout(6000) });
+      const res = await fetch("/api/workspaces", {
+        credentials: "include",
+        signal: AbortSignal.timeout(6000),
+      });
       const data = await res.json();
       if (data.workspaces) {
         setWorkspaces(data.workspaces);
@@ -283,6 +287,7 @@ export function App() {
       const res = await fetch("/api/workspaces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ name: clean }),
       });
       const data = await res.json();
@@ -310,6 +315,7 @@ export function App() {
       const res = await fetch(`/api/workspaces/${encodeURIComponent(currentWorkspace)}/rename`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ newName: clean }),
       });
       const data = await res.json();
@@ -346,6 +352,7 @@ export function App() {
         try {
           const res = await fetch(`/api/workspaces/${encodeURIComponent(wsName)}`, {
             method: "DELETE",
+            credentials: "include",
           });
           const data = await res.json();
           if (res.ok && data.success) {
@@ -372,6 +379,7 @@ export function App() {
       const res = await fetch(`/api/logs/${encodeURIComponent(filename)}/rename`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ newTitle: newTitle.trim(), workspace: currentWorkspace }),
       });
       if (res.ok) {
@@ -434,7 +442,10 @@ export function App() {
   const fetchLogs = async (wsName?: string) => {
     const ws = wsName || currentWorkspace;
     try {
-      const res = await fetch(`/api/logs?workspace=${encodeURIComponent(ws)}`, { signal: AbortSignal.timeout(6000) });
+      const res = await fetch(`/api/logs?workspace=${encodeURIComponent(ws)}`, {
+        credentials: "include",
+        signal: AbortSignal.timeout(6000),
+      });
       const data = await res.json();
       if (data.logs) {
         setSavedSessions(data.logs);
@@ -464,7 +475,9 @@ export function App() {
     const ws = wsName || currentWorkspace;
     try {
       setLoading(true);
-      const res = await fetch(`/api/logs/${encodeURIComponent(filename)}?workspace=${encodeURIComponent(ws)}`);
+      const res = await fetch(`/api/logs/${encodeURIComponent(filename)}?workspace=${encodeURIComponent(ws)}`, {
+        credentials: "include",
+      });
       const data = await res.json();
       if (data.messages) {
         setMessages(data.messages);
@@ -497,6 +510,7 @@ export function App() {
             `/api/logs/${encodeURIComponent(filename)}?workspace=${encodeURIComponent(currentWorkspace)}`,
             { 
               method: "DELETE",
+              credentials: "include",
               signal: AbortSignal.timeout(6000), // 🛡️ Prevent any hanging socket connections
             }
           );
@@ -534,7 +548,7 @@ export function App() {
 
   const fetchConfig = async () => {
     try {
-      const res = await fetch("/api/config");
+      const res = await fetch("/api/config", { credentials: "include" });
       const data = await res.json();
       setConfig(data);
       if (data?.mcpServers) {
@@ -576,6 +590,7 @@ export function App() {
       const res = await fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -826,6 +841,7 @@ export function App() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           message: query,
           history,

@@ -79,7 +79,9 @@ export function SubConversationModal({
   const loadSessionTurns = async (filename: string) => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/logs/${encodeURIComponent(filename)}?workspace=${encodeURIComponent(workspace)}`);
+      const res = await fetch(`/api/logs/${encodeURIComponent(filename)}?workspace=${encodeURIComponent(workspace)}`, {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to load session details");
       const data = await res.json();
       setSessionTitle(data.title || filename);
@@ -94,6 +96,7 @@ export function SubConversationModal({
           const docRes = await fetch("/api/documents/by-hashes", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({ hashes: rawHashes }),
           });
           const docData = await docRes.json();

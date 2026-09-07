@@ -16,6 +16,7 @@ import { loadConfig, saveConfigToDisk } from "./config/index.js";
 import { LoopConfig, MCPServerDef } from "./config/schema.js";
 import { MCPClientManager } from "./mcp/client-manager.js";
 import { LoopOrchestrator } from "./engine/loop-orchestrator.js";
+import { LLMClient } from "./llm/client.js";
 import {
   saveConversationLog,
   listConversationLogs,
@@ -78,33 +79,24 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🛡️ 2. Controlled CORS policy
+// 🛡️ 2. Controlled CORS policy & Preflight Handling
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (e.g., same-origin mobile apps, curl, server-side fetch)
       if (!origin) return callback(null, true);
 
-      // Allow localhost and local loopback on common dev ports
-      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/.test(origin);
-      if (isLocalhost) {
-        return callback(null, true);
-      }
-
-      // Check against explicit allowed origin env variable if defined
-      const allowedCustomOrigins = process.env.ALLOWED_ORIGINS
-        ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-        : [];
-      if (allowedCustomOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      // Allow same host with different ports or same domain in intranet
+      // Allow all origins (returning true dynamically reflects the requesting origin with credentials)
       return callback(null, true);
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Range", "Accept"],
+    exposedHeaders: ["Content-Range", "X-Content-Range"],
+    maxAge: 86400, // 24 hours preflight cache
   })
 );
+app.options("*", cors());
 
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
@@ -700,6 +692,40 @@ app.get("/api/tools", (req, res) => {
   const tools = mcpManager.getOpenAITools();
   const discoveredTools = mcpManager.getDiscoveredTools();
   res.json({ tools, discoveredTools });
+});
+
+// 3b. Server-side LLM Proxy & Health Test (Bypasses all client-side CORS and protects API keys)
+app.post("/api/llm/completions", requireAuth, async (req, res) => {
+  try {
+    const { messages, tools, model, temperature, maxTokens } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: "messages array is required" });
+    }
+    const client = new LLMClient({
+      ...config.llm,
+      model: model || config.llm.model,
+      temperature: temperature ?? config.llm.temperature,
+      maxTokens: maxTokens ?? config.llm.maxTokens,
+    });
+    const completion = await client.createChatCompletion(messages, tools);
+    res.json(completion);
+  } catch (err: any) {
+    console.error("[LLM Proxy Error]:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/llm/test", requireAuth, async (req, res) => {
+  try {
+    const client = new LLMClient(config.llm);
+    const result = await client.createChatCompletion([
+      { role: "user", content: "Reply with 'LLM connection successful'" },
+    ]);
+    const message = result.choices[0]?.message?.content || "";
+    res.json({ success: true, message, model: config.llm.model });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Helper for Document Manager instance per user
