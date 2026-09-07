@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 
 export const LLMConfigSchema = z.object({
   baseUrl: z.string().default("https://api.openai.com/v1"),
@@ -6,6 +6,15 @@ export const LLMConfigSchema = z.object({
   model: z.string().default("gpt-4o"),
   temperature: z.number().min(0).max(2).default(0.7),
   maxTokens: z.number().positive().optional().default(4096),
+});
+
+export const VoiceConfigSchema = z.object({
+  baseUrl: z.string().default("https://api.minimaxi.com/v1"),
+  apiKey: z.string().default(""),
+  model: z.string().default("speech-01-turbo"),
+  voiceId: z.string().default("English_expressive_narrator"),
+  speed: z.number().min(0.5).max(2.0).default(1.0),
+  enabled: z.boolean().default(true),
 });
 
 export const PromptsConfigSchema = z.object({
@@ -37,12 +46,14 @@ export const MCPServerDefSchema = z.object({
 
 export const LoopConfigSchema = z.object({
   llm: LLMConfigSchema,
+  voice: VoiceConfigSchema.optional(),
   prompts: PromptsConfigSchema,
   mcpServers: z.record(z.string(), MCPServerDefSchema),
   maxLoopIterations: z.number().min(1).max(50).default(10),
 });
 
 export type LLMConfig = z.infer<typeof LLMConfigSchema>;
+export type VoiceConfig = z.infer<typeof VoiceConfigSchema>;
 export type PromptsConfig = z.infer<typeof PromptsConfigSchema>;
 export type MCPServerDef = z.infer<typeof MCPServerDefSchema>;
 export type LoopConfig = z.infer<typeof LoopConfigSchema>;

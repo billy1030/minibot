@@ -37,6 +37,8 @@ import {
   GitBranch,
   Palette,
   Sliders,
+  Mic,
+  MicOff,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
@@ -182,6 +184,29 @@ export function App() {
     } catch {
       return false;
     }
+  });
+
+  // 🎙️ Voice-to-Text (STT) 狀態與參照（支援 zh-HK 粵語、zh-CN 國語、en-US 英語）
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const [sttLang, setSttLang] = useState<"zh-HK" | "zh-CN" | "en-US">(() => {
+    try {
+      return (localStorage.getItem("minibot_stt_lang") as "zh-HK" | "zh-CN" | "en-US") || "zh-HK";
+    } catch {
+      return "zh-HK";
+    }
+  });
+  const [sttStatusText, setSttStatusText] = useState<string>("");
+  const recognitionRef = useRef<any>(null);
+  const silenceTimerRef = useRef<any>(null);
+  const isStoppingVoiceRef = useRef<boolean>(false);
+  const speechBuffersRef = useRef<{
+    previousFinal: string;
+    currentFinal: string;
+    currentInterim: string;
+  }>({
+    previousFinal: "",
+    currentFinal: "",
+    currentInterim: "",
   });
 
   useEffect(() => {
@@ -563,12 +588,203 @@ export function App() {
     setExpandedTools((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleSend = async () => {
-    if (!inputPrompt.trim() || loading) return;
+  // 🎙️ voicemate 核心連接詞與語氣詞字典（用於延長未完句子的安靜檢測期）
+  const isIncompleteSentence = (text: string): boolean => {
+    if (!text) return false;
+    const clean = text.trim();
+    const cantoneseConnectives = [
+      "同埋", "因為", "但係", "即係", "如果", "仲有", "咁樣", "然後", "或者", "諗緊",
+      "所以", "其實", "即", "而", "而且", "仲未", "只要", "不過", "可能", "特別係",
+      "另外", "跟住", "仲話", "先至", "咁", "呢", "啊", "呀", "喎", "嘅時候", "同"
+    ];
+    const mandarinConnectives = [
+      "而且", "因為", "但是", "如果", "然後", "還有", "就是", "所以", "其實", "不過", "並且"
+    ];
+    const englishConnectives = [
+      "and", "or", "because", "but", "so", "then", "if", "when", "while", "like",
+      "um", "uh", "well", "although", "however", "also", "actually", "meanwhile"
+    ];
+
+    for (const c of [...cantoneseConnectives, ...mandarinConnectives]) {
+      if (clean.endsWith(c)) return true;
+    }
+    const lower = clean.toLowerCase();
+    for (const w of englishConnectives) {
+      if (lower.endsWith(" " + w) || lower === w) return true;
+    }
+    return false;
+  };
+
+  const stopVoiceRecognition = (providedTranscript?: string) => {
+    if (!recognitionRef.current && !isListening) return;
+    isStoppingVoiceRef.current = true;
+    setIsListening(false);
+
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
+
+    const buffers = speechBuffersRef.current;
+    const candidateText =
+      (providedTranscript && typeof providedTranscript === "string" && providedTranscript.trim()) ||
+      (buffers.previousFinal + " " + buffers.currentFinal + " " + buffers.currentInterim).trim();
+
+    // 重設語音緩衝區
+    speechBuffersRef.current = {
+      previousFinal: "",
+      currentFinal: "",
+      currentInterim: "",
+    };
+
+    if (candidateText) {
+      setInputPrompt(candidateText);
+      setSttStatusText(`語音已轉為文字：${candidateText.slice(0, 20)}${candidateText.length > 20 ? "..." : ""}`);
+      setTimeout(() => setSttStatusText(""), 3500);
+      setTimeout(() => chatInputRef.current?.focus(), 100);
+    } else {
+      setSttStatusText("未偵測到清晰語音");
+      setTimeout(() => setSttStatusText(""), 2500);
+    }
+    isStoppingVoiceRef.current = false;
+  };
+
+  const startVoiceRecognition = () => {
+    // 檢查瀏覽器原生 SpeechRecognition 支援
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      showAlert(
+        "您的瀏覽器暫未支援 Web Speech API。請使用 Chrome 或 Edge 瀏覽器以使用語音轉文字功能。",
+        "warning",
+        "瀏覽器不支援語音輸入"
+      );
+      return;
+    }
+
+    // 若正在錄音中，點擊即為立即停止
+    if (isListening) {
+      stopVoiceRecognition();
+      return;
+    }
+
+    try {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {}
+      }
+
+      speechBuffersRef.current = {
+        previousFinal: "",
+        currentFinal: "",
+        currentInterim: "",
+      };
+      isStoppingVoiceRef.current = false;
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = sttLang;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        const langName = sttLang === "zh-HK" ? "🇭🇰 粵語" : sttLang === "zh-CN" ? "🇨🇳 國語" : "🇺🇸 English";
+        setSttStatusText(`🎙️ 正在聆聽【${langName}】...`);
+      };
+
+      recognition.onresult = (event: any) => {
+        let interim = "";
+        let final = "";
+        for (let i = 0; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            final += event.results[i][0].transcript;
+          } else {
+            interim += event.results[i][0].transcript;
+          }
+        }
+        speechBuffersRef.current.currentFinal = final;
+        speechBuffersRef.current.currentInterim = interim;
+
+        const fullSpoken = (
+          speechBuffersRef.current.previousFinal +
+          " " +
+          speechBuffersRef.current.currentFinal +
+          " " +
+          speechBuffersRef.current.currentInterim
+        ).trim();
+
+        if (fullSpoken) {
+          // 即時同步顯示在輸入框內，所見即所得
+          setInputPrompt(fullSpoken);
+
+          const incomplete = isIncompleteSentence(fullSpoken);
+          const baseDelay = 2000; // 基礎安靜停頓 2 秒
+          const effectiveDelay = incomplete ? baseDelay + 1200 : baseDelay; // 連接詞智能延長 +1.2s
+          const suffix = incomplete ? " (語氣未完，聆聽中...)" : ` (${(effectiveDelay / 1000).toFixed(1)}s 後自動停止)`;
+
+          const preview = fullSpoken.length > 25 ? "..." + fullSpoken.slice(-25) : fullSpoken;
+          setSttStatusText(`🎙️ "${preview}"${suffix}`);
+
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(() => {
+            stopVoiceRecognition(fullSpoken);
+          }, effectiveDelay);
+        }
+      };
+
+      recognition.onerror = (e: any) => {
+        console.warn("SpeechRecognition error:", e);
+        if (e.error !== "no-speech") {
+          setSttStatusText(`語音辨識提示: ${e.error}`);
+        }
+      };
+
+      recognition.onend = () => {
+        // 如果處於錄音狀態但非主動停止，則進行 keep-alive 自動續接重啟
+        if (!isStoppingVoiceRef.current && isListening) {
+          speechBuffersRef.current.previousFinal = (
+            speechBuffersRef.current.previousFinal +
+            " " +
+            speechBuffersRef.current.currentFinal
+          ).trim();
+          speechBuffersRef.current.currentFinal = "";
+          speechBuffersRef.current.currentInterim = "";
+          try {
+            recognition.start();
+          } catch {}
+        }
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err: any) {
+      console.error("Failed to start speech recognition:", err);
+      setIsListening(false);
+      showAlert(`啟動語音辨識失敗: ${err.message || err}`, "error", "語音啟動失敗");
+    }
+  };
+
+  const handleSend = async (textOverride?: string) => {
+    const rawQuery = textOverride !== undefined ? textOverride : inputPrompt;
+    if (!rawQuery.trim() || loading) return;
+
+    // 若送出時仍在錄音，先行停止
+    if (isListening) {
+      stopVoiceRecognition();
+    }
 
     const userMessageId = "user-" + Date.now();
     const assistantMessageId = "asst-" + Date.now();
-    const query = inputPrompt.trim();
+    const query = rawQuery.trim();
     const now = Date.now();
 
     // Calculate next turn index based on existing assistant responses
@@ -3087,27 +3303,120 @@ export function App() {
             )}
           </div>
 
-          <input
-            ref={chatInputRef}
-            type="text"
-            value={inputPrompt}
-            onChange={(e) => setInputPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Ask anything or query attached Excel / PDF / Word documents..."
-            disabled={loading}
-            style={{
-              flex: 1,
-              background: "var(--bg-card)",
-              border: "1px solid var(--border-color)",
-              borderRadius: 8,
-              padding: "12px 16px",
-              color: "var(--text-main)",
-              fontSize: 14,
-              outline: "none",
-            }}
-          />
+          {/* 🎙️ Voice Language Selector (Cantonese zh-HK, Mandarin zh-CN, English en-US) */}
+          <div style={{ display: "flex", alignItems: "center", position: "relative" }}>
+            <select
+              value={sttLang}
+              onChange={(e) => {
+                const val = e.target.value as "zh-HK" | "zh-CN" | "en-US";
+                setSttLang(val);
+                try {
+                  localStorage.setItem("minibot_stt_lang", val);
+                } catch {}
+              }}
+              title="Select Voice-to-Text Language"
+              style={{
+                height: 42,
+                padding: "0 10px",
+                borderRadius: 8,
+                background: "var(--bg-card)",
+                border: "1px solid var(--border-color)",
+                color: "var(--text-main)",
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="zh-HK">🇭🇰 粵語</option>
+              <option value="zh-CN">🇨🇳 國語</option>
+              <option value="en-US">🇺🇸 EN</option>
+            </select>
+          </div>
+
+          <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column" }}>
+            <input
+              ref={chatInputRef}
+              type="text"
+              value={inputPrompt}
+              onChange={(e) => setInputPrompt(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder="Ask anything or query attached Excel / PDF / Word documents..."
+              disabled={loading}
+              style={{
+                width: "100%",
+                background: isListening ? "rgba(239, 68, 68, 0.05)" : "var(--bg-card)",
+                border: isListening ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
+                borderRadius: 8,
+                padding: "12px 16px",
+                color: "var(--text-main)",
+                fontSize: 14,
+                outline: "none",
+                transition: "border-color 0.2s, background-color 0.2s",
+                boxSizing: "border-box",
+              }}
+            />
+            {sttStatusText && (
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 8px)",
+                  left: 0,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: isListening ? "#ef4444" : "var(--accent)",
+                  background: isListening ? "rgba(239, 68, 68, 0.12)" : "var(--bg-secondary)",
+                  border: isListening ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid var(--border-color)",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: "100%",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                  zIndex: 10,
+                  pointerEvents: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                {sttStatusText}
+              </div>
+            )}
+          </div>
+
+          {/* 🎙️ Voice-to-Text Microphone Trigger Button */}
           <button
-            onClick={handleSend}
+            type="button"
+            onClick={startVoiceRecognition}
+            disabled={loading}
+            title={isListening ? "點擊停止語音輸入 (正在收音)" : "語音輸入 (點擊開始講嘢)"}
+            className={isListening ? "voice-recording-pulse" : ""}
+            style={{
+              padding: "0 14px",
+              height: 44,
+              borderRadius: 8,
+              background: isListening ? "#ef4444" : "var(--bg-card)",
+              color: isListening ? "#ffffff" : "var(--text-main)",
+              border: isListening ? "1px solid #ef4444" : "1px solid var(--border-color)",
+              cursor: loading ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              transition: "all 0.2s ease",
+              flexShrink: 0,
+            }}
+          >
+            {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+            <span style={{ display: "none" }}>Voice</span>
+          </button>
+
+          <button
+            onClick={() => handleSend()}
             disabled={loading || !inputPrompt.trim()}
             style={{
               padding: "0 22px",

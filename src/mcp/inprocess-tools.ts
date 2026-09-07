@@ -50,17 +50,21 @@ async function performDuckDuckGoSearch(query: string, maxResults = 5): Promise<s
     .join("\n\n");
 }
 
+// Helper to reliably execute mmx on Windows (via cmd.exe /c mmx) and Unix
+async function execMmxAsync(args: string[], timeout = 30000): Promise<string> {
+  const isWin = process.platform === "win32";
+  const cmd = isWin ? "cmd.exe" : "mmx";
+  const execArgs = isWin ? ["/c", "mmx", ...args] : args;
+  const { stdout } = await execFileAsync(cmd, execArgs, { timeout });
+  return stdout.trim();
+}
+
 async function performMiniMaxSearch(query: string): Promise<string> {
   const apiKey = process.env.MINIMAX_API_KEY || process.env.LLM_API_KEY;
   if (!apiKey) {
     throw new Error("No MiniMax API key available for fallback search.");
   }
-  const { stdout } = await execFileAsync(
-    "mmx",
-    ["search", query, "--api-key", apiKey],
-    { timeout: 15000 }
-  );
-  return stdout.trim();
+  return await execMmxAsync(["search", query, "--api-key", apiKey], 15000);
 }
 
 async function performSearch(query: string, maxResults = 5): Promise<string> {
@@ -116,16 +120,14 @@ async function minimaxSearch(query: string): Promise<string> {
   const apiKey = process.env.MINIMAX_API_KEY || process.env.LLM_API_KEY;
   const args = ["search", query];
   if (apiKey) args.push("--api-key", apiKey);
-  const { stdout } = await execFileAsync("mmx", args, { timeout: 15000 });
-  return stdout.trim();
+  return await execMmxAsync(args, 15000);
 }
 
 async function minimaxGenerateImage(prompt: string, aspectRatio = "1:1"): Promise<string> {
   const apiKey = process.env.MINIMAX_API_KEY || process.env.LLM_API_KEY;
   const args = ["image", prompt, "--aspect-ratio", aspectRatio];
   if (apiKey) args.push("--api-key", apiKey);
-  const { stdout } = await execFileAsync("mmx", args, { timeout: 30000 });
-  return stdout.trim();
+  return await execMmxAsync(args, 30000);
 }
 
 async function minimaxTextToSpeech(text: string, voice?: string): Promise<string> {
@@ -133,16 +135,14 @@ async function minimaxTextToSpeech(text: string, voice?: string): Promise<string
   const args = ["speech", text];
   if (voice) args.push("--voice", voice);
   if (apiKey) args.push("--api-key", apiKey);
-  const { stdout } = await execFileAsync("mmx", args, { timeout: 30000 });
-  return stdout.trim();
+  return await execMmxAsync(args, 30000);
 }
 
 async function minimaxGenerateMusic(prompt: string): Promise<string> {
   const apiKey = process.env.MINIMAX_API_KEY || process.env.LLM_API_KEY;
   const args = ["music", prompt];
   if (apiKey) args.push("--api-key", apiKey);
-  const { stdout } = await execFileAsync("mmx", args, { timeout: 60000 });
-  return stdout.trim();
+  return await execMmxAsync(args, 60000);
 }
 
 // ==========================================

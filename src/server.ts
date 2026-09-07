@@ -3,6 +3,15 @@ import express from "express";
 import cors from "cors";
 import path from "node:path";
 import fs from "node:fs";
+
+// 🛡️ Global crash guards: prevent unhandled exceptions or rejected promises from killing the server
+process.on("uncaughtException", (err) => {
+  console.error("[CRITICAL UNCAUGHT EXCEPTION]:", err?.stack || err);
+});
+
+process.on("unhandledRejection", (reason: any) => {
+  console.error("[CRITICAL UNHANDLED REJECTION]:", reason?.stack || reason);
+});
 import { loadConfig, saveConfigToDisk } from "./config/index.js";
 import { LoopConfig, MCPServerDef } from "./config/schema.js";
 import { MCPClientManager } from "./mcp/client-manager.js";

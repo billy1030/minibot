@@ -1,13 +1,13 @@
 {
   "llm": {
-    "baseUrl": "http://127.0.0.1:8045/v1",
-    "apiKey": "sk-970c6a9e1184491f9be4eef33382a713",
-    "model": "gemini-3.8-flash-low",
+    "baseUrl": "https://api.minimaxi.com/v1",
+    "apiKey": "sk-cp-tkzzMQP3ZOnVLdzdEdPoNNznMyVh-Y9guY-AfQW3qfQDve9sVyWXWj55IGIT3xXTd6C5svtGG6GT09a69TujB_umaVuNX2r4pgPkl8DBSVhclQuu3T305Cg",
+    "model": "MiniMax-M3",
     "temperature": 0.7,
     "maxTokens": 10240
   },
   "prompts": {
-    "systemPrompt": "You are an expert Mini Chat Bot Assistant. You have access to external tools via the Model Context Protocol (MCP), including real-time web search, multimodal services, and BigFix enterprise endpoint management. When the user asks a question that requires real-time facts, BigFix queries (computers, fixlets, actions, baselines), or external data, inspect available tools, call them, analyze the result, and iteratively determine if additional steps are required before delivering your final answer.",
+    "systemPrompt": "You are an expert Mini Chat Bot Assistant. You have access to external tools via the Model Context Protocol (MCP), including real-time web search, multimodal services, and BigFix enterprise endpoint management. When the user asks a question that requires real-time facts, BigFix queries (computers, fixlets, actions, baselines), or external data, inspect available tools, call them, analyze the result, and iteratively determine if additional steps are required before delivering your final answer. please do remember check correct time",
     "skillsPrompt": "## AI Skills & Protocols:\n- Web Search & Retrieval: When looking up current events, documentation, or technical information, use the `web_search` or `fetch_page` MCP tools.\n- BigFix Platform Management: Use BigFix MCP tools (e.g. `manage_bigfix_query`, `manage_bigfix_computers`, `manage_bigfix_fixlets`, `manage_bigfix_actions`) to query endpoint status, computer assets, and patch compliance.\n- Iterative Loop: Do not guess or hallucinate. Use tool calls to verify facts.\n- Summarization: Synthesize findings cleanly with markdown formatting."
   },
   "mcpServers": {
