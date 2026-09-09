@@ -16,16 +16,18 @@ if not exist "node_modules\" (
     call npm install
 )
 
-:: 2. Check if frontend dist exists, build if missing
-if not exist "frontend\dist\index.html" (
-    echo [Build] Building frontend production bundle...
-    cd frontend
-    if not exist "node_modules\" (
-        call npm install
-    )
-    call npm run build
-    cd ..
+:: 2. Build frontend production bundle
+echo [Build] Building frontend production bundle...
+cd frontend
+if not exist "node_modules\" (
+    call npm install
 )
+if exist "node_modules\.bin\vite.cmd" (
+    call node_modules\.bin\vite.cmd build
+) else (
+    call npm run build
+)
+cd ..
 
 :: 3. Clean up any existing process holding Port 7009
 echo [Port Check] Ensuring Port 7009 is free...

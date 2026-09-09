@@ -229,6 +229,14 @@ export function App() {
   // 🔊 Text-to-Speech (TTS) 狀態與音訊參照（廣東話 / Cantonese）
   // 1: local TTS (瀏覽器原生 Web Speech Synthesis - zh-HK)
   // 2: minimax (MiniMax Speech-2.8-HD 神經網絡語音 API)
+  // 語言選擇：粵語 (cantonese) / 國語 (mandarin) / 英語 (english)
+  const [ttsLang, setTtsLang] = useState<"cantonese" | "mandarin" | "english">(() => {
+    try {
+      return (localStorage.getItem("minibot_tts_lang") as "cantonese" | "mandarin" | "english") || "cantonese";
+    } catch {
+      return "cantonese";
+    }
+  });
   const [ttsEngine, setTtsEngine] = useState<"local" | "minimax">(() => {
     try {
       return (localStorage.getItem("minibot_tts_engine") as "local" | "minimax") || "local";
@@ -274,16 +282,11 @@ export function App() {
 
     const updateVoices = () => {
       const all = window.speechSynthesis.getVoices();
-      // 篩選粵語 (zh-HK / yue) 與相容中文 (zh-TW / zh-CN) 聲音
-      const filtered = all.filter(
-        (v) =>
-          v.lang === "zh-HK" ||
-          v.lang === "yue-Hant-HK" ||
-          v.lang.toLowerCase().includes("hk") ||
-          v.lang.toLowerCase().includes("yue") ||
-          v.lang.startsWith("zh")
-      );
-      // 若無特定中文，則列出所有以防萬一
+      // 篩選粵語 (zh-HK / yue)、國語 (zh-CN / zh-TW) 與英語 (en) 聲音
+      const filtered = all.filter((v) => {
+        const l = v.lang.toLowerCase();
+        return l.startsWith("zh") || l.startsWith("yue") || l.startsWith("en");
+      });
       setAvailableLocalVoices(filtered.length > 0 ? filtered : all);
     };
 
@@ -934,7 +937,7 @@ export function App() {
       return;
     }
 
-    // 模式 1: Local 原生瀏覽器 TTS (zh-HK 粵語 / 多聲線選擇 / 速度調整)
+    // 模式 1: Local 原生瀏覽器 TTS (粵語 / 國語 / 英語 / 多聲線選擇 / 速度調整)
     if (ttsEngine === "local") {
       if (typeof window === "undefined" || !("speechSynthesis" in window)) {
         showAlert("您的瀏覽器不支援 Web Speech 語音合成 API", "warning", "TTS 不可用");
@@ -944,7 +947,8 @@ export function App() {
       setPlayingMessageId(messageId);
 
       const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = "zh-HK";
+      const targetLang = ttsLang === "cantonese" ? "zh-HK" : ttsLang === "mandarin" ? "zh-CN" : "en-US";
+      utterance.lang = targetLang;
       utterance.rate = ttsSpeed || 1.0;
       utterance.pitch = 1.0;
 
@@ -954,11 +958,20 @@ export function App() {
       if (localTtsVoiceURI) {
         selectedVoice = voices.find((v) => v.voiceURI === localTtsVoiceURI);
       }
-      // 2. 若無手動指定或找不到，尋找系統內建最佳粵語聲音 (如 Sin-ji, Danny, Tracy, Hong Kong 等)
+      // 2. 若無手動指定或找不到，根據當前選擇語言尋找系統最佳聲音
       if (!selectedVoice) {
-        selectedVoice =
-          voices.find((v) => v.lang === "zh-HK" || v.lang === "yue-Hant-HK" || v.lang.startsWith("zh-HK")) ||
-          voices.find((v) => v.lang === "zh-TW" || v.lang === "zh-CN");
+        if (ttsLang === "cantonese") {
+          selectedVoice =
+            voices.find((v) => v.lang === "zh-HK" || v.lang === "yue-Hant-HK" || v.lang.startsWith("zh-HK")) ||
+            voices.find((v) => v.lang === "zh-TW" || v.lang === "zh-CN");
+        } else if (ttsLang === "mandarin") {
+          selectedVoice =
+            voices.find((v) => v.lang === "zh-CN" || v.lang === "zh-TW" || (v.lang.startsWith("zh") && !v.lang.includes("HK"))) ||
+            voices.find((v) => v.lang.startsWith("zh"));
+        } else {
+          selectedVoice =
+            voices.find((v) => v.lang.startsWith("en-US") || v.lang.startsWith("en-GB") || v.lang.startsWith("en"));
+        }
       }
       if (selectedVoice) {
         utterance.voice = selectedVoice;
@@ -2640,7 +2653,7 @@ export function App() {
                 }}
               >
                 <Volume2 size={15} color={playingMessageId ? "#10b981" : "currentColor"} />
-                <span>Voice Setup: {ttsEngine === "local" ? "1 Local" : "2 MiniMax"} ({ttsSpeed}x)</span>
+                <span>Voice ({ttsLang === "cantonese" ? "粵" : ttsLang === "mandarin" ? "普" : "EN"}): {ttsEngine === "local" ? "Local" : "MiniMax"} ({ttsSpeed}x)</span>
                 {playingMessageId && (
                   <span
                     style={{
@@ -2666,7 +2679,7 @@ export function App() {
                 <button
                   type="button"
                   onClick={stopTtsPlayback}
-                  title="立即停止粵語朗讀"
+                  title="立即停止語音朗讀"
                   style={{
                     height: 32,
                     padding: "0 8px",
@@ -2799,12 +2812,65 @@ export function App() {
                     </div>
                   </div>
 
+                  {/* Language Selector: Cantonese / Mandarin / English */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
+                      朗讀語言 (Target Language):
+                    </span>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {[
+                        { id: "cantonese", label: "🇭🇰 粵語", defaultVoice: "Cantonese_CuteGirl" },
+                        { id: "mandarin", label: "🇨🇳 國語", defaultVoice: "female-yujie" },
+                        { id: "english", label: "🇬🇧 英語", defaultVoice: "English_Trustworthy_Man" }
+                      ].map((item) => {
+                        const isSelected = ttsLang === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              const newLang = item.id as "cantonese" | "mandarin" | "english";
+                              setTtsLang(newLang);
+                              try {
+                                localStorage.setItem("minibot_tts_lang", newLang);
+                              } catch {}
+                              // 自動切換合適的預設 MiniMax voiceId
+                              setTtsVoiceId(item.defaultVoice);
+                              try {
+                                localStorage.setItem("minibot_tts_voice_id", item.defaultVoice);
+                              } catch {}
+                              // 清空 local voice 讓系統自動匹配該語言最佳聲線
+                              setLocalTtsVoiceURI("");
+                              try {
+                                localStorage.removeItem("minibot_local_tts_voice_uri");
+                              } catch {}
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "5px 2px",
+                              borderRadius: 6,
+                              border: isSelected ? "1px solid #10b981" : "1px solid var(--border-color)",
+                              background: isSelected ? "rgba(16, 185, 129, 0.15)" : "var(--bg-secondary)",
+                              color: isSelected ? "#10b981" : "var(--text-main)",
+                              fontSize: 11,
+                              fontWeight: isSelected ? 700 : 500,
+                              cursor: "pointer",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* Local Voice Selector (When Local TTS is selected) */}
                   {ttsEngine === "local" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
-                          選擇本機聲音 (男聲 / 女聲):
+                          選擇本機聲音 ({ttsLang === "cantonese" ? "粵語" : ttsLang === "mandarin" ? "國語" : "英語"}):
                         </span>
                         <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
                           共 {availableLocalVoices.length} 款可用
@@ -2831,28 +2897,35 @@ export function App() {
                           cursor: "pointer",
                         }}
                       >
-                        <option value="">⚙️ 系統預設最佳粵語 (自動判定)</option>
-                        {availableLocalVoices.map((v) => {
-                          const isCantonese = v.lang.includes("HK") || v.lang.toLowerCase().includes("yue");
-                          const isMale = v.name.toLowerCase().includes("danny") || v.name.toLowerCase().includes("male") || v.name.toLowerCase().includes("man");
-                          const isFemale = v.name.toLowerCase().includes("sin-ji") || v.name.toLowerCase().includes("tracy") || v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("woman");
-                          const tag = isMale ? " [男聲]" : isFemale ? " [女聲]" : "";
-                          const langTag = isCantonese ? "🇭🇰 粵語" : v.lang;
-                          return (
-                            <option key={v.voiceURI} value={v.voiceURI}>
-                              {v.name} ({langTag}){tag}
-                            </option>
-                          );
-                        })}
+                        <option value="">⚙️ 系統自動判定最佳 {ttsLang === "cantonese" ? "粵語" : ttsLang === "mandarin" ? "國語" : "英語"} 聲音</option>
+                        {(() => {
+                          const filtered = availableLocalVoices.filter((v) => {
+                            const l = v.lang.toLowerCase();
+                            if (ttsLang === "cantonese") return l.includes("hk") || l.includes("yue");
+                            if (ttsLang === "mandarin") return (l.startsWith("zh") && !l.includes("hk")) || l.includes("tw") || l.includes("cn");
+                            return l.startsWith("en");
+                          });
+                          const listToShow = filtered.length > 0 ? filtered : availableLocalVoices;
+                          return listToShow.map((v) => {
+                            const isMale = v.name.toLowerCase().includes("danny") || v.name.toLowerCase().includes("male") || v.name.toLowerCase().includes("man") || v.name.toLowerCase().includes("david");
+                            const isFemale = v.name.toLowerCase().includes("sin-ji") || v.name.toLowerCase().includes("tracy") || v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("zira") || v.name.toLowerCase().includes("woman");
+                            const tag = isMale ? " [男聲]" : isFemale ? " [女聲]" : "";
+                            return (
+                              <option key={v.voiceURI} value={v.voiceURI}>
+                                {v.name} ({v.lang}){tag}
+                              </option>
+                            );
+                          });
+                        })()}
                       </select>
                     </div>
                   )}
 
-                  {/* MiniMax Cantonese Persona Selector (When MiniMax is selected) */}
+                  {/* MiniMax Persona Selector (When MiniMax is selected) */}
                   {ttsEngine === "minimax" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
-                        選擇粵語人格聲線 (Voice Persona):
+                        選擇 {ttsLang === "cantonese" ? "粵語" : ttsLang === "mandarin" ? "國語" : "英語"} 人格聲線 (Voice Persona):
                       </span>
                       <select
                         value={ttsVoiceId}
@@ -2875,13 +2948,35 @@ export function App() {
                           cursor: "pointer",
                         }}
                       >
-                        <option value="Cantonese_CuteGirl">🌟 元氣輕快女孩 (Cute Girl)</option>
-                        <option value="Cantonese_KindWoman">🌸 溫暖親切大姐姐 (Kind Woman)</option>
-                        <option value="Cantonese_ProfessionalHost（F)">🎙️ 知性幹練女主播 (Professional)</option>
-                        <option value="Cantonese_GentleLady">☕ 溫柔磁性熟女 (Gentle Lady)</option>
-                        <option value="Cantonese_LivelyYouth">⚡ 活潑靈動少女 (Lively Youth)</option>
-                        <option value="presenter_male">👔 沉穩男主持 (Presenter Male)</option>
-                        <option value="English_Trustworthy_Man">💼 磁性成熟男聲 (Trustworthy Man)</option>
+                        {ttsLang === "cantonese" && (
+                          <>
+                            <option value="Cantonese_CuteGirl">🌟 [粵語] 元氣輕快女孩 (Cute Girl)</option>
+                            <option value="Cantonese_KindWoman">🌸 [粵語] 溫暖親切大姐姐 (Kind Woman)</option>
+                            <option value="Cantonese_ProfessionalHost（F)">🎙️ [粵語] 知性幹練女主播 (Professional)</option>
+                            <option value="Cantonese_GentleLady">☕ [粵語] 溫柔磁性熟女 (Gentle Lady)</option>
+                            <option value="Cantonese_LivelyYouth">⚡ [粵語] 活潑靈動少女 (Lively Youth)</option>
+                            <option value="presenter_male">👔 [粵語] 沉穩男主持 (Presenter Male)</option>
+                          </>
+                        )}
+                        {ttsLang === "mandarin" && (
+                          <>
+                            <option value="female-yujie">🌟 [國語] 溫柔知性御姐 (Female Yujie)</option>
+                            <option value="female-tianmei">🌸 [國語] 甜美親切少女 (Female Tianmei)</option>
+                            <option value="presenter_male">🎙️ [國語] 沉穩專業播音員 (Presenter Male)</option>
+                            <option value="presenter_female">📻 [國語] 專業新聞女主播 (Presenter Female)</option>
+                            <option value="male-qn-qingse">⚡ [國語] 陽光青澀少年 (Male Youth)</option>
+                            <option value="male-qn-jingying">👔 [國語] 商務菁英男聲 (Elite Male)</option>
+                          </>
+                        )}
+                        {ttsLang === "english" && (
+                          <>
+                            <option value="English_Trustworthy_Man">💼 [English] Trustworthy Man (沉穩商務男聲)</option>
+                            <option value="English_Graceful_Lady">🌸 [English] Graceful Lady (優雅知性女聲)</option>
+                            <option value="English_Energetic_Female">⚡ [English] Energetic Female (活潑元氣女聲)</option>
+                            <option value="English_Warm_Friend">☕ [English] Warm Friend (溫暖親切好友)</option>
+                            <option value="English_Inspiring_Speaker">🎙️ [English] Inspiring Speaker (激勵演講家)</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   )}
@@ -2949,10 +3044,20 @@ export function App() {
                       type="button"
                       disabled={isTtsLoading && playingMessageId === "__tts_test_preview__"}
                       onClick={() => {
-                        const testSampleText =
-                          ttsEngine === "local"
+                        let testSampleText = "你好！呢個係本地瀏覽器粵語聲音測試，速度同聲線設定正常運作。";
+                        if (ttsLang === "cantonese") {
+                          testSampleText = ttsEngine === "local"
                             ? "你好！呢個係本地瀏覽器粵語聲音測試，速度同聲線設定正常運作。"
                             : "你好！我係你嘅 MiniMax 廣東話語音助手，呢個係聲線角色測試。";
+                        } else if (ttsLang === "mandarin") {
+                          testSampleText = ttsEngine === "local"
+                            ? "您好！這是本地瀏覽器國語聲音測試，語速與聲線設定正常運作。"
+                            : "您好！我是您的 MiniMax 國語語音助手，這是聲線角色測試。";
+                        } else {
+                          testSampleText = ttsEngine === "local"
+                            ? "Hello! This is a test of the local browser English voice synthesizer."
+                            : "Hello! I am your MiniMax neural voice assistant. This is a voice persona test.";
+                        }
                         playCantoneseTts(testSampleText, "__tts_test_preview__");
                       }}
                       style={{
@@ -3633,8 +3738,8 @@ export function App() {
                               disabled={isTtsLoading && playingMessageId === m.id}
                               title={
                                 playingMessageId === m.id
-                                  ? "停止粵語朗讀"
-                                  : `以粵語朗讀此回答 (模式: ${ttsEngine === "local" ? "1 Local TTS" : "2 MiniMax Voice API"})`
+                                  ? "停止朗讀"
+                                  : `朗讀此回答 (${ttsLang === "cantonese" ? "粵語" : ttsLang === "mandarin" ? "國語" : "英語"} | 模式: ${ttsEngine === "local" ? "Local TTS" : "MiniMax Voice API"})`
                               }
                               style={{
                                 background: playingMessageId === m.id ? "rgba(16, 185, 129, 0.15)" : "transparent",
@@ -3676,7 +3781,7 @@ export function App() {
                               ) : (
                                 <>
                                   <Volume2 size={11} />
-                                  <span>粵語朗讀</span>
+                                  <span>語音朗讀</span>
                                 </>
                               )}
                             </button>
