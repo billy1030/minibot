@@ -277,6 +277,9 @@ export function App() {
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const ttsSpeakingTimeoutRef = useRef<any>(null);
+  const [showVoiceKeyEditor, setShowVoiceKeyEditor] = useState<boolean>(false);
+  const [customVoiceApiKey, setCustomVoiceApiKey] = useState<string>("");
+  const [isSavingVoiceKey, setIsSavingVoiceKey] = useState<boolean>(false);
 
   // 載入瀏覽器原生語音庫 (Web Speech API)
   useEffect(() => {
@@ -700,6 +703,57 @@ export function App() {
       }
     } catch (err: any) {
       showAlert(`Failed to save settings: ${err.message || "Network error"}`, "error", "Save Failed");
+    }
+  };
+
+  // 🎙️ Save Voice LLM API Key Only (Directly updates voice.apiKey without touching other settings)
+  const saveVoiceApiKeyOnly = async (newKey: string) => {
+    setIsSavingVoiceKey(true);
+    try {
+      const payload = {
+        voice: {
+          apiKey: newKey.trim(),
+        },
+      };
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        if (config) {
+          setConfig({
+            ...config,
+            voice: {
+              ...config.voice,
+              apiKey: newKey.trim() ? (newKey.trim().length > 8 ? `${newKey.trim().slice(0, 6)}...****` : "****") : "",
+            },
+          });
+        }
+        showAlert(
+          ttsLang === "cantonese"
+            ? "MiniMax 語音 API Key 已成功儲存！"
+            : ttsLang === "mandarin"
+            ? "MiniMax 語音 API Key 已成功保存！"
+            : "Voice API Key saved successfully!",
+          "success",
+          ttsLang === "cantonese" || ttsLang === "mandarin" ? "設定已更新" : "Voice Settings Updated"
+        );
+        setShowVoiceKeyEditor(false);
+        setCustomVoiceApiKey("");
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      showAlert(
+        `Failed to save Voice API Key: ${err.message || err}`,
+        "error",
+        "Save Failed"
+      );
+    } finally {
+      setIsSavingVoiceKey(false);
     }
   };
 
@@ -2709,14 +2763,26 @@ export function App() {
                         const lastMsg = assistantMsgs[assistantMsgs.length - 1];
                         playCantoneseTts(lastMsg.content, lastMsg.id);
                       } else {
-                        showAlert("No assistant response available in current conversation.", "info", "Nothing to Speak");
+                        showAlert(
+                          ttsLang === "cantonese"
+                            ? "目前對話中尚無助理回答可供朗讀"
+                            : ttsLang === "mandarin"
+                            ? "目前對話中尚無助理回答可供朗讀"
+                            : "No assistant response available in current conversation.",
+                          "info",
+                          ttsLang === "cantonese" || ttsLang === "mandarin" ? "無法朗讀" : "Nothing to Speak"
+                        );
                       }
                     }
                   }}
                   title={
                     playingMessageId
-                      ? "Stop reading aloud"
-                      : `Read latest answer (${ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"} | ${ttsSpeed}x)`
+                      ? ttsLang === "cantonese" ? "點擊立即停止朗讀" : ttsLang === "mandarin" ? "點擊立即停止朗讀" : "Stop reading aloud"
+                      : ttsLang === "cantonese"
+                      ? `朗讀最新回答 (粵語 | ${ttsSpeed}x)`
+                      : ttsLang === "mandarin"
+                      ? `朗讀最新回答 (國語 | ${ttsSpeed}x)`
+                      : `Read latest answer (English | ${ttsSpeed}x)`
                   }
                   style={{
                     height: 32,
@@ -2736,12 +2802,12 @@ export function App() {
                   {playingMessageId ? (
                     <>
                       <Square size={13} fill="#10b981" color="#10b981" className="animate-pulse" />
-                      <span style={{ color: "#10b981" }}>Stop</span>
+                      <span style={{ color: "#10b981" }}>{ttsLang === "cantonese" ? "停止" : ttsLang === "mandarin" ? "停止" : "Stop"}</span>
                     </>
                   ) : (
                     <>
                       <Volume2 size={15} color="var(--accent, #0284c7)" />
-                      <span>Speak</span>
+                      <span>{ttsLang === "cantonese" ? "朗讀" : ttsLang === "mandarin" ? "朗讀" : "Speak"}</span>
                     </>
                   )}
                 </button>
@@ -2750,7 +2816,13 @@ export function App() {
                 <button
                   type="button"
                   onClick={() => setShowTtsMenu(!showTtsMenu)}
-                  title={`Voice Setup (Language: ${ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"} | ${ttsEngine === "local" ? "Local" : "MiniMax"} | ${ttsSpeed}x)`}
+                  title={
+                    ttsLang === "cantonese"
+                      ? `語音設定 (語言: 粵語 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | ${ttsSpeed}x)`
+                      : ttsLang === "mandarin"
+                      ? `語音設定 (語言: 國語 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | ${ttsSpeed}x)`
+                      : `Voice Setup (Language: English | ${ttsEngine === "local" ? "Local" : "MiniMax"} | ${ttsSpeed}x)`
+                  }
                   style={{
                     height: 32,
                     padding: "0 8px",
@@ -2826,7 +2898,7 @@ export function App() {
                 >
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: 6 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.5px" }}>
-                      VOICE SETUP
+                      {ttsLang === "cantonese" ? "語音設定 (VOICE SETUP)" : ttsLang === "mandarin" ? "語音設定 (VOICE SETUP)" : "VOICE SETUP"}
                     </span>
                     {playingMessageId && (
                       <button
@@ -2846,7 +2918,7 @@ export function App() {
                           gap: 3,
                         }}
                       >
-                        <Square size={9} fill="#ef4444" /> Stop
+                        <Square size={9} fill="#ef4444" /> {ttsLang === "cantonese" ? "停止朗讀" : ttsLang === "mandarin" ? "停止朗讀" : "Stop"}
                       </button>
                     )}
                   </div>
@@ -2875,12 +2947,16 @@ export function App() {
                     >
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ fontSize: 12, fontWeight: 700, color: ttsEngine === "local" ? "#10b981" : "var(--text-main)" }}>
-                          1. Local Browser TTS
+                          {ttsLang === "cantonese" ? "1. 本地瀏覽器語音 (Local Browser TTS)" : ttsLang === "mandarin" ? "1. 本地瀏覽器語音 (Local Browser TTS)" : "1. Local Browser TTS"}
                         </span>
                         {ttsEngine === "local" && <Check size={14} color="#10b981" />}
                       </div>
                       <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                        System Web Speech API (Local & Google voices, zero latency)
+                        {ttsLang === "cantonese"
+                          ? "本機 Web Speech API (支援系統聲線與 Google 聲線，離線零延遲)"
+                          : ttsLang === "mandarin"
+                          ? "本機 Web Speech API (支援系統聲線與 Google 聲線，離線零延遲)"
+                          : "System Web Speech API (Local & Google voices, zero latency)"}
                       </span>
                     </div>
 
@@ -2906,12 +2982,16 @@ export function App() {
                     >
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span style={{ fontSize: 12, fontWeight: 700, color: ttsEngine === "minimax" ? "#10b981" : "var(--text-main)" }}>
-                          2. MiniMax Voice API
+                          {ttsLang === "cantonese" ? "2. MiniMax 雲端大模型語音 (Voice API)" : ttsLang === "mandarin" ? "2. MiniMax 雲端大模型語音 (Voice API)" : "2. MiniMax Voice API"}
                         </span>
                         {ttsEngine === "minimax" && <Check size={14} color="#10b981" />}
                       </div>
                       <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                        Speech-2.8-HD Neural AI voices with expressive tones
+                        {ttsLang === "cantonese"
+                          ? "MiniMax Speech-2.8-HD 超逼真磁性真人語音"
+                          : ttsLang === "mandarin"
+                          ? "MiniMax Speech-2.8-HD 超逼真磁性真人語音"
+                          : "Speech-2.8-HD Neural AI voices with expressive tones"}
                       </span>
                     </div>
                   </div>
@@ -2919,13 +2999,13 @@ export function App() {
                   {/* Language Selector: Cantonese / Mandarin / English */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
                     <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
-                      Target Language:
+                      {ttsLang === "cantonese" ? "朗讀語言 (Target Language):" : ttsLang === "mandarin" ? "朗讀語言 (Target Language):" : "Target Language:"}
                     </span>
                     <div style={{ display: "flex", gap: 4 }}>
                       {[
-                        { id: "cantonese", label: "🇭🇰 Cantonese", defaultVoice: "Cantonese_CuteGirl" },
-                        { id: "mandarin", label: "🇨🇳 Mandarin", defaultVoice: "female-yujie" },
-                        { id: "english", label: "🇬🇧 English", defaultVoice: "English_Trustworthy_Man" }
+                        { id: "cantonese", label: ttsLang === "cantonese" ? "🇭🇰 粵語" : ttsLang === "mandarin" ? "🇭🇰 粵語" : "🇭🇰 Cantonese", defaultVoice: "Cantonese_CuteGirl" },
+                        { id: "mandarin", label: ttsLang === "cantonese" ? "🇨🇳 國語" : ttsLang === "mandarin" ? "🇨🇳 國語" : "🇨🇳 Mandarin", defaultVoice: "female-yujie" },
+                        { id: "english", label: ttsLang === "cantonese" ? "🇬🇧 英語" : ttsLang === "mandarin" ? "🇬🇧 英語" : "🇬🇧 English", defaultVoice: "English_Trustworthy_Man" }
                       ].map((item) => {
                         const isSelected = ttsLang === item.id;
                         return (
@@ -2972,10 +3052,14 @@ export function App() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
-                          Voice Profile ({ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"}):
+                          {ttsLang === "cantonese"
+                            ? "選擇本機聲音 (Voice Profile):"
+                            : ttsLang === "mandarin"
+                            ? "選擇本機聲音 (Voice Profile):"
+                            : `Voice Profile (${ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"}):`}
                         </span>
                         <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                          {availableLocalVoices.length} available
+                          {availableLocalVoices.length} {ttsLang === "cantonese" || ttsLang === "mandarin" ? "款可用" : "available"}
                         </span>
                       </div>
                       <select
@@ -2999,7 +3083,13 @@ export function App() {
                           cursor: "pointer",
                         }}
                       >
-                        <option value="">⚙️ Auto (Best match for {ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"})</option>
+                        <option value="">
+                          {ttsLang === "cantonese"
+                            ? "⚙️ 系統自動判定最佳粵語聲音"
+                            : ttsLang === "mandarin"
+                            ? "⚙️ 系統自動判定最佳國語聲音"
+                            : `⚙️ Auto (Best match for ${ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"})`}
+                        </option>
                         {(() => {
                           const filtered = availableLocalVoices.filter((v) => {
                             const l = v.lang.toLowerCase();
@@ -3011,7 +3101,11 @@ export function App() {
                           return listToShow.map((v) => {
                             const isMale = v.name.toLowerCase().includes("danny") || v.name.toLowerCase().includes("male") || v.name.toLowerCase().includes("man") || v.name.toLowerCase().includes("david");
                             const isFemale = v.name.toLowerCase().includes("sin-ji") || v.name.toLowerCase().includes("tracy") || v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("zira") || v.name.toLowerCase().includes("woman");
-                            const tag = isMale ? " [Male]" : isFemale ? " [Female]" : "";
+                            const tag = isMale
+                              ? (ttsLang === "cantonese" || ttsLang === "mandarin" ? " [男聲]" : " [Male]")
+                              : isFemale
+                              ? (ttsLang === "cantonese" || ttsLang === "mandarin" ? " [女聲]" : " [Female]")
+                              : "";
                             return (
                               <option key={v.voiceURI} value={v.voiceURI}>
                                 {v.name} ({v.lang}){tag}
@@ -3027,7 +3121,11 @@ export function App() {
                   {ttsEngine === "minimax" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
-                        Voice Persona ({ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"}):
+                        {ttsLang === "cantonese"
+                          ? "人格聲線 (Voice Persona):"
+                          : ttsLang === "mandarin"
+                          ? "人格聲線 (Voice Persona):"
+                          : `Voice Persona (${ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"}):`}
                       </span>
                       <select
                         value={ttsVoiceId}
@@ -3087,7 +3185,7 @@ export function App() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
-                        Speech Rate:
+                        {ttsLang === "cantonese" || ttsLang === "mandarin" ? "朗讀速度 (Speech Rate):" : "Speech Rate:"}
                       </span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)" }}>
                         {ttsSpeed.toFixed(2)}x
@@ -3182,17 +3280,17 @@ export function App() {
                       {isTtsLoading && playingMessageId === "__tts_test_preview__" ? (
                         <>
                           <Loader2 size={12} className="spin" color="#10b981" />
-                          <span>Composing...</span>
+                          <span>{ttsLang === "cantonese" || ttsLang === "mandarin" ? "合成音訊中..." : "Composing..."}</span>
                         </>
                       ) : playingMessageId === "__tts_test_preview__" ? (
                         <>
                           <Square size={11} fill="#10b981" />
-                          <span>Testing (Click to stop)</span>
+                          <span>{ttsLang === "cantonese" || ttsLang === "mandarin" ? "正在測試 (點擊停止)" : "Testing (Click to stop)"}</span>
                         </>
                       ) : (
                         <>
                           <Play size={12} fill="currentColor" />
-                          <span>Test Voice</span>
+                          <span>{ttsLang === "cantonese" || ttsLang === "mandarin" ? "測試聲音角色" : "Test Voice"}</span>
                         </>
                       )}
                     </button>
@@ -3202,7 +3300,7 @@ export function App() {
                       <button
                         type="button"
                         onClick={() => stopTtsPlayback()}
-                        title="Stop playback"
+                        title={ttsLang === "cantonese" || ttsLang === "mandarin" ? "停止播放" : "Stop playback"}
                         style={{
                           padding: "8px 12px",
                           borderRadius: 6,
@@ -3219,8 +3317,100 @@ export function App() {
                         }}
                       >
                         <Square size={11} fill="#ef4444" />
-                        <span>Stop</span>
+                        <span>{ttsLang === "cantonese" || ttsLang === "mandarin" ? "停止" : "Stop"}</span>
                       </button>
+                    )}
+                  </div>
+
+                  {/* 🔑 Voice LLM Settings: Change API Key Only */}
+                  <div style={{ marginTop: 2, paddingTop: 8, borderTop: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#10b981", display: "flex", alignItems: "center", gap: 4 }}>
+                        <Volume2 size={12} color="#10b981" />
+                        {ttsLang === "cantonese"
+                          ? "Voice LLM 設定 (金鑰變更)"
+                          : ttsLang === "mandarin"
+                          ? "Voice LLM 設定 (金鑰變更)"
+                          : "Voice LLM Setting"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowVoiceKeyEditor(!showVoiceKeyEditor);
+                          if (!showVoiceKeyEditor && config?.voice?.apiKey) {
+                            setCustomVoiceApiKey(config.voice.apiKey.includes("****") ? "" : config.voice.apiKey);
+                          }
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: showVoiceKeyEditor ? "#10b981" : "var(--accent)",
+                          cursor: "pointer",
+                          fontSize: 10.5,
+                          fontWeight: 600,
+                          padding: 0,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 2,
+                        }}
+                      >
+                        {showVoiceKeyEditor
+                          ? (ttsLang === "cantonese" || ttsLang === "mandarin" ? "收起" : "Hide")
+                          : (ttsLang === "cantonese" || ttsLang === "mandarin" ? "變更 API Key" : "Change API Key")}
+                      </button>
+                    </div>
+
+                    {showVoiceKeyEditor && (
+                      <div style={{ background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.3 }}>
+                          {ttsLang === "cantonese"
+                            ? "輸入 MiniMax Voice API Key（若留空將自動沿用主 LLM 金鑰）："
+                            : ttsLang === "mandarin"
+                            ? "輸入 MiniMax Voice API Key（若留空將自動沿用主 LLM 金鑰）："
+                            : "Enter MiniMax Voice API Key (leave empty to inherit main LLM key):"}
+                        </div>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <input
+                            type="password"
+                            value={customVoiceApiKey}
+                            onChange={(e) => setCustomVoiceApiKey(e.target.value)}
+                            placeholder={config?.voice?.apiKey || "sk-cp-..."}
+                            style={{
+                              flex: 1,
+                              background: "var(--bg-secondary)",
+                              border: "1px solid var(--border-color)",
+                              borderRadius: 4,
+                              padding: "5px 8px",
+                              fontSize: 11,
+                              color: "var(--text-main)",
+                              outline: "none",
+                              fontFamily: "monospace",
+                            }}
+                          />
+                          <button
+                            type="button"
+                            disabled={isSavingVoiceKey}
+                            onClick={() => saveVoiceApiKeyOnly(customVoiceApiKey)}
+                            style={{
+                              padding: "5px 10px",
+                              borderRadius: 4,
+                              background: "#10b981",
+                              border: "none",
+                              color: "#ffffff",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: isSavingVoiceKey ? "not-allowed" : "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {isSavingVoiceKey ? <Loader2 size={11} className="spin" /> : <Check size={11} />}
+                            <span>{ttsLang === "cantonese" || ttsLang === "mandarin" ? "儲存" : "Save"}</span>
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -3840,8 +4030,12 @@ export function App() {
                               disabled={isTtsLoading && playingMessageId === m.id}
                               title={
                                 playingMessageId === m.id
-                                  ? "Stop reading aloud"
-                                  : `Read response aloud (${ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"} | Mode: ${ttsEngine === "local" ? "Local TTS" : "MiniMax Voice API"})`
+                                  ? ttsLang === "cantonese" ? "停止朗讀" : ttsLang === "mandarin" ? "停止朗讀" : "Stop reading aloud"
+                                  : ttsLang === "cantonese"
+                                  ? `朗讀此回答 (粵語 | 模式: ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"})`
+                                  : ttsLang === "mandarin"
+                                  ? `朗讀此回答 (國語 | 模式: ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"})`
+                                  : `Read response aloud (English | Mode: ${ttsEngine === "local" ? "Local TTS" : "MiniMax Voice API"})`
                               }
                               style={{
                                 background: playingMessageId === m.id ? "rgba(16, 185, 129, 0.15)" : "transparent",
@@ -3873,17 +4067,23 @@ export function App() {
                               {isTtsLoading && playingMessageId === m.id ? (
                                 <>
                                   <Loader2 size={11} className="spin" color="#10b981" />
-                                  <span style={{ color: "#10b981" }}>Composing...</span>
+                                  <span style={{ color: "#10b981" }}>
+                                    {ttsLang === "cantonese" ? "合成中..." : ttsLang === "mandarin" ? "合成中..." : "Composing..."}
+                                  </span>
                                 </>
                               ) : playingMessageId === m.id ? (
                                 <>
                                   <Square size={10} fill="#10b981" color="#10b981" />
-                                  <span style={{ color: "#10b981" }}>Stop</span>
+                                  <span style={{ color: "#10b981" }}>
+                                    {ttsLang === "cantonese" ? "停止朗讀" : ttsLang === "mandarin" ? "停止朗讀" : "Stop"}
+                                  </span>
                                 </>
                               ) : (
                                 <>
                                   <Volume2 size={11} />
-                                  <span>Read Aloud</span>
+                                  <span>
+                                    {ttsLang === "cantonese" ? "語音朗讀" : ttsLang === "mandarin" ? "語音朗讀" : "Read Aloud"}
+                                  </span>
                                 </>
                               )}
                             </button>
