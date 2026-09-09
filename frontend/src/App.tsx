@@ -46,6 +46,7 @@ import {
   VolumeX,
   Square,
   Play,
+  Pause,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
@@ -271,10 +272,13 @@ export function App() {
   // 系統已安裝的中文/粵語可用語音清單
   const [availableLocalVoices, setAvailableLocalVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+  const [isTtsPaused, setIsTtsPaused] = useState<boolean>(false);
   const [isTtsLoading, setIsTtsLoading] = useState<boolean>(false);
   const [showTtsMenu, setShowTtsMenu] = useState<boolean>(false);
   const ttsMenuRef = useRef<HTMLDivElement>(null);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsAudioBlobUrlRef = useRef<string | null>(null);
+  const ttsAbortControllerRef = useRef<AbortController | null>(null);
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const ttsSpeakingTimeoutRef = useRef<any>(null);
   const [showVoiceKeyEditor, setShowVoiceKeyEditor] = useState<boolean>(false);
@@ -948,6 +952,14 @@ export function App() {
 
   // 🔊 Text-to-Speech (TTS) playback control (supports Local browser TTS and MiniMax Voice API)
   const stopTtsPlayback = () => {
+    // Abort pending TTS fetch request if still in flight
+    if (ttsAbortControllerRef.current) {
+      try {
+        ttsAbortControllerRef.current.abort();
+      } catch {}
+      ttsAbortControllerRef.current = null;
+    }
+
     // Clear speaking keepalive interval if any
     if (ttsSpeakingTimeoutRef.current) {
       clearInterval(ttsSpeakingTimeoutRef.current);
@@ -959,14 +971,23 @@ export function App() {
       activeUtteranceRef.current.onerror = null;
       activeUtteranceRef.current = null;
     }
-    // Stop MiniMax audio element
+    // Stop MiniMax audio element without triggering onerror
     if (ttsAudioRef.current) {
       try {
+        ttsAudioRef.current.onerror = null;
+        ttsAudioRef.current.onended = null;
         ttsAudioRef.current.pause();
         ttsAudioRef.current.currentTime = 0;
-        ttsAudioRef.current.src = "";
+        ttsAudioRef.current.removeAttribute("src");
+        ttsAudioRef.current.load();
       } catch {}
       ttsAudioRef.current = null;
+    }
+    if (ttsAudioBlobUrlRef.current) {
+      try {
+        URL.revokeObjectURL(ttsAudioBlobUrlRef.current);
+      } catch {}
+      ttsAudioBlobUrlRef.current = null;
     }
     // Stop browser native speech synthesis
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -975,7 +996,40 @@ export function App() {
       } catch {}
     }
     setPlayingMessageId(null);
+    setIsTtsPaused(false);
     setIsTtsLoading(false);
+  };
+
+  // ⏸️ Pause / On-Hold current TTS playback
+  const pauseTtsPlayback = () => {
+    if (ttsAudioRef.current) {
+      try {
+        ttsAudioRef.current.pause();
+      } catch {}
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.pause();
+      } catch {}
+    }
+    setIsTtsPaused(true);
+  };
+
+  // ▶️ Resume current on-hold TTS playback
+  const resumeTtsPlayback = async () => {
+    if (ttsAudioRef.current) {
+      try {
+        await ttsAudioRef.current.play();
+      } catch (err) {
+        console.error("Failed to resume audio:", err);
+      }
+    }
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.resume();
+      } catch {}
+    }
+    setIsTtsPaused(false);
   };
 
   const playCantoneseTts = async (text: string, messageId: string) => {
@@ -1065,6 +1119,7 @@ export function App() {
         }
         activeUtteranceRef.current = null;
         setPlayingMessageId(null);
+        setIsTtsPaused(false);
       };
 
       utterance.onend = () => {
@@ -1112,14 +1167,19 @@ export function App() {
     }
 
     // Mode 2: MiniMax Speech-2.8-HD Neural Voice API
+    const abortController = new AbortController();
+    ttsAbortControllerRef.current = abortController;
+
     try {
       setIsTtsLoading(true);
       setPlayingMessageId(messageId);
+      showAlert("語音模型生成中，請稍候... (Synthesizing speech, please wait...)", "info", "生成語音中 (Generating Voice)");
 
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        signal: abortController.signal,
         body: JSON.stringify({
           text: cleanText.slice(0, 3000),
           voiceId: ttsVoiceId || "Cantonese_CuteGirl",
@@ -1129,35 +1189,75 @@ export function App() {
         }),
       });
 
+      // If aborted while waiting for response, return quietly
+      if (abortController.signal.aborted) {
+        return;
+      }
+
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
         throw new Error(errJson.error || `Server response error (${response.status})`);
       }
 
       const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
+      if (abortController.signal.aborted) {
+        return;
+      }
+      if (!audioBlob || audioBlob.size === 0) {
+        throw new Error("Received empty audio from voice model");
+      }
 
-      const audio = new Audio(audioUrl);
+      const audioUrl = URL.createObjectURL(audioBlob);
+      ttsAudioBlobUrlRef.current = audioUrl;
+
+      const audio = new Audio();
       ttsAudioRef.current = audio;
 
       audio.onended = () => {
         setPlayingMessageId(null);
-        URL.revokeObjectURL(audioUrl);
+        setIsTtsPaused(false);
+        if (ttsAudioBlobUrlRef.current === audioUrl) {
+          URL.revokeObjectURL(audioUrl);
+          ttsAudioBlobUrlRef.current = null;
+        }
       };
 
       audio.onerror = (e) => {
+        // If aborted or cleared by user stopping, do not popup error
+        if (abortController.signal.aborted || !ttsAudioRef.current) {
+          return;
+        }
         console.error("Audio playback error:", e);
         setPlayingMessageId(null);
-        URL.revokeObjectURL(audioUrl);
-        showAlert("Audio playback failed.", "error", "Playback Error");
+        setIsTtsPaused(false);
+        if (ttsAudioBlobUrlRef.current === audioUrl) {
+          URL.revokeObjectURL(audioUrl);
+          ttsAudioBlobUrlRef.current = null;
+        }
+        showAlert("語音模型回應未及時或音訊解碼失敗，請稍候重試。(Voice model timed out or audio failed to decode)", "warning", "Audio Playback Failed");
       };
 
-      await audio.play();
+      audio.src = audioUrl;
+      try {
+        await audio.play();
+      } catch (playErr: any) {
+        // If play() was aborted or interrupted by user clicking pause/stop, ignore
+        if (playErr.name === "AbortError" || abortController.signal.aborted) {
+          return;
+        }
+        throw playErr;
+      }
     } catch (err: any) {
+      if (err.name === "AbortError" || abortController.signal.aborted) {
+        return;
+      }
       console.error("MiniMax TTS error:", err);
       setPlayingMessageId(null);
-      showAlert(`MiniMax TTS synthesis error: ${err.message || err}`, "error", "Voice Generation Failed");
+      showAlert(`語音大模型未及時反應或生成失敗 (${err.message || err})。建議稍候再試。`, "warning", "Voice Generation Failed");
     } finally {
+      if (ttsAbortControllerRef.current === abortController) {
+        ttsAbortControllerRef.current = null;
+      }
       setIsTtsLoading(false);
     }
   };
@@ -2738,8 +2838,8 @@ export function App() {
               <Sliders size={15} />
             </button>
 
-            {/* 🔊 Voice Speak, Stop & Setup Navigation Bar Controls */}
-            <div style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 4 }} ref={ttsMenuRef}>
+            {/* 🔊 Group of 4 Voice Controls: 1. Speak | 2. On-Hold/Resume | 3. Stop | 4. Setup */}
+            <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }} ref={ttsMenuRef}>
               <div
                 style={{
                   display: "inline-flex",
@@ -2750,12 +2850,14 @@ export function App() {
                   overflow: "hidden",
                 }}
               >
-                {/* 1. Direct Speak / Stop Button */}
+                {/* 1. Speak Button */}
                 <button
                   type="button"
                   onClick={() => {
                     if (playingMessageId) {
-                      stopTtsPlayback();
+                      if (isTtsPaused) {
+                        resumeTtsPlayback();
+                      }
                     } else {
                       // Speak the latest assistant response
                       const assistantMsgs = messages.filter((m) => m.role === "assistant" && m.content.trim());
@@ -2777,50 +2879,131 @@ export function App() {
                   }}
                   title={
                     playingMessageId
-                      ? ttsLang === "cantonese" ? "點擊立即停止朗讀" : ttsLang === "mandarin" ? "點擊立即停止朗讀" : "Stop reading aloud"
+                      ? isTtsPaused ? "Resume Playback" : "Currently Reading Aloud"
                       : ttsLang === "cantonese"
-                      ? `朗讀最新回答 (粵語 | ${ttsSpeed}x)`
+                      ? `朗讀最新回答 (廣東話 | ${ttsSpeed}x)`
                       : ttsLang === "mandarin"
-                      ? `朗讀最新回答 (國語 | ${ttsSpeed}x)`
+                      ? `朗讀最新回答 (中文普通話 | ${ttsSpeed}x)`
                       : `Read latest answer (English | ${ttsSpeed}x)`
                   }
                   style={{
                     height: 32,
                     padding: "0 10px",
-                    background: playingMessageId ? "rgba(16, 185, 129, 0.2)" : "transparent",
+                    background: playingMessageId && !isTtsPaused ? "rgba(16, 185, 129, 0.2)" : "transparent",
                     border: "none",
-                    color: playingMessageId ? "#10b981" : "var(--text-main)",
+                    color: playingMessageId && !isTtsPaused ? "#10b981" : "var(--text-main)",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 6,
+                    gap: 5,
                     cursor: "pointer",
                     fontSize: 12,
                     fontWeight: 700,
                     transition: "all 0.15s ease",
                   }}
                 >
-                  {playingMessageId ? (
+                  {isTtsLoading ? (
                     <>
-                      <Square size={13} fill="#10b981" color="#10b981" className="animate-pulse" />
-                      <span style={{ color: "#10b981" }}>{ttsLang === "cantonese" ? "停止" : ttsLang === "mandarin" ? "停止" : "Stop"}</span>
+                      <Loader2 size={13} className="spin" color="#10b981" />
+                      <span style={{ color: "#10b981" }}>{ttsLang === "cantonese" ? "合成中" : ttsLang === "mandarin" ? "合成中" : "Wait"}</span>
+                    </>
+                  ) : playingMessageId && !isTtsPaused ? (
+                    <>
+                      <Volume2 size={14} color="#10b981" className="animate-pulse" />
+                      <span style={{ color: "#10b981" }}>{ttsLang === "cantonese" ? "播放中" : ttsLang === "mandarin" ? "播放中" : "Playing"}</span>
                     </>
                   ) : (
                     <>
-                      <Volume2 size={15} color="var(--accent, #0284c7)" />
+                      <Play size={13} color="var(--accent, #0284c7)" fill="var(--accent, #0284c7)" />
                       <span>{ttsLang === "cantonese" ? "朗讀" : ttsLang === "mandarin" ? "朗讀" : "Speak"}</span>
                     </>
                   )}
                 </button>
 
-                {/* 2. Setup Dropdown Trigger */}
+                {/* 2. On-Hold / Resume Button */}
+                <button
+                  type="button"
+                  disabled={!playingMessageId}
+                  onClick={() => {
+                    if (!playingMessageId) return;
+                    if (isTtsPaused) {
+                      resumeTtsPlayback();
+                    } else {
+                      pauseTtsPlayback();
+                    }
+                  }}
+                  title={
+                    !playingMessageId
+                      ? "No active audio playback"
+                      : isTtsPaused
+                      ? "點擊繼續播放 (Resume)"
+                      : "點擊暫停保留 (On-Hold)"
+                  }
+                  style={{
+                    height: 32,
+                    padding: "0 9px",
+                    background: isTtsPaused ? "rgba(245, 158, 11, 0.2)" : "transparent",
+                    border: "none",
+                    borderLeft: "1px solid var(--border-color)",
+                    color: !playingMessageId ? "var(--text-muted)" : isTtsPaused ? "#f59e0b" : "var(--text-main)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    cursor: !playingMessageId ? "not-allowed" : "pointer",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    opacity: !playingMessageId ? 0.45 : 1,
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {isTtsPaused ? (
+                    <>
+                      <Play size={12} color="#f59e0b" fill="#f59e0b" />
+                      <span style={{ color: "#f59e0b", fontWeight: 700 }}>Resume</span>
+                    </>
+                  ) : (
+                    <>
+                      <Pause size={12} color={playingMessageId ? "var(--text-main)" : "var(--text-muted)"} />
+                      <span>On-Hold</span>
+                    </>
+                  )}
+                </button>
+
+                {/* 3. Stop Button */}
+                <button
+                  type="button"
+                  disabled={!playingMessageId && !isTtsLoading}
+                  onClick={stopTtsPlayback}
+                  title="點擊停止播放 (Stop)"
+                  style={{
+                    height: 32,
+                    padding: "0 9px",
+                    background: "transparent",
+                    border: "none",
+                    borderLeft: "1px solid var(--border-color)",
+                    color: playingMessageId || isTtsLoading ? "#ef4444" : "var(--text-muted)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    cursor: !playingMessageId && !isTtsLoading ? "not-allowed" : "pointer",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    opacity: !playingMessageId && !isTtsLoading ? 0.45 : 1,
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Square size={11} fill={playingMessageId || isTtsLoading ? "#ef4444" : "var(--text-muted)"} />
+                  <span>Stop</span>
+                </button>
+
+                {/* 4. Setup Dropdown Trigger */}
                 <button
                   type="button"
                   onClick={() => setShowTtsMenu(!showTtsMenu)}
                   title={
                     ttsLang === "cantonese"
-                      ? `語音設定 (語言: 粵語 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | ${ttsSpeed}x)`
+                      ? `語音設定 (語言: 廣東話 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | ${ttsSpeed}x)`
                       : ttsLang === "mandarin"
-                      ? `語音設定 (語言: 國語 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | ${ttsSpeed}x)`
+                      ? `語音設定 (語言: 中文普通話 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | ${ttsSpeed}x)`
                       : `Voice Setup (Language: English | ${ttsEngine === "local" ? "Local" : "MiniMax"} | ${ttsSpeed}x)`
                   }
                   style={{
@@ -2839,7 +3022,7 @@ export function App() {
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <span>{ttsLang === "cantonese" ? "🇭🇰 Yue" : ttsLang === "mandarin" ? "🇨🇳 Man" : "🇬🇧 EN"}</span>
+                  <span>{ttsLang === "cantonese" ? "廣東話" : ttsLang === "mandarin" ? "中文" : "English"}</span>
                   <ChevronDown
                     size={12}
                     style={{
@@ -2849,33 +3032,6 @@ export function App() {
                   />
                 </button>
               </div>
-
-              {/* Quick Stop Button in Navbar when playing */}
-              {playingMessageId && (
-                <button
-                  type="button"
-                  onClick={stopTtsPlayback}
-                  title="Stop reading aloud"
-                  style={{
-                    height: 32,
-                    padding: "0 8px",
-                    borderRadius: 8,
-                    background: "rgba(239, 68, 68, 0.15)",
-                    border: "1px solid #ef4444",
-                    color: "#ef4444",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                    cursor: "pointer",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  <Square size={11} fill="#ef4444" />
-                  <span>Stop</span>
-                </button>
-              )}
 
               {/* TTS Voice Setup Dropdown Popover */}
               {showTtsMenu && (
@@ -3003,8 +3159,8 @@ export function App() {
                     </span>
                     <div style={{ display: "flex", gap: 4 }}>
                       {[
-                        { id: "cantonese", label: ttsLang === "cantonese" ? "🇭🇰 粵語" : ttsLang === "mandarin" ? "🇭🇰 粵語" : "🇭🇰 Cantonese", defaultVoice: "Cantonese_CuteGirl" },
-                        { id: "mandarin", label: ttsLang === "cantonese" ? "🇨🇳 國語" : ttsLang === "mandarin" ? "🇨🇳 國語" : "🇨🇳 Mandarin", defaultVoice: "female-yujie" },
+                        { id: "cantonese", label: ttsLang === "cantonese" ? "🇭🇰 廣東話" : ttsLang === "mandarin" ? "🇭🇰 廣東話" : "🇭🇰 Cantonese", defaultVoice: "Cantonese_CuteGirl" },
+                        { id: "mandarin", label: ttsLang === "cantonese" ? "🇨🇳 中文" : ttsLang === "mandarin" ? "🇨🇳 中文" : "🇨🇳 Chinese", defaultVoice: "female-yujie" },
                         { id: "english", label: ttsLang === "cantonese" ? "🇬🇧 英語" : ttsLang === "mandarin" ? "🇬🇧 英語" : "🇬🇧 English", defaultVoice: "English_Trustworthy_Man" }
                       ].map((item) => {
                         const isSelected = ttsLang === item.id;
@@ -4073,9 +4229,9 @@ export function App() {
                                 </>
                               ) : playingMessageId === m.id ? (
                                 <>
-                                  <Square size={10} fill="#10b981" color="#10b981" />
-                                  <span style={{ color: "#10b981" }}>
-                                    {ttsLang === "cantonese" ? "停止朗讀" : ttsLang === "mandarin" ? "停止朗讀" : "Stop"}
+                                  <Square size={10} fill="#ef4444" color="#ef4444" />
+                                  <span style={{ color: "#ef4444" }}>
+                                    Stop
                                   </span>
                                 </>
                               ) : (
@@ -4087,6 +4243,47 @@ export function App() {
                                 </>
                               )}
                             </button>
+
+                            {/* Message Row On-Hold / Resume Button */}
+                            {playingMessageId === m.id && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (isTtsPaused) {
+                                    resumeTtsPlayback();
+                                  } else {
+                                    pauseTtsPlayback();
+                                  }
+                                }}
+                                title={isTtsPaused ? "繼續播放 (Resume)" : "暫停播放 (On-Hold)"}
+                                style={{
+                                  background: isTtsPaused ? "rgba(245, 158, 11, 0.2)" : "rgba(245, 158, 11, 0.1)",
+                                  border: "1px solid #f59e0b",
+                                  borderRadius: 4,
+                                  padding: "2px 8px",
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  color: "#f59e0b",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  transition: "all 0.15s ease",
+                                }}
+                              >
+                                {isTtsPaused ? (
+                                  <>
+                                    <Play size={10} color="#f59e0b" fill="#f59e0b" />
+                                    <span>Resume</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Pause size={10} color="#f59e0b" />
+                                    <span>On-Hold</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
 
                             <button
                               type="button"
