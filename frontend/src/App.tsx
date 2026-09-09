@@ -932,8 +932,19 @@ export function App() {
       .replace(/\s+/g, " ")
       .trim();
 
+    // 如果目前 AI 仍在生成中，或該訊息仍處於 streaming 狀態，提示用戶等待生成完畢
+    const targetMsg = messages.find((m) => m.id === messageId);
+    if ((targetMsg && targetMsg.isStreaming) || (loading && targetMsg && targetMsg.role === "assistant" && !targetMsg.content.trim())) {
+      showAlert("正在等待 AI 回答生成完畢... 請稍候片刻再點擊語音朗讀", "info", "等待 AI 回答中 (Waiting for response)");
+      return;
+    }
+
     if (!cleanText) {
-      showAlert("此訊息沒有可供朗讀的文字內容", "info", "無法播放");
+      if (loading || (targetMsg && targetMsg.isStreaming)) {
+        showAlert("正在等待 AI 生成語音內容... 請稍候 (Waiting for response)", "info", "語音準備中");
+      } else {
+        showAlert("此訊息尚無可供朗讀的文字內容，請等待生成完畢 (TTS composing)", "info", "語音排隊中");
+      }
       return;
     }
 
