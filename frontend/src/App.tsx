@@ -2958,7 +2958,7 @@ export function App() {
                       : ttsLang === "cantonese"
                       ? `播放最新回答 (粵語 | ${ttsSpeed}x)`
                       : ttsLang === "mandarin"
-                      ? `播放最新回答 (中文普通話 | ${ttsSpeed}x)`
+                      ? `播放最新回答 (國語 | ${ttsSpeed}x)`
                       : `Play latest answer (English | ${ttsSpeed}x)`
                   }
                   style={{
@@ -3090,7 +3090,7 @@ export function App() {
                     ttsLang === "cantonese"
                       ? `語音設定 (語言: 粵語 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | 限時: ${ttsTimeout}s | ${ttsSpeed}x)`
                       : ttsLang === "mandarin"
-                      ? `語音設定 (語言: 中文普通話 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | 限時: ${ttsTimeout}s | ${ttsSpeed}x)`
+                      ? `語音設定 (語言: 國語 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | 限時: ${ttsTimeout}s | ${ttsSpeed}x)`
                       : `Voice Setup (Language: English | ${ttsEngine === "local" ? "Local" : "MiniMax"} | Timeout: ${ttsTimeout}s | ${ttsSpeed}x)`
                   }
                   style={{
@@ -3109,7 +3109,7 @@ export function App() {
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <span>{ttsLang === "cantonese" ? "粵語" : ttsLang === "mandarin" ? "中文" : "English"}</span>
+                  <span>{ttsLang === "cantonese" ? "粵語" : ttsLang === "mandarin" ? "國語" : "English"}</span>
                   <ChevronDown
                     size={12}
                     style={{
@@ -3247,7 +3247,7 @@ export function App() {
                     <div style={{ display: "flex", gap: 4 }}>
                       {[
                         { id: "cantonese", label: ttsLang === "cantonese" || ttsLang === "mandarin" ? "🇭🇰 粵語" : "🇭🇰 Cantonese", defaultVoice: "Cantonese_CuteGirl" },
-                        { id: "mandarin", label: ttsLang === "cantonese" || ttsLang === "mandarin" ? "🇨🇳 中文" : "🇨🇳 Chinese", defaultVoice: "female-yujie" },
+                        { id: "mandarin", label: ttsLang === "cantonese" || ttsLang === "mandarin" ? "🇨🇳 國語" : "🇨🇳 Mandarin", defaultVoice: "female-yujie" },
                         { id: "english", label: ttsLang === "cantonese" || ttsLang === "mandarin" ? "🇬🇧 英語" : "🇬🇧 English", defaultVoice: "English_Trustworthy_Man" }
                       ].map((item) => {
                         const isSelected = ttsLang === item.id;
