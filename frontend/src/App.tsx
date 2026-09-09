@@ -48,6 +48,7 @@ import {
   Play,
   Pause,
   RotateCcw,
+  ArrowUp,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
@@ -555,6 +556,15 @@ export function App() {
   };
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const lastGeneratedTurnRef = useRef<HTMLDivElement>(null);
+
+  const scrollToLastGeneratedTurn = () => {
+    if (lastGeneratedTurnRef.current) {
+      lastGeneratedTurnRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   // Fetch initial configuration, workspaces, and active MCP tools
   useEffect(() => {
@@ -4014,6 +4024,11 @@ export function App() {
           >
             {messages.map((m, mIdx) => {
               const isUser = m.role === "user";
+              // Identify if this is the last assistant response or thread end
+              const lastAssistantIdx = messages.map((item) => item.role).lastIndexOf("assistant");
+              const targetIdx = lastAssistantIdx !== -1 ? lastAssistantIdx : messages.length - 1;
+              const isTargetTurn = mIdx === targetIdx;
+
               // Calculate a display turn index if not present
               const turnNumber = m.turnIndex || Math.floor(mIdx / 2) + 1;
               const timeString = m.timestamp
@@ -4023,12 +4038,14 @@ export function App() {
               return (
                 <div
                   key={m.id}
+                  ref={isTargetTurn ? lastGeneratedTurnRef : undefined}
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     alignItems: isUser ? "flex-end" : "flex-start",
                     width: "100%",
                     minWidth: 0,
+                    scrollMarginTop: "24px",
                   }}
                 >
                   {/* Header Tag: Turn Number & Time */}
@@ -5037,6 +5054,39 @@ export function App() {
             }}
           >
             <Send size={16} /> Send
+          </button>
+
+          {/* ⬆️ Upper Arrow Button: Jump to top of last generated session/turn */}
+          <button
+            type="button"
+            onClick={scrollToLastGeneratedTurn}
+            title="Jump back to top of last generated session"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 8,
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
+              color: "var(--text-main)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "var(--accent)";
+              e.currentTarget.style.color = "var(--accent)";
+              e.currentTarget.style.background = "var(--bg-secondary)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--border-color)";
+              e.currentTarget.style.color = "var(--text-main)";
+              e.currentTarget.style.background = "var(--bg-card)";
+            }}
+          >
+            <ArrowUp size={18} />
           </button>
           </div>
         </div>
