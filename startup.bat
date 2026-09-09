@@ -29,9 +29,12 @@ if exist "node_modules\.bin\vite.cmd" (
 )
 cd ..
 
+:: Ensure PORT is explicitly set to 7009 for MiniBot
+set PORT=7009
+
 :: 3. Clean up any existing process holding Port 7009
 echo [Port Check] Ensuring Port 7009 is free...
-powershell -NoProfile -Command "Stop-Process -Id (Get-NetTCPConnection -LocalPort 7009 -ErrorAction SilentlyContinue).OwningProcess -Force -ErrorAction SilentlyContinue"
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 7009 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
 
 :: 4. Launch browser automatically in background after 2 seconds
 start /min powershell -NoProfile -Command "Start-Sleep -Seconds 2; Start-Process 'http://localhost:7009'"
