@@ -2969,28 +2969,17 @@ export function App() {
                     color: playingMessageId && !isTtsPaused ? "#10b981" : "var(--text-main)",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 5,
+                    justifyContent: "center",
                     cursor: "pointer",
-                    fontSize: 12,
-                    fontWeight: 700,
                     transition: "all 0.15s ease",
                   }}
                 >
                   {isTtsLoading ? (
-                    <>
-                      <Loader2 size={13} className="spin" color="#10b981" />
-                      <span style={{ color: "#10b981" }}>{ttsLang === "cantonese" ? "合成中" : ttsLang === "mandarin" ? "合成中" : "Wait"}</span>
-                    </>
+                    <Loader2 size={15} className="spin" color="#10b981" />
                   ) : playingMessageId && !isTtsPaused ? (
-                    <>
-                      <Volume2 size={14} color="#10b981" className="animate-pulse" />
-                      <span style={{ color: "#10b981" }}>{ttsLang === "cantonese" ? "播放中" : ttsLang === "mandarin" ? "播放中" : "Playing"}</span>
-                    </>
+                    <Volume2 size={15} color="#10b981" className="animate-pulse" />
                   ) : (
-                    <>
-                      <Play size={13} color="var(--accent, #0284c7)" fill="var(--accent, #0284c7)" />
-                      <span>Play</span>
-                    </>
+                    <Play size={15} color="var(--accent, #0284c7)" fill="var(--accent, #0284c7)" />
                   )}
                 </button>
 
@@ -3015,31 +3004,23 @@ export function App() {
                   }
                   style={{
                     height: 32,
-                    padding: "0 9px",
+                    padding: "0 10px",
                     background: isTtsPaused ? "rgba(245, 158, 11, 0.2)" : "transparent",
                     border: "none",
                     borderLeft: "1px solid var(--border-color)",
                     color: !playingMessageId ? "var(--text-muted)" : isTtsPaused ? "#f59e0b" : "var(--text-main)",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 5,
+                    justifyContent: "center",
                     cursor: !playingMessageId ? "not-allowed" : "pointer",
-                    fontSize: 12,
-                    fontWeight: 600,
                     opacity: !playingMessageId ? 0.45 : 1,
                     transition: "all 0.15s ease",
                   }}
                 >
                   {isTtsPaused ? (
-                    <>
-                      <Play size={12} color="#f59e0b" fill="#f59e0b" />
-                      <span style={{ color: "#f59e0b", fontWeight: 700 }}>Resume</span>
-                    </>
+                    <Play size={14} color="#f59e0b" fill="#f59e0b" />
                   ) : (
-                    <>
-                      <Pause size={12} color={playingMessageId ? "var(--text-main)" : "var(--text-muted)"} />
-                      <span>On-Hold</span>
-                    </>
+                    <Pause size={14} color={playingMessageId ? "var(--text-main)" : "var(--text-muted)"} />
                   )}
                 </button>
 
@@ -3049,24 +3030,22 @@ export function App() {
                   onClick={repeatTtsPlayback}
                   title={
                     ttsLang === "cantonese"
-                      ? "重播剛才的語音 (免重新生成)"
+                      ? "重播 (免重新生成)"
                       : ttsLang === "mandarin"
-                      ? "重播剛才的語音 (免重新生成)"
+                      ? "重播 (免重新生成)"
                       : "Repeat last speech (Instant zero-latency replay without regeneration)"
                   }
                   style={{
                     height: 32,
-                    padding: "0 9px",
+                    padding: "0 10px",
                     background: "transparent",
                     border: "none",
                     borderLeft: "1px solid var(--border-color)",
                     color: "var(--text-main)",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 5,
+                    justifyContent: "center",
                     cursor: "pointer",
-                    fontSize: 12,
-                    fontWeight: 600,
                     transition: "all 0.15s ease",
                   }}
                   onMouseEnter={(e) => {
@@ -3076,8 +3055,7 @@ export function App() {
                     e.currentTarget.style.color = "var(--text-main)";
                   }}
                 >
-                  <RotateCcw size={12} color="var(--accent, #0284c7)" />
-                  <span>Repeat</span>
+                  <RotateCcw size={14} color="var(--accent, #0284c7)" />
                 </button>
 
                 {/* 4. Stop Button */}
@@ -3088,23 +3066,20 @@ export function App() {
                   title="點擊停止播放 (Stop)"
                   style={{
                     height: 32,
-                    padding: "0 9px",
+                    padding: "0 10px",
                     background: "transparent",
                     border: "none",
                     borderLeft: "1px solid var(--border-color)",
                     color: playingMessageId || isTtsLoading ? "#ef4444" : "var(--text-muted)",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 5,
+                    justifyContent: "center",
                     cursor: !playingMessageId && !isTtsLoading ? "not-allowed" : "pointer",
-                    fontSize: 12,
-                    fontWeight: 600,
                     opacity: !playingMessageId && !isTtsLoading ? 0.45 : 1,
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <Square size={11} fill={playingMessageId || isTtsLoading ? "#ef4444" : "var(--text-muted)"} />
-                  <span>Stop</span>
+                  <Square size={13} fill={playingMessageId || isTtsLoading ? "#ef4444" : "var(--text-muted)"} />
                 </button>
 
                 {/* 5. Setup Dropdown Trigger */}
