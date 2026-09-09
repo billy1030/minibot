@@ -2954,12 +2954,12 @@ export function App() {
                   }}
                   title={
                     playingMessageId
-                      ? isTtsPaused ? "Resume Playback" : "Currently Reading Aloud"
+                      ? isTtsPaused ? "Resume Playback" : "Currently Playing"
                       : ttsLang === "cantonese"
-                      ? `朗讀最新回答 (廣東話 | ${ttsSpeed}x)`
+                      ? `播放最新回答 (廣東話 | ${ttsSpeed}x)`
                       : ttsLang === "mandarin"
-                      ? `朗讀最新回答 (中文普通話 | ${ttsSpeed}x)`
-                      : `Read latest answer (English | ${ttsSpeed}x)`
+                      ? `播放最新回答 (中文普通話 | ${ttsSpeed}x)`
+                      : `Play latest answer (English | ${ttsSpeed}x)`
                   }
                   style={{
                     height: 32,
@@ -2989,7 +2989,7 @@ export function App() {
                   ) : (
                     <>
                       <Play size={13} color="var(--accent, #0284c7)" fill="var(--accent, #0284c7)" />
-                      <span>{ttsLang === "cantonese" ? "朗讀" : ttsLang === "mandarin" ? "朗讀" : "Speak"}</span>
+                      <span>Play</span>
                     </>
                   )}
                 </button>
@@ -3186,7 +3186,7 @@ export function App() {
                           gap: 3,
                         }}
                       >
-                        <Square size={9} fill="#ef4444" /> {ttsLang === "cantonese" ? "停止朗讀" : ttsLang === "mandarin" ? "停止朗讀" : "Stop"}
+                        <Square size={9} fill="#ef4444" /> {ttsLang === "cantonese" || ttsLang === "mandarin" ? "停止播放" : "Stop"}
                       </button>
                     )}
                   </div>
@@ -3267,7 +3267,7 @@ export function App() {
                   {/* Language Selector: Cantonese / Mandarin / English */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
                     <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
-                      {ttsLang === "cantonese" ? "朗讀語言 (Target Language):" : ttsLang === "mandarin" ? "朗讀語言 (Target Language):" : "Target Language:"}
+                      {ttsLang === "cantonese" || ttsLang === "mandarin" ? "語音語言 (Voice Language):" : "Voice Language:"}
                     </span>
                     <div style={{ display: "flex", gap: 4 }}>
                       {[
@@ -3453,7 +3453,7 @@ export function App() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
-                        {ttsLang === "cantonese" || ttsLang === "mandarin" ? "朗讀速度 (Speech Rate):" : "Speech Rate:"}
+                        {ttsLang === "cantonese" || ttsLang === "mandarin" ? "播放速度 (Playback Speed):" : "Playback Speed:"}
                       </span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)" }}>
                         {ttsSpeed.toFixed(2)}x
@@ -4388,9 +4388,7 @@ export function App() {
                               ) : (
                                 <>
                                   <Volume2 size={11} />
-                                  <span>
-                                    {ttsLang === "cantonese" ? "語音朗讀" : ttsLang === "mandarin" ? "語音朗讀" : "Read Aloud"}
-                                  </span>
+                                  <span>Play</span>
                                 </>
                               )}
                             </button>
