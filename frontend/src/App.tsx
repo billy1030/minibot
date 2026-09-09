@@ -2956,7 +2956,7 @@ export function App() {
                     playingMessageId
                       ? isTtsPaused ? "Resume Playback" : "Currently Playing"
                       : ttsLang === "cantonese"
-                      ? `播放最新回答 (廣東話 | ${ttsSpeed}x)`
+                      ? `播放最新回答 (粵語 | ${ttsSpeed}x)`
                       : ttsLang === "mandarin"
                       ? `播放最新回答 (中文普通話 | ${ttsSpeed}x)`
                       : `Play latest answer (English | ${ttsSpeed}x)`
@@ -3088,7 +3088,7 @@ export function App() {
                   onClick={() => setShowTtsMenu(!showTtsMenu)}
                   title={
                     ttsLang === "cantonese"
-                      ? `語音設定 (語言: 廣東話 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | 限時: ${ttsTimeout}s | ${ttsSpeed}x)`
+                      ? `語音設定 (語言: 粵語 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | 限時: ${ttsTimeout}s | ${ttsSpeed}x)`
                       : ttsLang === "mandarin"
                       ? `語音設定 (語言: 中文普通話 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | 限時: ${ttsTimeout}s | ${ttsSpeed}x)`
                       : `Voice Setup (Language: English | ${ttsEngine === "local" ? "Local" : "MiniMax"} | Timeout: ${ttsTimeout}s | ${ttsSpeed}x)`
@@ -3109,7 +3109,7 @@ export function App() {
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <span>{ttsLang === "cantonese" ? "廣東話" : ttsLang === "mandarin" ? "中文" : "English"}</span>
+                  <span>{ttsLang === "cantonese" ? "粵語" : ttsLang === "mandarin" ? "中文" : "English"}</span>
                   <ChevronDown
                     size={12}
                     style={{
@@ -3246,9 +3246,9 @@ export function App() {
                     </span>
                     <div style={{ display: "flex", gap: 4 }}>
                       {[
-                        { id: "cantonese", label: ttsLang === "cantonese" ? "🇭🇰 廣東話" : ttsLang === "mandarin" ? "🇭🇰 廣東話" : "🇭🇰 Cantonese", defaultVoice: "Cantonese_CuteGirl" },
-                        { id: "mandarin", label: ttsLang === "cantonese" ? "🇨🇳 中文" : ttsLang === "mandarin" ? "🇨🇳 中文" : "🇨🇳 Chinese", defaultVoice: "female-yujie" },
-                        { id: "english", label: ttsLang === "cantonese" ? "🇬🇧 英語" : ttsLang === "mandarin" ? "🇬🇧 英語" : "🇬🇧 English", defaultVoice: "English_Trustworthy_Man" }
+                        { id: "cantonese", label: ttsLang === "cantonese" || ttsLang === "mandarin" ? "🇭🇰 粵語" : "🇭🇰 Cantonese", defaultVoice: "Cantonese_CuteGirl" },
+                        { id: "mandarin", label: ttsLang === "cantonese" || ttsLang === "mandarin" ? "🇨🇳 中文" : "🇨🇳 Chinese", defaultVoice: "female-yujie" },
+                        { id: "english", label: ttsLang === "cantonese" || ttsLang === "mandarin" ? "🇬🇧 英語" : "🇬🇧 English", defaultVoice: "English_Trustworthy_Man" }
                       ].map((item) => {
                         const isSelected = ttsLang === item.id;
                         return (
@@ -3530,7 +3530,7 @@ export function App() {
                         if (ttsLang === "cantonese") {
                           testSampleText = ttsEngine === "local"
                             ? "你好！呢個係本地瀏覽器粵語聲音測試，速度同聲線設定正常運作。"
-                            : "你好！我係你嘅 MiniMax 廣東話語音助手，呢個係聲線角色測試。";
+                            : "你好！我係你嘅 MiniMax 粵語語音助手，呢個係聲線角色測試。";
                         } else if (ttsLang === "mandarin") {
                           testSampleText = ttsEngine === "local"
                             ? "您好！這是本地瀏覽器國語聲音測試，語速與聲線設定正常運作。"
