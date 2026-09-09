@@ -766,10 +766,13 @@ app.get("/api/llm/test", requireAuth, async (req, res) => {
 // 3c. Text-to-Speech (TTS) via MiniMax Speech-2.8-HD (Cantonese & multilingual neural voice)
 app.post("/api/tts", requireAuth, async (req, res) => {
   try {
-    const { text, voiceId = "Cantonese_CuteGirl", speed = 1.0, pitch = 0, vol = 1.0 } = req.body;
+    const { text, voiceId = "Cantonese_CuteGirl", speed = 1.0, pitch = 0, vol = 1.0, timeout = 30 } = req.body;
     if (!text || typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ success: false, error: "Text is required for TTS synthesis" });
     }
+
+    // Dynamic timeout limit: between 3 and 120 seconds (default 30s)
+    const timeoutSec = Math.max(3, Math.min(120, Number(timeout) || 30));
 
     // Use dedicated voice.apiKey if configured, otherwise fallback to llm.apiKey
     const apiKey = (config.voice?.apiKey && config.voice.apiKey.trim()) || config.llm.apiKey;
@@ -841,8 +844,8 @@ app.post("/api/tts", requireAuth, async (req, res) => {
       res.status(502).json({ success: false, error: err.message });
     });
 
-    ttsReq.setTimeout(30000, () => {
-      ttsReq.destroy(new Error("TTS request timed out after 30 seconds"));
+    ttsReq.setTimeout(timeoutSec * 1000, () => {
+      ttsReq.destroy(new Error(`MiniMax Voice API request timed out after ${timeoutSec} seconds`));
     });
 
     ttsReq.write(postData);

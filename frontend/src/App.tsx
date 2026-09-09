@@ -47,6 +47,7 @@ import {
   Square,
   Play,
   Pause,
+  RotateCcw,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
@@ -269,6 +270,15 @@ export function App() {
       return 1.0;
     }
   });
+  // MiniMax 大模型語音合成超時限制 (秒，預設 30s)
+  const [ttsTimeout, setTtsTimeout] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("minibot_tts_timeout");
+      return saved ? parseInt(saved, 10) : 30;
+    } catch {
+      return 30;
+    }
+  });
   // 系統已安裝的中文/粵語可用語音清單
   const [availableLocalVoices, setAvailableLocalVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
@@ -281,6 +291,13 @@ export function App() {
   const ttsAbortControllerRef = useRef<AbortController | null>(null);
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const ttsSpeakingTimeoutRef = useRef<any>(null);
+  // 快取最後一次合成/播放的音訊資訊，支援免重新生成立即重播 (Repeat without regeneration)
+  const lastTtsPlaybackRef = useRef<{
+    messageId: string;
+    text: string;
+    engine: "local" | "minimax";
+    audioBlobUrl: string | null;
+  } | null>(null);
   const [showVoiceKeyEditor, setShowVoiceKeyEditor] = useState<boolean>(false);
   const [customVoiceApiKey, setCustomVoiceApiKey] = useState<string>("");
   const [isSavingVoiceKey, setIsSavingVoiceKey] = useState<boolean>(false);
@@ -983,12 +1000,6 @@ export function App() {
       } catch {}
       ttsAudioRef.current = null;
     }
-    if (ttsAudioBlobUrlRef.current) {
-      try {
-        URL.revokeObjectURL(ttsAudioBlobUrlRef.current);
-      } catch {}
-      ttsAudioBlobUrlRef.current = null;
-    }
     // Stop browser native speech synthesis
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
@@ -1030,6 +1041,56 @@ export function App() {
       } catch {}
     }
     setIsTtsPaused(false);
+  };
+
+  // 🔁 Repeat last played voice without regeneration (免重新生成立即重播)
+  const repeatTtsPlayback = async () => {
+    const cached = lastTtsPlaybackRef.current;
+    if (!cached) {
+      // If nothing played yet, fall back to playing the latest assistant response
+      const assistantMsgs = messages.filter((m) => m.role === "assistant" && m.content.trim());
+      if (assistantMsgs.length > 0) {
+        const lastMsg = assistantMsgs[assistantMsgs.length - 1];
+        playCantoneseTts(lastMsg.content, lastMsg.id);
+      }
+      return;
+    }
+
+    // If currently playing, stop it first
+    stopTtsPlayback();
+
+    // Mode A: MiniMax with cached audio blob URL - replay instantly without re-generating!
+    if (cached.engine === "minimax" && cached.audioBlobUrl) {
+      try {
+        setPlayingMessageId(cached.messageId);
+        setIsTtsPaused(false);
+        const audio = new Audio();
+        ttsAudioRef.current = audio;
+        ttsAudioBlobUrlRef.current = cached.audioBlobUrl;
+
+        audio.onended = () => {
+          setPlayingMessageId(null);
+          setIsTtsPaused(false);
+        };
+
+        audio.onerror = (e) => {
+          if (!ttsAudioRef.current) return;
+          console.error("Audio playback error during repeat:", e);
+          setPlayingMessageId(null);
+          setIsTtsPaused(false);
+        };
+
+        audio.src = cached.audioBlobUrl;
+        audio.currentTime = 0;
+        await audio.play();
+        return;
+      } catch (err) {
+        console.warn("Replay from cached blob failed, re-fetching:", err);
+      }
+    }
+
+    // Mode B: Local Web Speech API or fallback - replay clean text directly without regeneration
+    playCantoneseTts(cached.text, cached.messageId);
   };
 
   const playCantoneseTts = async (text: string, messageId: string) => {
@@ -1077,6 +1138,12 @@ export function App() {
       }
 
       setPlayingMessageId(messageId);
+      lastTtsPlaybackRef.current = {
+        messageId,
+        text: cleanText,
+        engine: "local",
+        audioBlobUrl: null,
+      };
 
       const utterance = new SpeechSynthesisUtterance(cleanText);
       const targetLang = ttsLang === "cantonese" ? "zh-HK" : ttsLang === "mandarin" ? "zh-CN" : "en-US";
@@ -1173,7 +1240,7 @@ export function App() {
     try {
       setIsTtsLoading(true);
       setPlayingMessageId(messageId);
-      showAlert("語音模型生成中，請稍候... (Synthesizing speech, please wait...)", "info", "生成語音中 (Generating Voice)");
+      showAlert(`語音模型生成中，請稍候... (限時 ${ttsTimeout}s)`, "info", "生成語音中 (Generating Voice)");
 
       const response = await fetch("/api/tts", {
         method: "POST",
@@ -1186,6 +1253,7 @@ export function App() {
           speed: ttsSpeed || 1.0,
           vol: 1.0,
           pitch: 0,
+          timeout: ttsTimeout || 30,
         }),
       });
 
@@ -1207,8 +1275,23 @@ export function App() {
         throw new Error("Received empty audio from voice model");
       }
 
+      // Revoke older blob URL if replacing
+      if (lastTtsPlaybackRef.current?.audioBlobUrl) {
+        try {
+          URL.revokeObjectURL(lastTtsPlaybackRef.current.audioBlobUrl);
+        } catch {}
+      }
+
       const audioUrl = URL.createObjectURL(audioBlob);
       ttsAudioBlobUrlRef.current = audioUrl;
+
+      // Cache for instant zero-latency Repeat button!
+      lastTtsPlaybackRef.current = {
+        messageId,
+        text: cleanText,
+        engine: "minimax",
+        audioBlobUrl: audioUrl,
+      };
 
       const audio = new Audio();
       ttsAudioRef.current = audio;
@@ -1216,10 +1299,6 @@ export function App() {
       audio.onended = () => {
         setPlayingMessageId(null);
         setIsTtsPaused(false);
-        if (ttsAudioBlobUrlRef.current === audioUrl) {
-          URL.revokeObjectURL(audioUrl);
-          ttsAudioBlobUrlRef.current = null;
-        }
       };
 
       audio.onerror = (e) => {
@@ -1230,10 +1309,6 @@ export function App() {
         console.error("Audio playback error:", e);
         setPlayingMessageId(null);
         setIsTtsPaused(false);
-        if (ttsAudioBlobUrlRef.current === audioUrl) {
-          URL.revokeObjectURL(audioUrl);
-          ttsAudioBlobUrlRef.current = null;
-        }
         showAlert("語音模型回應未及時或音訊解碼失敗，請稍候重試。(Voice model timed out or audio failed to decode)", "warning", "Audio Playback Failed");
       };
 
@@ -2968,7 +3043,44 @@ export function App() {
                   )}
                 </button>
 
-                {/* 3. Stop Button */}
+                {/* 3. Repeat Button (No re-generation) */}
+                <button
+                  type="button"
+                  onClick={repeatTtsPlayback}
+                  title={
+                    ttsLang === "cantonese"
+                      ? "重播剛才的語音 (免重新生成)"
+                      : ttsLang === "mandarin"
+                      ? "重播剛才的語音 (免重新生成)"
+                      : "Repeat last speech (Instant zero-latency replay without regeneration)"
+                  }
+                  style={{
+                    height: 32,
+                    padding: "0 9px",
+                    background: "transparent",
+                    border: "none",
+                    borderLeft: "1px solid var(--border-color)",
+                    color: "var(--text-main)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "var(--accent, #0284c7)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "var(--text-main)";
+                  }}
+                >
+                  <RotateCcw size={12} color="var(--accent, #0284c7)" />
+                  <span>Repeat</span>
+                </button>
+
+                {/* 4. Stop Button */}
                 <button
                   type="button"
                   disabled={!playingMessageId && !isTtsLoading}
@@ -2995,16 +3107,16 @@ export function App() {
                   <span>Stop</span>
                 </button>
 
-                {/* 4. Setup Dropdown Trigger */}
+                {/* 5. Setup Dropdown Trigger */}
                 <button
                   type="button"
                   onClick={() => setShowTtsMenu(!showTtsMenu)}
                   title={
                     ttsLang === "cantonese"
-                      ? `語音設定 (語言: 廣東話 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | ${ttsSpeed}x)`
+                      ? `語音設定 (語言: 廣東話 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | 限時: ${ttsTimeout}s | ${ttsSpeed}x)`
                       : ttsLang === "mandarin"
-                      ? `語音設定 (語言: 中文普通話 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | ${ttsSpeed}x)`
-                      : `Voice Setup (Language: English | ${ttsEngine === "local" ? "Local" : "MiniMax"} | ${ttsSpeed}x)`
+                      ? `語音設定 (語言: 中文普通話 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | 限時: ${ttsTimeout}s | ${ttsSpeed}x)`
+                      : `Voice Setup (Language: English | ${ttsEngine === "local" ? "Local" : "MiniMax"} | Timeout: ${ttsTimeout}s | ${ttsSpeed}x)`
                   }
                   style={{
                     height: 32,
@@ -3389,6 +3501,45 @@ export function App() {
                           }}
                         >
                           {spd}x
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ⏱️ TTS Timeout Setting */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>
+                        {ttsLang === "cantonese" || ttsLang === "mandarin" ? "合成超時上限 (TIMEOUT)" : "TTS TIMEOUT LIMIT"}
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)" }}>
+                        {ttsTimeout}s
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: 5 }}>
+                      {[5, 10, 15, 30, 60].map((sec) => (
+                        <button
+                          key={sec}
+                          type="button"
+                          onClick={() => {
+                            setTtsTimeout(sec);
+                            try {
+                              localStorage.setItem("minibot_tts_timeout", String(sec));
+                            } catch {}
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: "3px 0",
+                            borderRadius: 4,
+                            border: ttsTimeout === sec ? "1px solid var(--accent)" : "1px solid var(--border-color)",
+                            background: ttsTimeout === sec ? "rgba(2, 132, 199, 0.15)" : "var(--bg-secondary)",
+                            color: ttsTimeout === sec ? "var(--accent)" : "var(--text-muted)",
+                            fontSize: 10,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {sec}s
                         </button>
                       ))}
                     </div>
