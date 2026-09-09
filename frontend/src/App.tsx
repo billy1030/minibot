@@ -4067,16 +4067,62 @@ export function App() {
                         color: "#0369a1",
                         border: "1px solid #bae6fd",
                         boxShadow: "0 2px 6px rgba(186, 230, 253, 0.35)",
-                        padding: "12px 18px",
+                        padding: "10px 14px",
                         borderRadius: "16px 16px 2px 16px",
                         maxWidth: "85%",
                         fontSize: 14,
                         lineHeight: 1.5,
                         wordBreak: "break-word",
                         overflowWrap: "anywhere",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 10,
                       }}
                     >
-                      <MarkdownRenderer content={m.content} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <MarkdownRenderer content={m.content} />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(m.content);
+                            setCopiedMessageId(m.id);
+                            setTimeout(() => setCopiedMessageId(null), 2000);
+                          } catch (err) {
+                            console.error("Failed to copy user message:", err);
+                          }
+                        }}
+                        title="Copy message"
+                        style={{
+                          background: copiedMessageId === m.id ? "rgba(16, 185, 129, 0.15)" : "transparent",
+                          border: "none",
+                          borderRadius: 4,
+                          padding: "4px",
+                          color: copiedMessageId === m.id ? "#10b981" : "#0284c7",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                          opacity: 0.75,
+                          transition: "all 0.15s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.opacity = "1";
+                          e.currentTarget.style.background = "rgba(2, 132, 199, 0.12)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.opacity = "0.75";
+                          e.currentTarget.style.background = copiedMessageId === m.id ? "rgba(16, 185, 129, 0.15)" : "transparent";
+                        }}
+                      >
+                        {copiedMessageId === m.id ? (
+                          <ClipboardCheck size={14} color="#10b981" />
+                        ) : (
+                          <Copy size={14} />
+                        )}
+                      </button>
                     </div>
                   ) : (
                     <div style={{ maxWidth: "100%", width: "100%", minWidth: 0 }}>
