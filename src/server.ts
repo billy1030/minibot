@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import path from "node:path";
 import fs from "node:fs";
+import https from "node:https";
 
 // 🛡️ Global crash guards: prevent unhandled exceptions or rejected promises from killing the server
 process.on("uncaughtException", (err) => {
@@ -52,6 +53,7 @@ import {
   verifyTotpToken,
   hashRecoveryCode,
   getUserDirs,
+  SESSION_MAX_AGE_SECONDS,
 } from "./auth/user-manager.js";
 import { SafeUser } from "./auth/types.js";
 import { EMBEDDED_FRONTEND } from "./server-embedded-assets.js";
@@ -96,7 +98,7 @@ app.use(
     maxAge: 86400, // 24 hours preflight cache
   })
 );
-app.options("*", cors());
+app.options(/(.*)/, cors());
 
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
@@ -247,7 +249,7 @@ app.post("/api/auth/login", (req, res) => {
     const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
     res.setHeader(
       "Set-Cookie",
-      `loop_session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}${isSecure ? "; Secure" : ""}`
+      `loop_session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SECONDS}${isSecure ? "; Secure" : ""}`
     );
     return res.json({
       success: true,
@@ -307,7 +309,7 @@ app.post("/api/auth/2fa/challenge", (req, res) => {
     const isSecure = req.secure || req.headers["x-forwarded-proto"] === "https";
     res.setHeader(
       "Set-Cookie",
-      `loop_session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}${isSecure ? "; Secure" : ""}`
+      `loop_session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SECONDS}${isSecure ? "; Secure" : ""}`
     );
     return res.json({
       success: true,
@@ -626,11 +628,23 @@ app.get("/api/config", (req, res) => {
     ? (config.llm.apiKey.length > 8 ? `${config.llm.apiKey.slice(0, 6)}...****` : "****")
     : "";
 
+  const maskedVoiceKey = config.voice?.apiKey
+    ? (config.voice.apiKey.length > 8 ? `${config.voice.apiKey.slice(0, 6)}...****` : "****")
+    : "";
+
   const safeConfig = {
     ...config,
     llm: {
       ...config.llm,
       apiKey: maskedKey,
+    },
+    voice: {
+      baseUrl: config.voice?.baseUrl || "https://api.minimaxi.com/v1",
+      apiKey: maskedVoiceKey,
+      model: config.voice?.model || "speech-2.8-hd",
+      voiceId: config.voice?.voiceId || "Cantonese_CuteGirl",
+      speed: config.voice?.speed ?? 1.0,
+      enabled: config.voice?.enabled ?? true,
     },
     tools: mcpManager.getOpenAITools(),
     discoveredTools: mcpManager.getDiscoveredTools(),
@@ -652,6 +666,19 @@ app.post("/api/config", requireAuth, async (req, res) => {
         apiKey: newApiKey || config.llm.apiKey,
       };
     }
+    if (updates.voice) {
+      const isMasked = updates.voice.apiKey?.includes("...****") || updates.voice.apiKey === "****";
+      const newVoiceKey = isMasked ? (config.voice?.apiKey || "") : updates.voice.apiKey;
+
+      config.voice = {
+        baseUrl: updates.voice.baseUrl || config.voice?.baseUrl || "https://api.minimaxi.com/v1",
+        apiKey: newVoiceKey !== undefined ? newVoiceKey : (config.voice?.apiKey || ""),
+        model: updates.voice.model || config.voice?.model || "speech-2.8-hd",
+        voiceId: updates.voice.voiceId || config.voice?.voiceId || "Cantonese_CuteGirl",
+        speed: updates.voice.speed ?? config.voice?.speed ?? 1.0,
+        enabled: updates.voice.enabled ?? config.voice?.enabled ?? true,
+      };
+    }
     if (updates.prompts) {
       config.prompts = { ...config.prompts, ...updates.prompts };
     }
@@ -670,6 +697,10 @@ app.post("/api/config", requireAuth, async (req, res) => {
       ? (config.llm.apiKey.length > 8 ? `${config.llm.apiKey.slice(0, 6)}...****` : "****")
       : "";
 
+    const maskedVoiceKey = config.voice?.apiKey
+      ? (config.voice.apiKey.length > 8 ? `${config.voice.apiKey.slice(0, 6)}...****` : "****")
+      : "";
+
     res.json({
       success: true,
       config: {
@@ -677,6 +708,10 @@ app.post("/api/config", requireAuth, async (req, res) => {
         llm: {
           ...config.llm,
           apiKey: maskedKey,
+        },
+        voice: {
+          ...config.voice,
+          apiKey: maskedVoiceKey,
         },
         tools: mcpManager.getOpenAITools(),
         discoveredTools: mcpManager.getDiscoveredTools(),
@@ -724,6 +759,96 @@ app.get("/api/llm/test", requireAuth, async (req, res) => {
     const message = result.choices[0]?.message?.content || "";
     res.json({ success: true, message, model: config.llm.model });
   } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3c. Text-to-Speech (TTS) via MiniMax Speech-2.8-HD (Cantonese & multilingual neural voice)
+app.post("/api/tts", requireAuth, async (req, res) => {
+  try {
+    const { text, voiceId = "Cantonese_CuteGirl", speed = 1.0, pitch = 0, vol = 1.0 } = req.body;
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ success: false, error: "Text is required for TTS synthesis" });
+    }
+
+    // Use dedicated voice.apiKey if configured, otherwise fallback to llm.apiKey
+    const apiKey = (config.voice?.apiKey && config.voice.apiKey.trim()) || config.llm.apiKey;
+    if (!apiKey) {
+      return res.status(500).json({ success: false, error: "MiniMax Voice API key not configured on server" });
+    }
+
+    const postData = JSON.stringify({
+      model: "speech-2.8-hd",
+      text: text.trim(),
+      stream: false,
+      voice_setting: {
+        voice_id: voiceId,
+        speed: Number(speed) || 1.0,
+        vol: Number(vol) || 1.0,
+        pitch: Math.round(Number(pitch)) || 0,
+      },
+      audio_setting: {
+        sample_rate: 24000,
+        bitrate: 64000,
+        format: "mp3",
+        channel: 1,
+      },
+    });
+
+    const ttsReq = https.request(
+      "https://api.minimaxi.com/v1/t2a_v2",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Length": Buffer.byteLength(postData),
+        },
+      },
+      (ttsRes) => {
+        let rawBody = "";
+        ttsRes.on("data", (chunk) => {
+          rawBody += chunk;
+        });
+
+        ttsRes.on("end", () => {
+          try {
+            const parsed = JSON.parse(rawBody);
+            if (parsed.base_resp && parsed.base_resp.status_code !== 0) {
+              return res.status(502).json({
+                success: false,
+                error: parsed.base_resp.status_msg || "MiniMax TTS failed",
+              });
+            }
+
+            if (parsed.data && parsed.data.audio) {
+              const audioBuffer = Buffer.from(parsed.data.audio, "hex");
+              res.setHeader("Content-Type", "audio/mpeg");
+              res.setHeader("Content-Length", audioBuffer.length);
+              return res.send(audioBuffer);
+            }
+
+            return res.status(502).json({ success: false, error: "No audio data received from MiniMax" });
+          } catch (parseErr: any) {
+            return res.status(502).json({ success: false, error: `Invalid response from MiniMax: ${parseErr.message}` });
+          }
+        });
+      }
+    );
+
+    ttsReq.on("error", (err) => {
+      console.error("[TTS Request Error]:", err.message);
+      res.status(502).json({ success: false, error: err.message });
+    });
+
+    ttsReq.setTimeout(30000, () => {
+      ttsReq.destroy(new Error("TTS request timed out after 30 seconds"));
+    });
+
+    ttsReq.write(postData);
+    ttsReq.end();
+  } catch (err: any) {
+    console.error("[TTS Error]:", err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

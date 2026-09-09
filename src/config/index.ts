@@ -41,6 +41,14 @@ export function loadConfig(configPath?: string): LoopConfig {
       temperature: fileContent.llm?.temperature ?? 0.7,
       maxTokens: fileContent.llm?.maxTokens ?? 4096,
     },
+    voice: {
+      baseUrl: process.env.VOICE_BASE_URL || fileContent.voice?.baseUrl || "https://api.minimaxi.com/v1",
+      apiKey: process.env.VOICE_API_KEY || (fileContent.voice?.apiKey && !fileContent.voice.apiKey.startsWith("${") ? fileContent.voice.apiKey : ""),
+      model: process.env.VOICE_MODEL || fileContent.voice?.model || "speech-2.8-hd",
+      voiceId: fileContent.voice?.voiceId || "Cantonese_CuteGirl",
+      speed: fileContent.voice?.speed ?? 1.0,
+      enabled: fileContent.voice?.enabled ?? true,
+    },
     prompts: {
       systemPrompt: process.env.SYSTEM_PROMPT || fileContent.prompts?.systemPrompt,
       skillsPrompt: process.env.SKILLS_PROMPT || fileContent.prompts?.skillsPrompt,
@@ -74,6 +82,14 @@ export function saveConfigToDisk(updatedConfig: Partial<LoopConfig>, configPath?
       model: updatedConfig.llm?.model ?? existing.llm?.model ?? "MiniMax-M3",
       temperature: updatedConfig.llm?.temperature ?? existing.llm?.temperature ?? 0.7,
       maxTokens: updatedConfig.llm?.maxTokens ?? existing.llm?.maxTokens ?? 4096,
+    },
+    voice: {
+      baseUrl: updatedConfig.voice?.baseUrl ?? existing.voice?.baseUrl ?? "https://api.minimaxi.com/v1",
+      apiKey: updatedConfig.voice?.apiKey ?? existing.voice?.apiKey ?? "",
+      model: updatedConfig.voice?.model ?? existing.voice?.model ?? "speech-2.8-hd",
+      voiceId: updatedConfig.voice?.voiceId ?? existing.voice?.voiceId ?? "Cantonese_CuteGirl",
+      speed: updatedConfig.voice?.speed ?? existing.voice?.speed ?? 1.0,
+      enabled: updatedConfig.voice?.enabled ?? existing.voice?.enabled ?? true,
     },
     prompts: {
       systemPrompt: updatedConfig.prompts?.systemPrompt ?? existing.prompts?.systemPrompt,

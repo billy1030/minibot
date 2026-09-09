@@ -42,6 +42,10 @@ import {
   Copy,
   ClipboardCheck,
   ClipboardPaste,
+  Volume2,
+  VolumeX,
+  Square,
+  Play,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
@@ -84,6 +88,14 @@ interface ConfigState {
     model: string;
     temperature: number;
     maxTokens: number;
+  };
+  voice?: {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    voiceId: string;
+    speed: number;
+    enabled: boolean;
   };
   prompts: {
     systemPrompt: string;
@@ -146,6 +158,7 @@ export function App() {
   const [currentStep, setCurrentStep] = useState<number | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showVoiceApiKey, setShowVoiceApiKey] = useState(false);
   const [config, setConfig] = useState<ConfigState | null>(null);
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
   const [selectedToolDetail, setSelectedToolDetail] = useState<any | null>(null);
@@ -213,6 +226,76 @@ export function App() {
     currentInterim: "",
   });
 
+  // 🔊 Text-to-Speech (TTS) 狀態與音訊參照（廣東話 / Cantonese）
+  // 1: local TTS (瀏覽器原生 Web Speech Synthesis - zh-HK)
+  // 2: minimax (MiniMax Speech-2.8-HD 神經網絡語音 API)
+  const [ttsEngine, setTtsEngine] = useState<"local" | "minimax">(() => {
+    try {
+      return (localStorage.getItem("minibot_tts_engine") as "local" | "minimax") || "local";
+    } catch {
+      return "local";
+    }
+  });
+  const [ttsVoiceId, setTtsVoiceId] = useState<string>(() => {
+    try {
+      return localStorage.getItem("minibot_tts_voice_id") || "Cantonese_CuteGirl";
+    } catch {
+      return "Cantonese_CuteGirl";
+    }
+  });
+  // Local TTS 專屬自選聲線 URI (例如系統中的男聲 Danny、女聲 Sin-ji / Tracy 等)
+  const [localTtsVoiceURI, setLocalTtsVoiceURI] = useState<string>(() => {
+    try {
+      return localStorage.getItem("minibot_local_tts_voice_uri") || "";
+    } catch {
+      return "";
+    }
+  });
+  // 語音朗讀速度 (0.75x ~ 1.75x，預設 1.0x)
+  const [ttsSpeed, setTtsSpeed] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("minibot_tts_speed");
+      return saved ? parseFloat(saved) : 1.0;
+    } catch {
+      return 1.0;
+    }
+  });
+  // 系統已安裝的中文/粵語可用語音清單
+  const [availableLocalVoices, setAvailableLocalVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+  const [isTtsLoading, setIsTtsLoading] = useState<boolean>(false);
+  const [showTtsMenu, setShowTtsMenu] = useState<boolean>(false);
+  const ttsMenuRef = useRef<HTMLDivElement>(null);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // 載入瀏覽器原生語音庫 (Web Speech API)
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const updateVoices = () => {
+      const all = window.speechSynthesis.getVoices();
+      // 篩選粵語 (zh-HK / yue) 與相容中文 (zh-TW / zh-CN) 聲音
+      const filtered = all.filter(
+        (v) =>
+          v.lang === "zh-HK" ||
+          v.lang === "yue-Hant-HK" ||
+          v.lang.toLowerCase().includes("hk") ||
+          v.lang.toLowerCase().includes("yue") ||
+          v.lang.startsWith("zh")
+      );
+      // 若無特定中文，則列出所有以防萬一
+      setAvailableLocalVoices(filtered.length > 0 ? filtered : all);
+    };
+
+    updateVoices();
+    window.speechSynthesis.onvoiceschanged = updateVoices;
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.body.classList.toggle("hide-mermaid-tools", !showMermaidTools);
@@ -230,6 +313,18 @@ export function App() {
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
   }, [showMermaidMenu]);
+
+  useEffect(() => {
+    const handleClickOutsideTts = (e: MouseEvent) => {
+      if (ttsMenuRef.current && !ttsMenuRef.current.contains(e.target as Node)) {
+        setShowTtsMenu(false);
+      }
+    };
+    if (showTtsMenu) {
+      document.addEventListener("mousedown", handleClickOutsideTts);
+      return () => document.removeEventListener("mousedown", handleClickOutsideTts);
+    }
+  }, [showTtsMenu]);
 
   const handleInsertMermaid = (snippet: string, isSnippetOnly?: boolean) => {
     if (isSnippetOnly) {
@@ -789,6 +884,148 @@ export function App() {
       console.error("Failed to start speech recognition:", err);
       setIsListening(false);
       showAlert(`啟動語音辨識失敗: ${err.message || err}`, "error", "語音啟動失敗");
+    }
+  };
+
+  // 🔊 Cantonese Text-to-Speech (TTS) 朗讀播放控制（支援 1: Local 原生瀏覽器 TTS 與 2: MiniMax 語音 API）
+  const stopTtsPlayback = () => {
+    // 停止 MiniMax 音訊元素
+    if (ttsAudioRef.current) {
+      try {
+        ttsAudioRef.current.pause();
+        ttsAudioRef.current.currentTime = 0;
+        ttsAudioRef.current.src = "";
+      } catch {}
+      ttsAudioRef.current = null;
+    }
+    // 停止瀏覽器原生語音朗讀
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+    setPlayingMessageId(null);
+    setIsTtsLoading(false);
+  };
+
+  const playCantoneseTts = async (text: string, messageId: string) => {
+    // 如果當前正在播放同一則訊息，再次點擊即為停止
+    if (playingMessageId === messageId) {
+      stopTtsPlayback();
+      return;
+    }
+
+    // 停止任何先前的播放
+    stopTtsPlayback();
+
+    // 清理 markdown、HTML 和思維標籤，提取純朗讀文字
+    const cleanText = text
+      .replace(/<think>[\s\S]*?<\/think>/gi, "")
+      .replace(/```[\s\S]*?```/g, " [程式碼區塊] ")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/!\[.*?\]\(.*?\)/g, "")
+      .replace(/\[([^\]]+)\]\(.*?\)/g, "$1")
+      .replace(/[#*_\->~|]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!cleanText) {
+      showAlert("此訊息沒有可供朗讀的文字內容", "info", "無法播放");
+      return;
+    }
+
+    // 模式 1: Local 原生瀏覽器 TTS (zh-HK 粵語 / 多聲線選擇 / 速度調整)
+    if (ttsEngine === "local") {
+      if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+        showAlert("您的瀏覽器不支援 Web Speech 語音合成 API", "warning", "TTS 不可用");
+        return;
+      }
+
+      setPlayingMessageId(messageId);
+
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = "zh-HK";
+      utterance.rate = ttsSpeed || 1.0;
+      utterance.pitch = 1.0;
+
+      const voices = window.speechSynthesis.getVoices();
+      // 1. 若使用者有手動指定 localTtsVoiceURI，優先套用
+      let selectedVoice: SpeechSynthesisVoice | undefined;
+      if (localTtsVoiceURI) {
+        selectedVoice = voices.find((v) => v.voiceURI === localTtsVoiceURI);
+      }
+      // 2. 若無手動指定或找不到，尋找系統內建最佳粵語聲音 (如 Sin-ji, Danny, Tracy, Hong Kong 等)
+      if (!selectedVoice) {
+        selectedVoice =
+          voices.find((v) => v.lang === "zh-HK" || v.lang === "yue-Hant-HK" || v.lang.startsWith("zh-HK")) ||
+          voices.find((v) => v.lang === "zh-TW" || v.lang === "zh-CN");
+      }
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+
+      utterance.onend = () => {
+        setPlayingMessageId(null);
+      };
+      utterance.onerror = (e) => {
+        console.warn("Local TTS error:", e);
+        setPlayingMessageId(null);
+      };
+
+      // 避免 Chrome 長句子垃圾回收 bug
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
+
+    // 模式 2: MiniMax Speech-2.8-HD 雲端大模型神經語音 API (支援語速與角色聲線)
+    try {
+      setIsTtsLoading(true);
+      setPlayingMessageId(messageId);
+
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          text: cleanText.slice(0, 3000), // MiniMax 單次推薦長度
+          voiceId: ttsVoiceId || "Cantonese_CuteGirl",
+          speed: ttsSpeed || 1.0,
+          vol: 1.0,
+          pitch: 0,
+        }),
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || `伺服器回應錯誤 (${response.status})`);
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      const audio = new Audio(audioUrl);
+      ttsAudioRef.current = audio;
+
+      audio.onended = () => {
+        setPlayingMessageId(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = (e) => {
+        console.error("Audio playback error:", e);
+        setPlayingMessageId(null);
+        URL.revokeObjectURL(audioUrl);
+        showAlert("音訊播放失敗", "error", "播放錯誤");
+      };
+
+      await audio.play();
+    } catch (err: any) {
+      console.error("MiniMax TTS error:", err);
+      setPlayingMessageId(null);
+      showAlert(`MiniMax 廣東話語音合成失敗: ${err.message || err}`, "error", "語音生成失敗");
+    } finally {
+      setIsTtsLoading(false);
     }
   };
 
@@ -2368,6 +2605,421 @@ export function App() {
               <Sliders size={15} />
             </button>
 
+            {/* 🔊 Cantonese Voice Setup (TTS) Navigation Bar Menu (Local Voice / MiniMax Voice / Speed / Stop) */}
+            <div style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 4 }} ref={ttsMenuRef}>
+              <button
+                type="button"
+                onClick={() => setShowTtsMenu(!showTtsMenu)}
+                title={`語音設定 Voice Setup (現正使用: ${ttsEngine === "local" ? "1 Local TTS" : "2 MiniMax Voice API"} | 語速: ${ttsSpeed}x)`}
+                style={{
+                  height: 32,
+                  padding: "0 10px",
+                  borderRadius: 8,
+                  background: showTtsMenu || playingMessageId ? "rgba(16, 185, 129, 0.15)" : "var(--bg-card)",
+                  border: showTtsMenu || playingMessageId ? "1px solid #10b981" : "1px solid var(--border-color)",
+                  color: showTtsMenu || playingMessageId ? "#10b981" : "var(--text-muted)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!showTtsMenu && !playingMessageId) {
+                    e.currentTarget.style.borderColor = "#10b981";
+                    e.currentTarget.style.color = "#10b981";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!showTtsMenu && !playingMessageId) {
+                    e.currentTarget.style.borderColor = "var(--border-color)";
+                    e.currentTarget.style.color = "var(--text-muted)";
+                  }
+                }}
+              >
+                <Volume2 size={15} color={playingMessageId ? "#10b981" : "currentColor"} />
+                <span>Voice Setup: {ttsEngine === "local" ? "1 Local" : "2 MiniMax"} ({ttsSpeed}x)</span>
+                {playingMessageId && (
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: "#10b981",
+                      animation: "pulse 1.5s infinite",
+                    }}
+                  />
+                )}
+                <ChevronDown
+                  size={12}
+                  style={{
+                    transform: showTtsMenu ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                  }}
+                />
+              </button>
+
+              {/* Quick Stop Button in Navbar when playing */}
+              {playingMessageId && (
+                <button
+                  type="button"
+                  onClick={stopTtsPlayback}
+                  title="立即停止粵語朗讀"
+                  style={{
+                    height: 32,
+                    padding: "0 8px",
+                    borderRadius: 8,
+                    background: "rgba(239, 68, 68, 0.15)",
+                    border: "1px solid #ef4444",
+                    color: "#ef4444",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    cursor: "pointer",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Square size={11} fill="#ef4444" />
+                  <span>停止朗讀</span>
+                </button>
+              )}
+
+              {/* TTS Voice Setup Dropdown Popover */}
+              {showTtsMenu && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "calc(100% + 8px)",
+                    width: 320,
+                    background: "var(--bg-secondary, #1e293b)",
+                    border: "1px solid var(--border-color, #334155)",
+                    borderRadius: 12,
+                    boxShadow: "0 12px 30px rgba(0,0,0,0.45)",
+                    zIndex: 1000,
+                    padding: "12px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border-color)", paddingBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.5px" }}>
+                      語音設定 (VOICE SETUP)
+                    </span>
+                    {playingMessageId && (
+                      <button
+                        type="button"
+                        onClick={stopTtsPlayback}
+                        style={{
+                          background: "rgba(239, 68, 68, 0.15)",
+                          border: "1px solid #ef4444",
+                          color: "#ef4444",
+                          borderRadius: 4,
+                          padding: "1px 6px",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 3,
+                        }}
+                      >
+                        <Square size={9} fill="#ef4444" /> 停止朗讀
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Engine Selection: Option 1 vs Option 2 */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {/* Option 1: Local Browser TTS */}
+                    <div
+                      onClick={() => {
+                        setTtsEngine("local");
+                        try {
+                          localStorage.setItem("minibot_tts_engine", "local");
+                        } catch {}
+                      }}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: 8,
+                        border: ttsEngine === "local" ? "1px solid #10b981" : "1px solid var(--border-color)",
+                        background: ttsEngine === "local" ? "rgba(16, 185, 129, 0.12)" : "var(--bg-card)",
+                        cursor: "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: ttsEngine === "local" ? "#10b981" : "var(--text-main)" }}>
+                          1. Local TTS (本地瀏覽器語音)
+                        </span>
+                        {ttsEngine === "local" && <Check size={14} color="#10b981" />}
+                      </div>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        本機 Web Speech API (支援粵語男聲/女聲切換，離線零延遲)
+                      </span>
+                    </div>
+
+                    {/* Option 2: MiniMax Neural Voice API */}
+                    <div
+                      onClick={() => {
+                        setTtsEngine("minimax");
+                        try {
+                          localStorage.setItem("minibot_tts_engine", "minimax");
+                        } catch {}
+                      }}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: 8,
+                        border: ttsEngine === "minimax" ? "1px solid #10b981" : "1px solid var(--border-color)",
+                        background: ttsEngine === "minimax" ? "rgba(16, 185, 129, 0.12)" : "var(--bg-card)",
+                        cursor: "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: ttsEngine === "minimax" ? "#10b981" : "var(--text-main)" }}>
+                          2. MiniMax Voice API (雲端神經大模型)
+                        </span>
+                        {ttsEngine === "minimax" && <Check size={14} color="#10b981" />}
+                      </div>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        MiniMax Speech-2.8-HD 超逼真磁性真人語音
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Local Voice Selector (When Local TTS is selected) */}
+                  {ttsEngine === "local" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
+                          選擇本機聲音 (男聲 / 女聲):
+                        </span>
+                        <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                          共 {availableLocalVoices.length} 款可用
+                        </span>
+                      </div>
+                      <select
+                        value={localTtsVoiceURI}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setLocalTtsVoiceURI(val);
+                          try {
+                            localStorage.setItem("minibot_local_tts_voice_uri", val);
+                          } catch {}
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          background: "var(--bg-secondary)",
+                          border: "1px solid var(--border-color)",
+                          color: "var(--text-main)",
+                          fontSize: 11,
+                          outline: "none",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <option value="">⚙️ 系統預設最佳粵語 (自動判定)</option>
+                        {availableLocalVoices.map((v) => {
+                          const isCantonese = v.lang.includes("HK") || v.lang.toLowerCase().includes("yue");
+                          const isMale = v.name.toLowerCase().includes("danny") || v.name.toLowerCase().includes("male") || v.name.toLowerCase().includes("man");
+                          const isFemale = v.name.toLowerCase().includes("sin-ji") || v.name.toLowerCase().includes("tracy") || v.name.toLowerCase().includes("female") || v.name.toLowerCase().includes("woman");
+                          const tag = isMale ? " [男聲]" : isFemale ? " [女聲]" : "";
+                          const langTag = isCantonese ? "🇭🇰 粵語" : v.lang;
+                          return (
+                            <option key={v.voiceURI} value={v.voiceURI}>
+                              {v.name} ({langTag}){tag}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* MiniMax Cantonese Persona Selector (When MiniMax is selected) */}
+                  {ttsEngine === "minimax" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
+                        選擇粵語人格聲線 (Voice Persona):
+                      </span>
+                      <select
+                        value={ttsVoiceId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTtsVoiceId(val);
+                          try {
+                            localStorage.setItem("minibot_tts_voice_id", val);
+                          } catch {}
+                        }}
+                        style={{
+                          width: "100%",
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          background: "var(--bg-secondary)",
+                          border: "1px solid var(--border-color)",
+                          color: "var(--text-main)",
+                          fontSize: 11,
+                          outline: "none",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <option value="Cantonese_CuteGirl">🌟 元氣輕快女孩 (Cute Girl)</option>
+                        <option value="Cantonese_KindWoman">🌸 溫暖親切大姐姐 (Kind Woman)</option>
+                        <option value="Cantonese_ProfessionalHost（F)">🎙️ 知性幹練女主播 (Professional)</option>
+                        <option value="Cantonese_GentleLady">☕ 溫柔磁性熟女 (Gentle Lady)</option>
+                        <option value="Cantonese_LivelyYouth">⚡ 活潑靈動少女 (Lively Youth)</option>
+                        <option value="presenter_male">👔 沉穩男主持 (Presenter Male)</option>
+                        <option value="English_Trustworthy_Man">💼 磁性成熟男聲 (Trustworthy Man)</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Speed Adjustment Slider & Presets */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
+                        朗讀速度 (Speech Rate):
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)" }}>
+                        {ttsSpeed.toFixed(2)}x
+                      </span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.05"
+                      value={ttsSpeed}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setTtsSpeed(val);
+                        try {
+                          localStorage.setItem("minibot_tts_speed", String(val));
+                        } catch {}
+                      }}
+                      style={{ width: "100%", cursor: "pointer" }}
+                    />
+
+                    {/* Quick Speed Pills */}
+                    <div style={{ display: "flex", gap: 4, justifyContent: "space-between" }}>
+                      {[0.8, 1.0, 1.25, 1.5].map((spd) => (
+                        <button
+                          key={spd}
+                          type="button"
+                          onClick={() => {
+                            setTtsSpeed(spd);
+                            try {
+                              localStorage.setItem("minibot_tts_speed", String(spd));
+                            } catch {}
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: "3px 0",
+                            borderRadius: 4,
+                            border: ttsSpeed === spd ? "1px solid var(--accent)" : "1px solid var(--border-color)",
+                            background: ttsSpeed === spd ? "rgba(2, 132, 199, 0.15)" : "var(--bg-secondary)",
+                            color: ttsSpeed === spd ? "var(--accent)" : "var(--text-muted)",
+                            fontSize: 10,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                          }}
+                        >
+                          {spd}x
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 🔊 Test Voice Role / Persona Button */}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      type="button"
+                      disabled={isTtsLoading && playingMessageId === "__tts_test_preview__"}
+                      onClick={() => {
+                        const testSampleText =
+                          ttsEngine === "local"
+                            ? "你好！呢個係本地瀏覽器粵語聲音測試，速度同聲線設定正常運作。"
+                            : "你好！我係你嘅 MiniMax 廣東話語音助手，呢個係聲線角色測試。";
+                        playCantoneseTts(testSampleText, "__tts_test_preview__");
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        borderRadius: 6,
+                        background: playingMessageId === "__tts_test_preview__" ? "rgba(16, 185, 129, 0.15)" : "var(--bg-card)",
+                        border: playingMessageId === "__tts_test_preview__" ? "1px solid #10b981" : "1px solid var(--border-color)",
+                        color: playingMessageId === "__tts_test_preview__" ? "#10b981" : "var(--text-main)",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {isTtsLoading && playingMessageId === "__tts_test_preview__" ? (
+                        <>
+                          <Loader2 size={12} className="spin" color="#10b981" />
+                          <span>合成音訊中...</span>
+                        </>
+                      ) : playingMessageId === "__tts_test_preview__" ? (
+                        <>
+                          <Square size={11} fill="#10b981" />
+                          <span>正在測試 (點擊停止)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play size={12} fill="currentColor" />
+                          <span>測試聲音角色 (Test Voice)</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Quick Stop Button */}
+                    {playingMessageId && (
+                      <button
+                        type="button"
+                        onClick={() => stopTtsPlayback()}
+                        title="停止播放"
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: 6,
+                          background: "rgba(239, 68, 68, 0.15)",
+                          border: "1px solid #ef4444",
+                          color: "#ef4444",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 4,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <Square size={11} fill="#ef4444" />
+                        <span>停止</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Separator */}
             <div style={{ width: 1, height: 20, background: "var(--border-color)" }} />
 
@@ -2974,6 +3626,61 @@ export function App() {
                           )}
 
                           <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            {/* 🔊 Cantonese Text-to-Voice Play/Stop Button */}
+                            <button
+                              type="button"
+                              onClick={() => playCantoneseTts(m.content, m.id)}
+                              disabled={isTtsLoading && playingMessageId === m.id}
+                              title={
+                                playingMessageId === m.id
+                                  ? "停止粵語朗讀"
+                                  : `以粵語朗讀此回答 (模式: ${ttsEngine === "local" ? "1 Local TTS" : "2 MiniMax Voice API"})`
+                              }
+                              style={{
+                                background: playingMessageId === m.id ? "rgba(16, 185, 129, 0.15)" : "transparent",
+                                border: playingMessageId === m.id ? "1px solid #10b981" : "1px solid var(--border-color)",
+                                borderRadius: 4,
+                                padding: "2px 8px",
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: playingMessageId === m.id ? "#10b981" : "var(--text-muted)",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (playingMessageId !== m.id) {
+                                  e.currentTarget.style.borderColor = "#10b981";
+                                  e.currentTarget.style.color = "#10b981";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (playingMessageId !== m.id) {
+                                  e.currentTarget.style.borderColor = "var(--border-color)";
+                                  e.currentTarget.style.color = "var(--text-muted)";
+                                }
+                              }}
+                            >
+                              {isTtsLoading && playingMessageId === m.id ? (
+                                <>
+                                  <Loader2 size={11} className="spin" color="#10b981" />
+                                  <span style={{ color: "#10b981" }}>合成中...</span>
+                                </>
+                              ) : playingMessageId === m.id ? (
+                                <>
+                                  <Square size={10} fill="#10b981" color="#10b981" />
+                                  <span style={{ color: "#10b981" }}>停止朗讀</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Volume2 size={11} />
+                                  <span>粵語朗讀</span>
+                                </>
+                              )}
+                            </button>
+
                             <button
                               type="button"
                               onClick={async () => {
@@ -3713,6 +4420,68 @@ export function App() {
                       }}
                     >
                       {showApiKey ? <EyeOff size={16} color="var(--accent)" /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 🎙️ MiniMax Voice API Key Configuration */}
+                <div style={{ background: "rgba(16, 185, 129, 0.05)", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(16, 185, 129, 0.25)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "#10b981", display: "flex", alignItems: "center", gap: 5 }}>
+                      <Volume2 size={13} color="#10b981" /> MiniMax Voice API Key (語音朗讀專屬金鑰)
+                    </label>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                      留空時預設沿用上方 LLM Secret Key
+                    </span>
+                  </div>
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <input
+                      type={showVoiceApiKey ? "text" : "password"}
+                      value={config.voice?.apiKey || ""}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          voice: {
+                            baseUrl: config.voice?.baseUrl || "https://api.minimaxi.com/v1",
+                            apiKey: e.target.value,
+                            model: config.voice?.model || "speech-2.8-hd",
+                            voiceId: config.voice?.voiceId || "Cantonese_CuteGirl",
+                            speed: config.voice?.speed ?? 1.0,
+                            enabled: config.voice?.enabled ?? true,
+                          },
+                        })
+                      }
+                      placeholder="留空則自動使用上方 LLM API Key (例如 sk-cp-...)"
+                      style={{
+                        width: "100%",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border-color)",
+                        padding: "8px 40px 8px 12px",
+                        borderRadius: 6,
+                        color: "var(--text-main)",
+                        fontSize: 13,
+                        fontFamily: showVoiceApiKey ? "ui-monospace, monospace" : "inherit",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowVoiceApiKey((prev) => !prev)}
+                      title={showVoiceApiKey ? "Hide Voice API Key" : "Show Voice API Key"}
+                      style={{
+                        position: "absolute",
+                        right: 8,
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "var(--text-muted)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: 4,
+                        borderRadius: 4,
+                      }}
+                    >
+                      {showVoiceApiKey ? <EyeOff size={16} color="#10b981" /> : <Eye size={16} />}
                     </button>
                   </div>
                 </div>

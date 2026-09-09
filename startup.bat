@@ -40,6 +40,10 @@ echo [Running] Starting MiniBot on http://localhost:7009 ...
 echo [Tip] Press Ctrl+C in this terminal window to stop the server.
 echo.
 
-call npx tsx src/server.ts
+if exist "node_modules\.bin\tsx.cmd" (
+    call node_modules\.bin\tsx.cmd src/server.ts
+) else (
+    call npx tsx src/server.ts
+)
 
 pause

@@ -12,6 +12,10 @@ const LOGS_ROOT = path.resolve(process.cwd(), "logs");
 const STORAGE_DOCS_ROOT = path.resolve(process.cwd(), "storage/documents");
 
 const AUTH_SECRET = process.env.SESSION_SECRET || "loop-engg-enterprise-auth-jwt-cookie-hmac-secret-2026";
+export const LOGIN_MAX_AGE_HOURS = process.env.LOGIN_MAX_AGE_HOURS
+  ? parseFloat(process.env.LOGIN_MAX_AGE_HOURS)
+  : 16;
+export const SESSION_MAX_AGE_SECONDS = Math.floor(LOGIN_MAX_AGE_HOURS * 3600);
 const LOCKOUT_MAX_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000; // 15 mins
 const failedAttemptsMap = new Map<string, { count: number; lastAttempt: number }>();
@@ -212,7 +216,7 @@ export function createSession(user: User): string {
   const sessionId = crypto.randomBytes(32).toString("hex");
   const sessions = getSessions();
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
+  const expiresAt = new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000);
 
   sessions[sessionId] = {
     userId: user.id,
@@ -247,7 +251,19 @@ export function getAuthenticatedUserFromCookie(cookieHeader?: string): SafeUser 
   const session = sessions[sessionId];
   if (!session) return null;
 
-  if (new Date(session.expiresAt).getTime() < Date.now()) {
+  const now = Date.now();
+  const expiresAtTime = new Date(session.expiresAt).getTime();
+  const createdAtTime = new Date(session.createdAt).getTime();
+  const loginMaxAgeMs = SESSION_MAX_AGE_SECONDS * 1000;
+
+  // 1. Sliding/regular expiry check
+  // 2. Hard cap by login age from createdAt (prevent indefinitely active sessions)
+  if (
+    isNaN(createdAtTime) ||
+    now - createdAtTime > loginMaxAgeMs ||
+    isNaN(expiresAtTime) ||
+    expiresAtTime < now
+  ) {
     delete sessions[sessionId];
     saveSessions(sessions);
     return null;
