@@ -2655,9 +2655,9 @@ export function App() {
             padding: "0 14px",
             background: "var(--bg-secondary)",
             flexWrap: "nowrap",
-            overflowX: "auto",
-            overflowY: "hidden",
             gap: 10,
+            position: "relative",
+            zIndex: 100,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -4737,9 +4737,10 @@ export function App() {
         </div>
 
         {/* Input Bar */}
+        {/* Input Dock Bar */}
         <div
           style={{
-            padding: "16px 20px",
+            padding: "12px 16px",
             borderTop: "1px solid var(--border-color)",
             background: "var(--bg-secondary)",
             display: "flex",
@@ -4753,7 +4754,7 @@ export function App() {
               width: "100%",
               maxWidth: "calc((100vw - 370px) * 0.8)",
               display: "flex",
-              gap: 12,
+              gap: 8,
               alignItems: "center",
               minWidth: 0,
               boxSizing: "border-box",
@@ -4764,9 +4765,9 @@ export function App() {
             onClick={() => setShowDocModal(true)}
             title={activeDocHashes.length > 0 ? `${activeDocHashes.length} document(s) attached` : "Attach Multi-Tab Excel, PDF, Word, or Text Files"}
             style={{
-              width: 42,
-              height: 42,
-              borderRadius: 8,
+              width: 34,
+              height: 34,
+              borderRadius: 7,
               background: activeDocHashes.length > 0 ? "rgba(16, 185, 129, 0.15)" : "var(--bg-card)",
               border: activeDocHashes.length > 0 ? "1.5px solid #10b981" : "1px solid var(--border-color)",
               color: activeDocHashes.length > 0 ? "#10b981" : "var(--text-muted)",
@@ -4791,26 +4792,26 @@ export function App() {
               }
             }}
           >
-            <Paperclip size={18} />
+            <Paperclip size={15} />
             {activeDocHashes.length > 0 && (
               <span
                 style={{
                   position: "absolute",
-                  top: -4,
-                  right: -4,
+                  top: -3,
+                  right: -3,
                   background: "#10b981",
                   color: "#ffffff",
-                  borderRadius: "10px",
-                  padding: "0 5px",
-                  fontSize: 10,
+                  borderRadius: "8px",
+                  padding: "0 4px",
+                  fontSize: 9,
                   fontWeight: 800,
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  minWidth: 16,
-                  height: 16,
+                  minWidth: 14,
+                  height: 14,
                   lineHeight: 1,
-                  boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
                 }}
               >
                 {activeDocHashes.length}
@@ -4834,9 +4835,9 @@ export function App() {
                 : "Thinking is OFF: Model answers directly without internal thought scratchpad. Click to turn ON."
             }
             style={{
-              width: 42,
-              height: 42,
-              borderRadius: 8,
+              width: 34,
+              height: 34,
+              borderRadius: 7,
               background: enableThinking ? "rgba(168, 85, 247, 0.15)" : "var(--bg-card)",
               border: enableThinking ? "1.5px solid #a855f7" : "1px solid var(--border-color)",
               color: enableThinking ? "#a855f7" : "var(--text-muted)",
@@ -4861,19 +4862,19 @@ export function App() {
               }
             }}
           >
-            <Brain size={18} color={enableThinking ? "#a855f7" : "var(--text-muted)"} />
+            <Brain size={15} color={enableThinking ? "#a855f7" : "var(--text-muted)"} />
             <span
               style={{
                 position: "absolute",
-                bottom: 2,
-                right: 3,
-                fontSize: 8,
-                padding: "0 3px",
-                borderRadius: 3,
+                bottom: 1,
+                right: 2,
+                fontSize: 7,
+                padding: "0 2px",
+                borderRadius: 2,
                 background: enableThinking ? "#a855f7" : "rgba(100, 116, 139, 0.3)",
                 color: "#ffffff",
                 fontWeight: 800,
-                lineHeight: "11px",
+                lineHeight: "9px",
               }}
             >
               {enableThinking ? "ON" : "OFF"}
@@ -4891,9 +4892,9 @@ export function App() {
                   : "Select Architecture / Diagram Mode"
               }
               style={{
-                width: 42,
-                height: 42,
-                borderRadius: 8,
+                width: 34,
+                height: 34,
+                borderRadius: 7,
                 background: selectedDiagramMode
                   ? selectedDiagramMode.id === "no-diagram"
                     ? "rgba(100, 116, 139, 0.18)"
@@ -4915,23 +4916,23 @@ export function App() {
                 transition: "all 0.15s ease",
               }}
             >
-              <GitBranch size={18} color={selectedDiagramMode ? selectedDiagramMode.color : "#10b981"} />
+              <GitBranch size={15} color={selectedDiagramMode ? selectedDiagramMode.color : "#10b981"} />
               {selectedDiagramMode && (
                 <span
                   style={{
                     position: "absolute",
-                    top: -4,
-                    right: -4,
-                    fontSize: 10,
-                    borderRadius: "10px",
+                    top: -3,
+                    right: -3,
+                    fontSize: 8,
+                    borderRadius: "8px",
                     background: selectedDiagramMode.color,
                     color: "#fff",
-                    width: 16,
-                    height: 16,
+                    width: 14,
+                    height: 14,
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
                   }}
                 >
                   {selectedDiagramMode.icon}
@@ -5406,15 +5407,15 @@ export function App() {
               }}
               title={`Voice-to-Text Language: ${sttLang === "zh-HK" ? "Cantonese (粵語)" : sttLang === "zh-CN" ? "Mandarin (國語)" : "English (英語)"}`}
               style={{
-                height: 42,
-                width: 44,
+                height: 34,
+                width: 36,
                 padding: "0 2px",
                 textAlign: "center",
-                borderRadius: 8,
+                borderRadius: 7,
                 background: "var(--bg-card)",
                 border: "1px solid var(--border-color)",
                 color: "var(--text-main)",
-                fontSize: 14,
+                fontSize: 13,
                 cursor: "pointer",
                 outline: "none",
               }}
@@ -5486,6 +5487,7 @@ export function App() {
               disabled={loading}
               style={{
                 width: "100%",
+                height: 34,
                 background: isListening
                   ? "rgba(239, 68, 68, 0.05)"
                   : selectedDiagramMode
@@ -5496,10 +5498,10 @@ export function App() {
                   : selectedDiagramMode
                   ? `1.5px solid ${selectedDiagramMode.color}`
                   : "1px solid var(--border-color)",
-                borderRadius: 8,
-                padding: "12px 42px 12px 16px",
+                borderRadius: 7,
+                padding: "0 36px 0 12px",
                 color: "var(--text-main)",
-                fontSize: 14,
+                fontSize: 13,
                 outline: "none",
                 transition: "border-color 0.2s, background-color 0.2s",
                 boxSizing: "border-box",
@@ -5523,14 +5525,14 @@ export function App() {
               title="Paste from clipboard into input"
               style={{
                 position: "absolute",
-                right: 8,
+                right: 6,
                 top: "50%",
                 transform: "translateY(-50%)",
                 background: "transparent",
                 border: "none",
                 cursor: "pointer",
-                padding: "4px",
-                borderRadius: 6,
+                padding: "3px",
+                borderRadius: 5,
                 color: "var(--text-muted)",
                 display: "flex",
                 alignItems: "center",
@@ -5546,7 +5548,7 @@ export function App() {
                 e.currentTarget.style.background = "transparent";
               }}
             >
-              <ClipboardPaste size={16} />
+              <ClipboardPaste size={14} />
             </button>
             {sttStatusText && (
               <div
@@ -5586,9 +5588,9 @@ export function App() {
             title={isListening ? "Click to stop voice input (Listening...)" : "Voice Input (Click to speak)"}
             className={isListening ? "voice-recording-pulse" : ""}
             style={{
-              width: 42,
-              height: 42,
-              borderRadius: 8,
+              width: 34,
+              height: 34,
+              borderRadius: 7,
               background: isListening ? "#ef4444" : "var(--bg-card)",
               color: isListening ? "#ffffff" : "var(--text-main)",
               border: isListening ? "1px solid #ef4444" : "1px solid var(--border-color)",
@@ -5600,7 +5602,7 @@ export function App() {
               flexShrink: 0,
             }}
           >
-            {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+            {isListening ? <MicOff size={15} /> : <Mic size={15} />}
           </button>
 
           {/* 🚀 Send Button (Compact Icon) */}
@@ -5609,9 +5611,9 @@ export function App() {
             disabled={loading || !inputPrompt.trim()}
             title="Send message (Enter)"
             style={{
-              width: 44,
-              height: 42,
-              borderRadius: 8,
+              width: 36,
+              height: 34,
+              borderRadius: 7,
               background: loading ? "#94a3b8" : "#1f6feb",
               color: "#ffffff",
               border: "none",
@@ -5624,7 +5626,7 @@ export function App() {
               flexShrink: 0,
             }}
           >
-            <Send size={18} />
+            <Send size={15} />
           </button>
 
           {/* ⬆️ Upper Arrow Button: Jump to top of last generated session/turn */}
@@ -5633,9 +5635,9 @@ export function App() {
             onClick={scrollToLastGeneratedTurn}
             title="Jump back to top of last generated session"
             style={{
-              width: 42,
-              height: 42,
-              borderRadius: 8,
+              width: 34,
+              height: 34,
+              borderRadius: 7,
               background: "var(--bg-card)",
               border: "1px solid var(--border-color)",
               color: "var(--text-main)",
@@ -5657,7 +5659,7 @@ export function App() {
               e.currentTarget.style.background = "var(--bg-card)";
             }}
           >
-            <ArrowUp size={18} />
+            <ArrowUp size={15} />
           </button>
           </div>
         </div>
