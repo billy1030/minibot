@@ -180,6 +180,14 @@ export function App() {
   const [showPastSessions, setShowPastSessions] = useState<boolean>(true);
   const [mcpViewMode, setMcpViewMode] = useState<"full" | "minimize" | "hide">("full");
   const [thinkingViewMode, setThinkingViewMode] = useState<"full" | "minimize" | "hide">("full");
+  const [enableThinking, setEnableThinking] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("minibot_enable_thinking");
+      return saved === "1";
+    } catch {
+      return false;
+    }
+  });
   const [mcpJsonText, setMcpJsonText] = useState<string>("");
   const [mcpJsonError, setMcpJsonError] = useState<string | null>(null);
   const [showDocModal, setShowDocModal] = useState<boolean>(false);
@@ -195,6 +203,13 @@ export function App() {
   const [deletingSessionFile, setDeletingSessionFile] = useState<string | null>(null);
   const [isDeletingWs, setIsDeletingWs] = useState<boolean>(false);
   const [showMermaidMenu, setShowMermaidMenu] = useState<boolean>(false);
+  const [selectedDiagramMode, setSelectedDiagramMode] = useState<{
+    id: string;
+    label: string;
+    prompt: string;
+    icon: string;
+    color: string;
+  } | null>(null);
   const mermaidMenuRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -361,6 +376,19 @@ export function App() {
       return () => document.removeEventListener("mousedown", handleClickOutsideTts);
     }
   }, [showTtsMenu]);
+
+  const handleSelectDiagramMode = (item: { id: string; label: string; prompt: string; icon: string; color: string }) => {
+    // Toggle off if already selected
+    if (selectedDiagramMode?.id === item.id) {
+      setSelectedDiagramMode(null);
+    } else {
+      setSelectedDiagramMode(item);
+    }
+    setShowMermaidMenu(false);
+    setTimeout(() => {
+      chatInputRef.current?.focus();
+    }, 50);
+  };
 
   const handleInsertMermaid = (snippet: string, isSnippetOnly?: boolean) => {
     if (isSnippetOnly) {
@@ -1405,7 +1433,14 @@ export function App() {
 
     const userMessageId = "user-" + Date.now();
     const assistantMessageId = "asst-" + Date.now();
-    const query = rawQuery.trim();
+    const baseQuery = rawQuery.trim();
+
+    // If a diagram mode badge is active, append instructions seamlessly behind the scenes
+    let finalQuery = baseQuery;
+    if (selectedDiagramMode?.prompt) {
+      finalQuery = `${baseQuery}\n\n[System Instruction: ${selectedDiagramMode.prompt}]`;
+    }
+
     const now = Date.now();
 
     // Calculate next turn index based on existing assistant responses
@@ -1413,7 +1448,7 @@ export function App() {
 
     setMessages((prev) => [
       ...prev,
-      { id: userMessageId, role: "user", content: query, timestamp: now, turnIndex: nextTurn },
+      { id: userMessageId, role: "user", content: baseQuery, timestamp: now, turnIndex: nextTurn },
       {
         id: assistantMessageId,
         role: "assistant",
@@ -1426,6 +1461,7 @@ export function App() {
     ]);
 
     setInputPrompt("");
+    setSelectedDiagramMode(null);
     setLoading(true);
     setCurrentStep(1);
 
@@ -1445,11 +1481,12 @@ export function App() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          message: query,
+          message: finalQuery,
           history,
           attachedDocHashes: activeDocHashes,
           sessionFile: activeSessionFile,
           workspace: currentWorkspace,
+          enableThinking,
         }),
       });
 
@@ -4388,6 +4425,34 @@ export function App() {
                         mainText = "";
                       }
 
+                      // 🛡️ Auto-Rescue Visual Diagrams trapped inside Thinking Process:
+                      // Thinking models often draft the full SVG or Mermaid diagram before closing </think>.
+                      // If an SVG or Mermaid block is trapped inside thoughtText, extract and hoist it to mainText
+                      if (thoughtText) {
+                        // Match SVG blocks (either inside ```xml/html/svg code fences or raw <svg>...</svg>)
+                        const svgRegex = /(`{3,}(?:xml|html|svg)?\s*[\s\S]*?<\/svg>[\s\S]*?`{3,}|<svg[\s\S]*?<\/svg>)/gi;
+                        // Match Mermaid diagram blocks
+                        const mermaidRegex = /(`{3,}mermaid[\s\S]*?`{3,})/gi;
+
+                        const extractedBlocks: string[] = [];
+                        
+                        let cleanThought = thoughtText.replace(svgRegex, (match) => {
+                          extractedBlocks.push(match.trim());
+                          return "\n[Diagram generated and presented in main response]\n";
+                        });
+
+                        cleanThought = cleanThought.replace(mermaidRegex, (match) => {
+                          extractedBlocks.push(match.trim());
+                          return "\n[Mermaid diagram presented in main response]\n";
+                        });
+
+                        if (extractedBlocks.length > 0) {
+                          thoughtText = cleanThought.trim();
+                          const hoistedVisuals = extractedBlocks.join("\n\n");
+                          mainText = mainText ? `${mainText}\n\n${hoistedVisuals}` : hoistedVisuals;
+                        }
+                      }
+
                       return (
                         <>
                           {/* Dedicated Thinking Block */}
@@ -4717,18 +4782,85 @@ export function App() {
             )}
           </button>
 
+          {/* 🧠 Thinking Mode Toggle Button (ON / OFF) */}
+          <button
+            type="button"
+            onClick={() => {
+              const nextVal = !enableThinking;
+              setEnableThinking(nextVal);
+              try {
+                localStorage.setItem("minibot_enable_thinking", nextVal ? "1" : "0");
+              } catch {}
+            }}
+            title={
+              enableThinking
+                ? "Thinking is ON: Model performs chain-of-thought reasoning before answering. Click to turn OFF."
+                : "Thinking is OFF: Model answers directly without internal thought scratchpad (ideal for large SVG diagrams). Click to turn ON."
+            }
+            style={{
+              padding: "11px 14px",
+              borderRadius: 8,
+              background: enableThinking ? "rgba(168, 85, 247, 0.15)" : "var(--bg-card)",
+              border: enableThinking ? "1px solid #a855f7" : "1px solid var(--border-color)",
+              color: enableThinking ? "#a855f7" : "var(--text-muted)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              fontSize: 13,
+              fontWeight: 600,
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              if (!enableThinking) {
+                e.currentTarget.style.borderColor = "#a855f7";
+                e.currentTarget.style.color = "#a855f7";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!enableThinking) {
+                e.currentTarget.style.borderColor = "var(--border-color)";
+                e.currentTarget.style.color = "var(--text-muted)";
+              }
+            }}
+          >
+            <Brain size={16} color={enableThinking ? "#a855f7" : "var(--text-muted)"} />
+            <span>Thinking</span>
+            <span
+              style={{
+                fontSize: 10,
+                padding: "1px 6px",
+                borderRadius: 4,
+                background: enableThinking ? "#a855f7" : "rgba(100, 116, 139, 0.2)",
+                color: enableThinking ? "#ffffff" : "var(--text-muted)",
+                fontWeight: 700,
+                letterSpacing: "0.5px",
+              }}
+            >
+              {enableThinking ? "ON" : "OFF"}
+            </span>
+          </button>
+
           {/* 📊 Mermaid Architecture Diagram Quick Action */}
           <div style={{ position: "relative" }}>
             <button
               type="button"
               onClick={() => setShowMermaidMenu((v) => !v)}
-              title="Insert or request Mermaid architecture diagram"
+              title="Select Architecture / Diagram Mode"
               style={{
                 padding: "11px 14px",
                 borderRadius: 8,
-                background: showMermaidMenu ? "rgba(16, 185, 129, 0.15)" : "var(--bg-card)",
-                border: showMermaidMenu ? "1px solid #10b981" : "1px solid var(--border-color)",
-                color: showMermaidMenu ? "#10b981" : "var(--text-muted)",
+                background: selectedDiagramMode
+                  ? "rgba(235, 108, 54, 0.15)"
+                  : showMermaidMenu
+                  ? "rgba(16, 185, 129, 0.15)"
+                  : "var(--bg-card)",
+                border: selectedDiagramMode
+                  ? "1px solid #eb6c36"
+                  : showMermaidMenu
+                  ? "1px solid #10b981"
+                  : "1px solid var(--border-color)",
+                color: selectedDiagramMode ? "#eb6c36" : showMermaidMenu ? "#10b981" : "var(--text-muted)",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -4738,8 +4870,22 @@ export function App() {
                 transition: "all 0.15s ease",
               }}
             >
-              <GitBranch size={16} color="#10b981" />
-              <span>Mermaid</span>
+              <GitBranch size={16} color={selectedDiagramMode ? "#eb6c36" : "#10b981"} />
+              <span>Diagram</span>
+              {selectedDiagramMode && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    padding: "1px 5px",
+                    borderRadius: 4,
+                    background: selectedDiagramMode.color,
+                    color: "#fff",
+                    fontWeight: 700,
+                  }}
+                >
+                  {selectedDiagramMode.icon} Active
+                </span>
+              )}
             </button>
 
             {showMermaidMenu && (
@@ -4755,12 +4901,13 @@ export function App() {
                   borderRadius: 12,
                   padding: 8,
                   boxShadow: "0 12px 28px rgba(0,0,0,0.18)",
-                  minWidth: 280,
+                  minWidth: 310,
                   display: "flex",
                   flexDirection: "column",
                   gap: 4,
                 }}
               >
+                {/* 🌟 Editorial SVG Section */}
                 <div
                   style={{
                     padding: "4px 8px 6px",
@@ -4773,35 +4920,145 @@ export function App() {
                     justifyContent: "space-between",
                   }}
                 >
-                  <span>📊 Mermaid Diagram Generator</span>
+                  <span>📐 Architecture & Visual Diagrams</span>
                   <span
                     style={{
                       fontSize: 10,
-                      background: "rgba(16, 185, 129, 0.15)",
-                      color: "#10b981",
+                      background: "rgba(235, 108, 54, 0.15)",
+                      color: "#eb6c36",
                       padding: "1px 6px",
                       borderRadius: 4,
                       fontWeight: 700,
                     }}
                   >
-                    Quick Apply
+                    Editorial SVG Priority
                   </span>
                 </div>
 
+                {/* 1. Create Editorial SVG Diagram */}
                 <button
                   type="button"
                   onClick={() =>
-                    handleInsertMermaid(
-                      "Please draw the system architecture using Mermaid flowchart syntax (flowchart TD), including detailed node branches, step descriptions, and processing logic."
-                    )
+                    handleSelectDiagramMode({
+                      id: "svg-create",
+                      label: "Editorial SVG",
+                      icon: "🎨",
+                      color: "#eb6c36",
+                      prompt:
+                        "Please create a high-fidelity standalone Editorial SVG architecture diagram following the `diagram-design` skill. Apply the flexible layout matrix with Top-Right Header Legend chips or Sidebar to prevent legend collision, clear focal hierarchy, orthogonal connectors, and opaque background badges behind connector labels.",
+                    })
                   }
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
                     padding: "8px 10px",
-                    background: "transparent",
-                    border: "none",
+                    background: selectedDiagramMode?.id === "svg-create" ? "rgba(235, 108, 54, 0.15)" : "transparent",
+                    border: selectedDiagramMode?.id === "svg-create" ? "1px solid rgba(235, 108, 54, 0.4)" : "1px solid transparent",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    color: "var(--text-main)",
+                    fontSize: 12.5,
+                    textAlign: "left",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(235, 108, 54, 0.12)")}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      selectedDiagramMode?.id === "svg-create" ? "rgba(235, 108, 54, 0.15)" : "transparent")
+                  }
+                >
+                  <span style={{ fontSize: 16 }}>🎨</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: "#eb6c36", display: "flex", justifyContent: "space-between" }}>
+                      <span>Create Editorial SVG</span>
+                      {selectedDiagramMode?.id === "svg-create" && <span style={{ fontSize: 11 }}>✓ Active</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>High-fidelity vector graphic with flexible layout</div>
+                  </div>
+                </button>
+
+                {/* 2. Auto-Fix Diagram */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSelectDiagramMode({
+                      id: "svg-autofix",
+                      label: "Auto-Fix SVG",
+                      icon: "🛠️",
+                      color: "#10b981",
+                      prompt:
+                        "Please inspect and auto-fix the previous SVG diagram: eliminate the legend collision by relocating the legend to the Top-Right Header (x=800..1320, y=35) or expanding the canvas viewBox height dynamically (height >= 1050 for 4 tiers) with at least 40px clearance above the legend. Retain all servers, subnets, and connector styles.",
+                    })
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 10px",
+                    background: selectedDiagramMode?.id === "svg-autofix" ? "rgba(16, 185, 129, 0.15)" : "transparent",
+                    border: selectedDiagramMode?.id === "svg-autofix" ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid transparent",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    color: "var(--text-main)",
+                    fontSize: 12.5,
+                    textAlign: "left",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(16, 185, 129, 0.12)")}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      selectedDiagramMode?.id === "svg-autofix" ? "rgba(16, 185, 129, 0.15)" : "transparent")
+                  }
+                >
+                  <span style={{ fontSize: 16 }}>🛠️</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: "#10b981", display: "flex", justifyContent: "space-between" }}>
+                      <span>Auto-Fix Diagram (Legend Overlap)</span>
+                      {selectedDiagramMode?.id === "svg-autofix" && <span style={{ fontSize: 11 }}>✓ Active</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Relocate legend to header or expand canvas clearance</div>
+                  </div>
+                </button>
+
+                {/* 📊 Mermaid Charts Section */}
+                <div
+                  style={{
+                    padding: "6px 8px 4px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "var(--text-muted)",
+                    borderTop: "1px solid var(--border-color)",
+                    borderBottom: "1px solid var(--border-color)",
+                    marginTop: 4,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span>📊 Mermaid Charts</span>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>Code-based</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSelectDiagramMode({
+                      id: "mermaid-flowchart",
+                      label: "Mermaid Flowchart",
+                      icon: "🔀",
+                      color: "#3b82f6",
+                      prompt:
+                        "Please draw the system architecture using Mermaid flowchart syntax (flowchart TD), including detailed node branches, step descriptions, and processing logic.",
+                    })
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 10px",
+                    background: selectedDiagramMode?.id === "mermaid-flowchart" ? "rgba(59, 130, 246, 0.15)" : "transparent",
+                    border: selectedDiagramMode?.id === "mermaid-flowchart" ? "1px solid rgba(59, 130, 246, 0.4)" : "1px solid transparent",
                     borderRadius: 6,
                     cursor: "pointer",
                     color: "var(--text-main)",
@@ -4810,11 +5067,19 @@ export function App() {
                     transition: "background 0.15s",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-card)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      selectedDiagramMode?.id === "mermaid-flowchart" ? "rgba(59, 130, 246, 0.15)" : "transparent")
+                  }
                 >
                   <span style={{ fontSize: 16 }}>🔀</span>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>Architecture Flowchart</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, display: "flex", justifyContent: "space-between" }}>
+                      <span>Architecture Flowchart</span>
+                      {selectedDiagramMode?.id === "mermaid-flowchart" && (
+                        <span style={{ fontSize: 11, color: "#3b82f6" }}>✓ Active</span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Node branching and logic flows</div>
                   </div>
                 </button>
@@ -4822,17 +5087,22 @@ export function App() {
                 <button
                   type="button"
                   onClick={() =>
-                    handleInsertMermaid(
-                      "Please draw the interaction flow using Mermaid sequence diagram syntax (sequenceDiagram), showing sequence handshakes and call chains between services."
-                    )
+                    handleSelectDiagramMode({
+                      id: "mermaid-sequence",
+                      label: "Mermaid Sequence",
+                      icon: "⏱️",
+                      color: "#8b5cf6",
+                      prompt:
+                        "Please draw the interaction flow using Mermaid sequence diagram syntax (sequenceDiagram), showing sequence handshakes and call chains between services.",
+                    })
                   }
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
                     padding: "8px 10px",
-                    background: "transparent",
-                    border: "none",
+                    background: selectedDiagramMode?.id === "mermaid-sequence" ? "rgba(139, 92, 246, 0.15)" : "transparent",
+                    border: selectedDiagramMode?.id === "mermaid-sequence" ? "1px solid rgba(139, 92, 246, 0.4)" : "1px solid transparent",
                     borderRadius: 6,
                     cursor: "pointer",
                     color: "var(--text-main)",
@@ -4841,11 +5111,19 @@ export function App() {
                     transition: "background 0.15s",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-card)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      selectedDiagramMode?.id === "mermaid-sequence" ? "rgba(139, 92, 246, 0.15)" : "transparent")
+                  }
                 >
                   <span style={{ fontSize: 16 }}>⏱️</span>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>Sequence Diagram</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, display: "flex", justifyContent: "space-between" }}>
+                      <span>Sequence Diagram</span>
+                      {selectedDiagramMode?.id === "mermaid-sequence" && (
+                        <span style={{ fontSize: 11, color: "#8b5cf6" }}>✓ Active</span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Service handshakes and call chains</div>
                   </div>
                 </button>
@@ -4853,17 +5131,22 @@ export function App() {
                 <button
                   type="button"
                   onClick={() =>
-                    handleInsertMermaid(
-                      "Please draw the cluster architecture using Mermaid syntax, including subgraph partition boundaries and data flows."
-                    )
+                    handleSelectDiagramMode({
+                      id: "mermaid-topology",
+                      label: "Mermaid Topology",
+                      icon: "🏛️",
+                      color: "#06b6d4",
+                      prompt:
+                        "Please draw the cluster architecture using Mermaid syntax, including subgraph partition boundaries and data flows.",
+                    })
                   }
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
                     padding: "8px 10px",
-                    background: "transparent",
-                    border: "none",
+                    background: selectedDiagramMode?.id === "mermaid-topology" ? "rgba(6, 182, 212, 0.15)" : "transparent",
+                    border: selectedDiagramMode?.id === "mermaid-topology" ? "1px solid rgba(6, 182, 212, 0.4)" : "1px solid transparent",
                     borderRadius: 6,
                     cursor: "pointer",
                     color: "var(--text-main)",
@@ -4872,11 +5155,19 @@ export function App() {
                     transition: "background 0.15s",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-card)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      selectedDiagramMode?.id === "mermaid-topology" ? "rgba(6, 182, 212, 0.15)" : "transparent")
+                  }
                 >
                   <span style={{ fontSize: 16 }}>🏛️</span>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>Cluster Topology</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, display: "flex", justifyContent: "space-between" }}>
+                      <span>Cluster Topology</span>
+                      {selectedDiagramMode?.id === "mermaid-topology" && (
+                        <span style={{ fontSize: 11, color: "#06b6d4" }}>✓ Active</span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Subgraph boundaries and data flows</div>
                   </div>
                 </button>
@@ -4884,17 +5175,22 @@ export function App() {
                 <button
                   type="button"
                   onClick={() =>
-                    handleInsertMermaid(
-                      "Please break down core concepts, module responsibilities, and technical key points using Mermaid mindmap syntax."
-                    )
+                    handleSelectDiagramMode({
+                      id: "mermaid-mindmap",
+                      label: "Mermaid Mindmap",
+                      icon: "🧠",
+                      color: "#f59e0b",
+                      prompt:
+                        "Please break down core concepts, module responsibilities, and technical key points using Mermaid mindmap syntax.",
+                    })
                   }
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
                     padding: "8px 10px",
-                    background: "transparent",
-                    border: "none",
+                    background: selectedDiagramMode?.id === "mermaid-mindmap" ? "rgba(245, 158, 11, 0.15)" : "transparent",
+                    border: selectedDiagramMode?.id === "mermaid-mindmap" ? "1px solid rgba(245, 158, 11, 0.4)" : "1px solid transparent",
                     borderRadius: 6,
                     cursor: "pointer",
                     color: "var(--text-main)",
@@ -4903,11 +5199,19 @@ export function App() {
                     transition: "background 0.15s",
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-card)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      selectedDiagramMode?.id === "mermaid-mindmap" ? "rgba(245, 158, 11, 0.15)" : "transparent")
+                  }
                 >
                   <span style={{ fontSize: 16 }}>🧠</span>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>Concept Mindmap</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, display: "flex", justifyContent: "space-between" }}>
+                      <span>Concept Mindmap</span>
+                      {selectedDiagramMode?.id === "mermaid-mindmap" && (
+                        <span style={{ fontSize: 11, color: "#f59e0b" }}>✓ Active</span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Hierarchical technical structure</div>
                   </div>
                 </button>
@@ -4941,8 +5245,8 @@ export function App() {
                 >
                   <span style={{ fontSize: 16 }}>📋</span>
                   <div>
-                    <div style={{ fontWeight: 600 }}>Insert Code Snippet</div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Directly insert complete Mermaid code</div>
+                    <div style={{ fontWeight: 600 }}>Insert Raw Code Template</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Paste editable code directly into input</div>
                   </div>
                 </button>
               </div>
@@ -4981,18 +5285,76 @@ export function App() {
           </div>
 
           <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column" }}>
+            {selectedDiagramMode && (
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 8px)",
+                  left: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "4px 10px",
+                  borderRadius: 16,
+                  background: "var(--bg-secondary)",
+                  border: `1px solid ${selectedDiagramMode.color}`,
+                  color: selectedDiagramMode.color,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                  zIndex: 20,
+                  animation: "fadeIn 0.2s ease",
+                }}
+              >
+                <span>{selectedDiagramMode.icon}</span>
+                <span>Mode: {selectedDiagramMode.label}</span>
+                <span style={{ fontSize: 10, opacity: 0.75 }}>(will attach to your prompt on send)</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDiagramMode(null)}
+                  title="Remove diagram instruction modifier"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    padding: "0 2px",
+                    display: "flex",
+                    alignItems: "center",
+                    fontSize: 14,
+                    lineHeight: 1,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#ef4444")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             <input
               ref={chatInputRef}
               type="text"
               value={inputPrompt}
               onChange={(e) => setInputPrompt(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Ask anything or query attached Excel / PDF / Word documents..."
+              placeholder={
+                selectedDiagramMode
+                  ? `[${selectedDiagramMode.label} mode active] Type your prompt (e.g. Draw DMZ and core router)...`
+                  : "Ask anything or query attached Excel / PDF / Word documents..."
+              }
               disabled={loading}
               style={{
                 width: "100%",
-                background: isListening ? "rgba(239, 68, 68, 0.05)" : "var(--bg-card)",
-                border: isListening ? "1.5px solid #ef4444" : "1px solid var(--border-color)",
+                background: isListening
+                  ? "rgba(239, 68, 68, 0.05)"
+                  : selectedDiagramMode
+                  ? "rgba(235, 108, 54, 0.03)"
+                  : "var(--bg-card)",
+                border: isListening
+                  ? "1.5px solid #ef4444"
+                  : selectedDiagramMode
+                  ? `1.5px solid ${selectedDiagramMode.color}`
+                  : "1px solid var(--border-color)",
                 borderRadius: 8,
                 padding: "12px 42px 12px 16px",
                 color: "var(--text-main)",

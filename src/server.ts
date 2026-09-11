@@ -628,6 +628,7 @@ app.delete("/api/users/:id", requireAdmin, (req, res) => {
 
 // 1. Get Configuration & Status
 app.get("/api/config", (req, res) => {
+  config = loadConfig();
   const maskedKey = config.llm.apiKey
     ? (config.llm.apiKey.length > 8 ? `${config.llm.apiKey.slice(0, 6)}...****` : "****")
     : "";
@@ -869,7 +870,7 @@ function getDocManager(req: express.Request): DocumentManager {
 // 4. Chat with Streaming Events (SSE) and Multi-Turn History, Document Attachment & Workspace Support
 app.post("/api/chat", requireAuth, async (req, res) => {
   const { userNumber } = getAuthContext(req);
-  const { message, history, attachedDocHashes, sessionFile, workspace } = req.body;
+  const { message, history, attachedDocHashes, sessionFile, workspace, enableThinking = true } = req.body;
   if (!message) {
     return res.status(400).json({ error: "Message is required." });
   }
@@ -894,7 +895,8 @@ app.post("/api/chat", requireAuth, async (req, res) => {
   }> = [];
 
   try {
-    const orchestrator = new LoopOrchestrator(config, mcpManager);
+    const currentConfig = loadConfig();
+    const orchestrator = new LoopOrchestrator(currentConfig, mcpManager);
     const docManager = getDocManager(req);
 
     // Retrieve preprocessed document context if hashes provided
@@ -974,7 +976,8 @@ app.post("/api/chat", requireAuth, async (req, res) => {
         },
       },
       history,
-      attachedContext
+      attachedContext,
+      enableThinking
     );
   } catch (err: any) {
     sendEvent("error", { message: err.message });

@@ -47,7 +47,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "minimax_generate_image",
         description:
-          "Generate an image using MiniMax's image-01 model. Returns generated image URLs or file details.",
+          "Generate an artistic or photographic visual image using MiniMax's image-01 model. Returns generated image URLs or file details. DO NOT use this tool for software diagrams, architecture, charts, or flowcharts — output SVG, HTML, or Mermaid directly instead.",
         inputSchema: {
           type: "object",
           properties: {

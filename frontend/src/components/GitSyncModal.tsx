@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { GitBranch, Download, Upload, RefreshCw, X, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { Download, Upload, RefreshCw, X, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { GithubIcon } from "./GithubIcon";
 
 interface GitSyncModalProps {
   isOpen: boolean;
@@ -112,7 +113,7 @@ export const GitSyncModal: React.FC<GitSyncModalProps> = ({
                 color: "#10b981",
               }}
             >
-              <GitBranch size={18} />
+              <GithubIcon size={18} />
             </div>
             <div>
               <h3
@@ -401,7 +402,7 @@ export const GitSyncModal: React.FC<GitSyncModalProps> = ({
               </>
             ) : (
               <>
-                <GitBranch size={15} />
+                <GithubIcon size={15} />
                 <span>Execute {selectedAction === "sync" ? "Full Sync" : selectedAction === "push" ? "Push" : "Pull"}</span>
               </>
             )}

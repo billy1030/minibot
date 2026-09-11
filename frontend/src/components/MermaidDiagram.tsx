@@ -670,30 +670,60 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
           </button>
 
           {/* 🎮 內聯直接控制按鈕組 (放大、縮小、復位 100%) */}
-          <div className="mm-btn-group">
+          <div
+            className="mm-btn-group"
+            onMouseDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
             <button
-              onClick={() => setInlineScale(s => Math.max(0.2, Number((s - 0.2).toFixed(2))))}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setInlineScale(s => Math.max(0.2, Number((s - 0.2).toFixed(2))));
+              }}
+              onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-btn"
               title="Zoom out"
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
-            <span
-              onClick={() => { setInlineScale(1.0); setInlinePan({ x: 0, y: 0 }); }}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setInlineScale(1.0);
+                setInlinePan({ x: 0, y: 0 });
+              }}
+              onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-text"
               title="Reset view"
             >
               {Math.round(inlineScale * 100)}%
-            </span>
+            </button>
             <button
-              onClick={() => setInlineScale(s => Math.min(5.0, Number((s + 0.25).toFixed(2))))}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setInlineScale(s => Math.min(5.0, Number((s + 0.25).toFixed(2))));
+              }}
+              onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-btn"
               title="Zoom in"
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => { setInlineScale(1.0); setInlinePan({ x: 0, y: 0 }); }}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setInlineScale(1.0);
+                setInlinePan({ x: 0, y: 0 });
+              }}
+              onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-btn"
               title="Reset view"
             >
@@ -702,23 +732,45 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
           </div>
 
           {/* ↕️ 節點上下行距/字距控制鍵 (↕- / 1.2 / ↕+) */}
-          <div className="mm-btn-group">
+          <div
+            className="mm-btn-group"
+            onMouseDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
             <button
-              onClick={() => updateLineHeight(Math.max(1.0, Number((lineHeight - 0.2).toFixed(1))))}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                updateLineHeight(Math.max(1.0, Number((lineHeight - 0.2).toFixed(1))));
+              }}
+              onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-btn"
               title="Decrease node line spacing (-0.2)"
             >
               ↕-
             </button>
-            <span
-              onClick={() => updateLineHeight(1.2)}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                updateLineHeight(1.2);
+              }}
+              onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-text indigo"
               title="Click to reset line height to default (1.2)"
             >
               ↕{lineHeight}
-            </span>
+            </button>
             <button
-              onClick={() => updateLineHeight(Math.min(2.8, Number((lineHeight + 0.2).toFixed(1))))}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                updateLineHeight(Math.min(2.8, Number((lineHeight + 0.2).toFixed(1))));
+              }}
+              onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-btn"
               title="Increase node line spacing (+0.2)"
             >
@@ -728,7 +780,13 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
 
           {/* ↕️ 消除上下留白邊距按鈕 (Detect & Reduce Up/Down Margin) */}
           <button
-            onClick={toggleReduceMargin}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              toggleReduceMargin();
+            }}
+            onDoubleClick={(e) => e.stopPropagation()}
             className={`mm-btn-fit ${isReduceMargin ? '' : 'inactive'}`}
             title={`${isReduceMargin ? 'Margin Fitted' : 'Fit Margin'}: Detect & reduce vertical margin space for current zoom (${Math.round(inlineScale * 100)}%)`}
           >
@@ -737,7 +795,13 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
 
           {/* 📐 4:3 展開外框切換按鈕 (Icon-only) */}
           <button
-            onClick={() => handleSetExpandLevel(expandLevel === 0 ? 1 : 0)}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              handleSetExpandLevel(expandLevel === 0 ? 1 : 0);
+            }}
+            onDoubleClick={(e) => e.stopPropagation()}
             className="mm-btn-icon"
             title={expandLevel === 1 ? 'Restore default frame' : 'Expand to 4:3 aspect ratio frame'}
           >
@@ -832,19 +896,46 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
 
               <div className="flex items-center gap-3">
                 {/* 彈窗內縮放控制組 */}
-                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs">
+                <div
+                  className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xs"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                >
                   <button
-                    onClick={() => setInlineScale(s => Math.max(0.2, Number((s - 0.2).toFixed(2))))}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setInlineScale(s => Math.max(0.2, Number((s - 0.2).toFixed(2))));
+                    }}
+                    onDoubleClick={(e) => e.stopPropagation()}
                     className="p-1 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition cursor-pointer"
                     title="Zoom Out"
                   >
                     <ZoomOut className="w-3.5 h-3.5" />
                   </button>
-                  <span className="px-1.5 text-xs font-mono font-bold text-slate-600 dark:text-slate-300">
-                    {Math.round(inlineScale * 100)}%
-                  </span>
                   <button
-                    onClick={() => setInlineScale(s => Math.min(5.0, Number((s + 0.25).toFixed(2))))}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setInlineScale(1.0);
+                      setInlinePan({ x: 0, y: 0 });
+                    }}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                    className="px-1.5 text-xs font-mono font-bold text-slate-600 dark:text-slate-300 hover:text-sky-600 cursor-pointer"
+                    title="Reset Zoom (100%)"
+                  >
+                    {Math.round(inlineScale * 100)}%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setInlineScale(s => Math.min(5.0, Number((s + 0.25).toFixed(2))));
+                    }}
+                    onDoubleClick={(e) => e.stopPropagation()}
                     className="p-1 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition cursor-pointer"
                     title="Zoom In"
                   >

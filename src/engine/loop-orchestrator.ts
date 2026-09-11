@@ -30,7 +30,8 @@ export class LoopOrchestrator {
     userPrompt: string,
     callbacks?: LoopEventCallbacks,
     history?: Array<{ role: "user" | "assistant"; content: string }>,
-    attachedContext?: string
+    attachedContext?: string,
+    enableThinking: boolean = true
   ): Promise<{ answer: string; iterations: number; history: OpenAI.Chat.Completions.ChatCompletionMessageParam[] }> {
     // 1. Build initial system message combining system prompt, attached docs, and AI skills
     const systemPromptParts = [this.config.prompts.systemPrompt];
@@ -47,6 +48,13 @@ export class LoopOrchestrator {
       "\n--- Active AI Skills & Instructions ---\n",
       this.config.prompts.skillsPrompt
     );
+
+    if (!enableThinking) {
+      systemPromptParts.push(
+        "\n--- Thinking Protocol ---\n",
+        "DIRECT RESPONSE MODE: Do NOT use <think> tags, chain-of-thought, or internal scratchpad reasoning. Answer directly, concisely, and output final content (code, text, SVG, markdown) immediately."
+      );
+    }
 
     const fullSystemPrompt = systemPromptParts.join("\n");
 

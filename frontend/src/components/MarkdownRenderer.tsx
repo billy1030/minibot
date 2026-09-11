@@ -31,6 +31,35 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
       clean = clean.slice(11, -3).trim();
     }
 
+    // Isolate SVG blocks (both inside ```svg/xml/html fences and standalone <svg>...</svg>)
+    // Marked interprets lines indented by 4+ spaces inside raw SVG as markdown code blocks (<pre><code>).
+    // By extracting SVGs to safe alphanumeric tokens and reinjecting after marked.parse, we preserve 100% SVG validity.
+    const svgBlocks: string[] = [];
+
+    clean = clean.replace(/`{3,}(?:xml|html|svg)?\s*([\s\S]*?<\/svg>[\s\S]*?)\s*`{3,}/gi, (_, svgContent) => {
+      const token = `MINIBOTSVGBLOCKTOKEN${svgBlocks.length}ENDTOKEN`;
+      svgBlocks.push(svgContent.trim());
+      return `\n\n${token}\n\n`;
+    });
+
+    clean = clean.replace(/(<div[\s\S]*?<svg[\s\S]*?<\/svg>[\s\S]*?<\/div>|<svg[\s\S]*?<\/svg>)/gi, (match) => {
+      const token = `MINIBOTSVGBLOCKTOKEN${svgBlocks.length}ENDTOKEN`;
+      svgBlocks.push(match.trim());
+      return `\n\n${token}\n\n`;
+    });
+
+    const restoreSvgs = (rawHtml: string): string => {
+      let res = rawHtml;
+      svgBlocks.forEach((svg, i) => {
+        const token = `MINIBOTSVGBLOCKTOKEN${i}ENDTOKEN`;
+        res = res.replace(
+          new RegExp(`<p>\\s*${token}\\s*<\\/p>|${token}`, 'g'),
+          `<div class="svg-diagram-wrapper" style="width:100%;overflow-x:auto;margin:1.25rem 0;display:flex;justify-content:center;background:#ffffff;padding:14px;border:1px solid var(--border-color);border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.06);">${svg}</div>`
+        );
+      });
+      return res;
+    };
+
     const MERMAID_REGEX = /```mermaid\s*([\s\S]*?)```/g;
     const result: ContentSegment[] = [];
     let lastIndex = 0;
@@ -42,13 +71,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
         const md = clean.slice(lastIndex, match.index);
         if (md.trim()) {
           try {
+            const rawParsed = marked.parse(md, { async: false }) as string;
             result.push({
               type: 'markdown',
               content: md,
-              html: marked.parse(md, { async: false }) as string,
+              html: restoreSvgs(rawParsed),
             });
           } catch {
-            result.push({ type: 'markdown', content: md, html: md });
+            result.push({ type: 'markdown', content: md, html: restoreSvgs(md) });
           }
         }
       }
@@ -67,13 +97,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
       const remaining = clean.slice(lastIndex);
       if (remaining.trim()) {
         try {
+          const rawParsed = marked.parse(remaining, { async: false }) as string;
           result.push({
             type: 'markdown',
             content: remaining,
-            html: marked.parse(remaining, { async: false }) as string,
+            html: restoreSvgs(rawParsed),
           });
         } catch {
-          result.push({ type: 'markdown', content: remaining, html: remaining });
+          result.push({ type: 'markdown', content: remaining, html: restoreSvgs(remaining) });
         }
       }
     }
@@ -81,13 +112,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     // Fallback: If no segments were extracted (e.g. whitespace or no mermaid)
     if (result.length === 0 && clean) {
       try {
+        const rawParsed = marked.parse(clean, { async: false }) as string;
         result.push({
           type: 'markdown',
           content: clean,
-          html: marked.parse(clean, { async: false }) as string,
+          html: restoreSvgs(rawParsed),
         });
       } catch {
-        result.push({ type: 'markdown', content: clean, html: clean });
+        result.push({ type: 'markdown', content: clean, html: restoreSvgs(clean) });
       }
     }
 

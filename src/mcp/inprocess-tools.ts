@@ -234,7 +234,7 @@ export const BUILTIN_INPROCESS_TOOLS: DiscoveredTool[] = [
   {
     serverName: "minimax-multimodal",
     name: "minimax_generate_image",
-    description: "Generate an image using MiniMax's image model.",
+    description: "Generate an artistic, photographic, or realistic visual image using MiniMax's image model (e.g. photos, artwork, scenery). DO NOT use this tool for technical diagrams, architecture diagrams, flowcharts, or charts — for those, generate native SVG, HTML, or Mermaid code directly in text.",
     inputSchema: {
       type: "object",
       properties: {

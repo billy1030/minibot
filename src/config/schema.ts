@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
 export const LLMConfigSchema = z.object({
   baseUrl: z.string().default("https://api.openai.com/v1"),
@@ -26,6 +26,9 @@ export const PromptsConfigSchema = z.object({
   skillsPrompt: z.string().default(
     "## AI Skills & Protocols:\n" +
     "- Internet Search & Web Ingestion: Use MCP search/fetch tools to gather facts before answering questions on dynamic topics.\n" +
+    "- High-Priority Visuals (Editorial SVG over Mermaid): When asked to generate diagrams, architecture, flowcharts, or system designs, DO NOT call `minimax_generate_image`. PRIORITIZE standalone editorial SVG diagrams following the `diagram-design` skill over standard Mermaid charts. Provide clean Mermaid diagrams only if specifically requested.\n" +
+    "- SVG Diagram Geometry Quality & Flexibility: Apply dynamic canvas geometry: calculate viewBox height dynamically based on tier count (`140 + (tiers * 180) + 120`), or adaptively place the Legend in the header (`x=800..1300, y=35`) or as a right sidebar (`x=1120, width=240`) so it never collides with components. Strictly follow §6 connector rules: NEVER draw connector lines striking through text labels; always mask labels with an opaque `<rect>` matching the canvas background.\n" +
+    "- Image Generation: Only invoke `minimax_generate_image` when the user explicitly requests an artistic photo, illustration, drawing, or painting.\n" +
     "- Verification: Cross-check information from multiple snippets.\n" +
     "- Tool Transparency: Always clearly state what action you are taking."
   ),

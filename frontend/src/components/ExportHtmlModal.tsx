@@ -24,8 +24,9 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
   const excludeFirstAssistantId = useId();
   const excludeUserQueriesId = useId();
 
-  // Option 1: Remove first Assistant Response (e.g. Welcome greeting / first AI turn)
-  const [excludeFirstAssistant, setExcludeFirstAssistant] = useState<boolean>(true);
+  // Option 1: Remove Welcome Greeting (only active by default if a welcome message actually exists in session)
+  const hasWelcomeMessage = messages.some((m) => m.id === "welcome");
+  const [excludeFirstAssistant, setExcludeFirstAssistant] = useState<boolean>(hasWelcomeMessage);
 
   // Option 2: Remove all user queries (keep only assistant responses / reports)
   const [excludeUserQueries, setExcludeUserQueries] = useState<boolean>(false);
@@ -42,13 +43,10 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Identify the first assistant message index
-  const firstAssistantIndex = messages.findIndex((m) => m.role === "assistant");
-
   // Filter messages according to selected options
-  const filteredMessages = messages.filter((m, idx) => {
-    // Check 1: Exclude first Assistant Response
-    if (excludeFirstAssistant && idx === firstAssistantIndex) {
+  const filteredMessages = messages.filter((m) => {
+    // Check 1: Exclude Welcome Greeting / first greeting message if chosen
+    if (excludeFirstAssistant && m.id === "welcome") {
       return false;
     }
     // Check 2: Exclude all User queries
@@ -249,7 +247,7 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
                     marginBottom: "2px",
                   }}
                 >
-                  Remove first Assistant Response
+                  Remove initial Welcome Greeting
                 </div>
                 <div
                   style={{
@@ -258,7 +256,7 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
                     lineHeight: 1.4,
                   }}
                 >
-                  Omits the initial welcome greeting or first AI reply from the export.
+                  Omits the initial bot greeting message from the exported report.
                 </div>
               </div>
             </label>

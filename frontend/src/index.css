@@ -559,6 +559,8 @@ html.warm .mm-group-btn:hover {
 }
 
 .mm-group-text {
+  background: transparent !important;
+  border: none !important;
   font-family: monospace !important;
   font-size: 12px !important;
   font-weight: 700 !important;
