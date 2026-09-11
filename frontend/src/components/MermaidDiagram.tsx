@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import {
   Network,
@@ -197,6 +197,7 @@ interface MermaidDiagramProps {
 export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const modalViewportRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const colorMenuRef = useRef<HTMLDivElement>(null);
 
@@ -625,8 +626,8 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
     setInlinePan({ x: 0, y: 0 });
   };
 
-  // Mouse-wheel zoom
-  const handleInlineWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+  // Mouse-wheel zoom logic
+  const handleWheelZoom = useCallback((e: WheelEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -641,7 +642,33 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
         )
       )
     );
-  };
+  }, []);
+
+  // 綁定原生非被動 (passive: false) wheel 監聽器，確保 100% 阻止頁面滾動且無警告
+  useEffect(() => {
+    const inlineEl = viewportRef.current;
+    if (inlineEl) {
+      inlineEl.addEventListener('wheel', handleWheelZoom, { passive: false });
+    }
+    return () => {
+      if (inlineEl) {
+        inlineEl.removeEventListener('wheel', handleWheelZoom);
+      }
+    };
+  }, [handleWheelZoom]);
+
+  useEffect(() => {
+    if (expandLevel !== 2) return;
+    const modalEl = modalViewportRef.current;
+    if (modalEl) {
+      modalEl.addEventListener('wheel', handleWheelZoom, { passive: false });
+    }
+    return () => {
+      if (modalEl) {
+        modalEl.removeEventListener('wheel', handleWheelZoom);
+      }
+    };
+  }, [expandLevel, handleWheelZoom]);
 
   // 內聯拖拽平移事件 (防止文字反白 highlight 與亞像素抖動)
   const handleInlineMouseDown = (e: React.MouseEvent) => {
@@ -656,18 +683,32 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
     };
   };
 
-  const handleInlineMouseMove = (e: React.MouseEvent) => {
+  // 🛡️ 全域視窗拖拽監聽：滑鼠快速甩出 Viewport 甚至移出瀏覽器視窗外放開，都能 100% 正確解除平移狀態
+  useEffect(() => {
     if (!isInlineDragging) return;
-    e.preventDefault();
-    const dx = e.clientX - inlineDragStart.current.x;
-    const dy = e.clientY - inlineDragStart.current.y;
-    setInlinePan({
-      x: Math.round(inlineDragStart.current.initialPanX + dx),
-      y: Math.round(inlineDragStart.current.initialPanY + dy)
-    });
-  };
 
-  const handleInlineMouseUp = () => setIsInlineDragging(false);
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      const dx = e.clientX - inlineDragStart.current.x;
+      const dy = e.clientY - inlineDragStart.current.y;
+      setInlinePan({
+        x: Math.round(inlineDragStart.current.initialPanX + dx),
+        y: Math.round(inlineDragStart.current.initialPanY + dy)
+      });
+    };
+
+    const handleWindowMouseUp = () => {
+      setIsInlineDragging(false);
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove, { passive: false });
+    window.addEventListener('mouseup', handleWindowMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [isInlineDragging]);
 
   const copyMermaidCode = async () => {
     try {
@@ -918,11 +959,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
       ) : (
         <div
           ref={viewportRef}
-          onWheel={handleInlineWheel}
           onMouseDown={handleInlineMouseDown}
-          onMouseMove={handleInlineMouseMove}
-          onMouseUp={handleInlineMouseUp}
-          onMouseLeave={handleInlineMouseUp}
           onDoubleClick={resetZoom}
           style={{
             minHeight: isReduceMargin
@@ -1089,11 +1126,8 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
 
             {/* 80% 畫布區 (Unconstrained Zoom Canvas) */}
             <div
-              onWheel={handleInlineWheel}
+              ref={modalViewportRef}
               onMouseDown={handleInlineMouseDown}
-              onMouseMove={handleInlineMouseMove}
-              onMouseUp={handleInlineMouseUp}
-              onMouseLeave={handleInlineMouseUp}
               onDoubleClick={resetZoom}
               className="flex-1 bg-slate-50/70 dark:bg-slate-950/70 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-inner overflow-hidden relative flex items-center justify-center select-none cursor-grab active:cursor-grabbing p-4"
             >
