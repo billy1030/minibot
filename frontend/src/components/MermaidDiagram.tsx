@@ -680,7 +680,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                setInlineScale(s => Math.max(0.4, Number((s - 0.2).toFixed(2))));
+                setInlineScale(s => Math.max(0.5, Number((s - 0.25).toFixed(2))));
               }}
               onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-btn"
@@ -906,7 +906,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      setInlineScale(s => Math.max(0.4, Number((s - 0.2).toFixed(2))));
+                      setInlineScale(s => Math.max(0.5, Number((s - 0.25).toFixed(2))));
                     }}
                     onDoubleClick={(e) => e.stopPropagation()}
                     className="p-1 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition cursor-pointer"

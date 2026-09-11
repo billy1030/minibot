@@ -844,7 +844,7 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
 
     if (zoomOutBtn) {
       zoomOutBtn.onclick = function() {
-        currentScale = Math.max(0.4, parseFloat((currentScale - 0.2).toFixed(2)));
+        currentScale = Math.max(0.5, parseFloat((currentScale - 0.25).toFixed(2)));
         if (resetBtn) resetBtn.textContent = Math.round(currentScale * 100) + '%';
         applyTransform();
       };
