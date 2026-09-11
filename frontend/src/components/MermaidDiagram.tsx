@@ -310,8 +310,8 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
       if (isTall) {
         baseHeight = Math.min(baseHeight, 480);
       }
-      // 根據當前放大比例計算緊密高度，上下各保留 8px 呼吸邊距 (共 16px)
-      const snug = Math.round(baseHeight * scale + 16);
+      // 根據當前放大比例計算緊密高度，上下各保留 8px 呼吸邊距 (共 16px)；設定上限 750px 避免 500% 縮放時撐爆排版
+      const snug = Math.min(750, Math.round(baseHeight * scale + 16));
       return Math.max(60, snug);
     }
     return null;
