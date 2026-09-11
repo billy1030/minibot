@@ -4851,16 +4851,18 @@ export function App() {
                 padding: "11px 14px",
                 borderRadius: 8,
                 background: selectedDiagramMode
-                  ? "rgba(235, 108, 54, 0.15)"
+                  ? selectedDiagramMode.id === "no-diagram"
+                    ? "rgba(100, 116, 139, 0.18)"
+                    : "rgba(235, 108, 54, 0.15)"
                   : showMermaidMenu
                   ? "rgba(16, 185, 129, 0.15)"
                   : "var(--bg-card)",
                 border: selectedDiagramMode
-                  ? "1px solid #eb6c36"
+                  ? `1px solid ${selectedDiagramMode.color}`
                   : showMermaidMenu
                   ? "1px solid #10b981"
                   : "1px solid var(--border-color)",
-                color: selectedDiagramMode ? "#eb6c36" : showMermaidMenu ? "#10b981" : "var(--text-muted)",
+                color: selectedDiagramMode ? selectedDiagramMode.color : showMermaidMenu ? "#10b981" : "var(--text-muted)",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
@@ -4870,7 +4872,7 @@ export function App() {
                 transition: "all 0.15s ease",
               }}
             >
-              <GitBranch size={16} color={selectedDiagramMode ? "#eb6c36" : "#10b981"} />
+              <GitBranch size={16} color={selectedDiagramMode ? selectedDiagramMode.color : "#10b981"} />
               <span>Diagram</span>
               {selectedDiagramMode && (
                 <span
@@ -4883,7 +4885,7 @@ export function App() {
                     fontWeight: 700,
                   }}
                 >
-                  {selectedDiagramMode.icon} Active
+                  {selectedDiagramMode.icon} {selectedDiagramMode.label}
                 </span>
               )}
             </button>
@@ -4907,6 +4909,94 @@ export function App() {
                   gap: 4,
                 }}
               >
+                {/* 🤖 AI Auto Mode (Default / Intelligent Decision) */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSelectDiagramMode({
+                      id: "ai-auto",
+                      label: "AI Auto",
+                      icon: "🤖",
+                      color: "#10b981",
+                      prompt:
+                        "Feel free to independently evaluate if this answer truly benefits from a visual diagram. Only generate an architecture diagram or flowchart if the explanation involves complex multi-component workflows, topologies, or sequences; otherwise, answer directly with clear text and tables without unnecessary diagrams.",
+                    })
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 10px",
+                    background: selectedDiagramMode?.id === "ai-auto" ? "rgba(16, 185, 129, 0.18)" : "transparent",
+                    border: selectedDiagramMode?.id === "ai-auto" ? "1px solid rgba(16, 185, 129, 0.45)" : "1px solid transparent",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    color: "var(--text-main)",
+                    fontSize: 12.5,
+                    textAlign: "left",
+                    transition: "all 0.15s",
+                    marginBottom: 2,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(16, 185, 129, 0.12)")}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      selectedDiagramMode?.id === "ai-auto" ? "rgba(16, 185, 129, 0.18)" : "transparent")
+                  }
+                >
+                  <span style={{ fontSize: 16 }}>🤖</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: "#10b981", display: "flex", justifyContent: "space-between" }}>
+                      <span>AI Auto Mode</span>
+                      {selectedDiagramMode?.id === "ai-auto" && <span style={{ fontSize: 11 }}>✓ Active</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>AI decides naturally whether a diagram is needed</div>
+                  </div>
+                </button>
+
+                {/* 🚫 No Diagram / Text Only Mode */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSelectDiagramMode({
+                      id: "no-diagram",
+                      label: "No Diagram",
+                      icon: "🚫",
+                      color: "#64748b",
+                      prompt:
+                        "Please provide your response strictly using text, lists, and markdown tables. Do NOT generate or output any diagrams, flowchart code, Mermaid syntax, or SVG drawings for this question.",
+                    })
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 10px",
+                    background: selectedDiagramMode?.id === "no-diagram" ? "rgba(100, 116, 139, 0.18)" : "transparent",
+                    border: selectedDiagramMode?.id === "no-diagram" ? "1px solid rgba(100, 116, 139, 0.45)" : "1px solid transparent",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    color: "var(--text-main)",
+                    fontSize: 12.5,
+                    textAlign: "left",
+                    transition: "all 0.15s",
+                    marginBottom: 2,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(100, 116, 139, 0.14)")}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      selectedDiagramMode?.id === "no-diagram" ? "rgba(100, 116, 139, 0.18)" : "transparent")
+                  }
+                >
+                  <span style={{ fontSize: 16 }}>🚫</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: "#64748b", display: "flex", justifyContent: "space-between" }}>
+                      <span>No Diagram (Text Only)</span>
+                      {selectedDiagramMode?.id === "no-diagram" && <span style={{ fontSize: 11 }}>✓ Active</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Strictly answer with markdown text/tables, no drawings</div>
+                  </div>
+                </button>
+
                 {/* 🌟 Editorial SVG Section */}
                 <div
                   style={{
@@ -4914,6 +5004,7 @@ export function App() {
                     fontSize: 11,
                     fontWeight: 700,
                     color: "var(--text-muted)",
+                    borderTop: "1px solid var(--border-color)",
                     borderBottom: "1px solid var(--border-color)",
                     display: "flex",
                     alignItems: "center",
