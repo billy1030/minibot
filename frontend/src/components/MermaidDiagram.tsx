@@ -196,6 +196,7 @@ interface MermaidDiagramProps {
 
 export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const colorMenuRef = useRef<HTMLDivElement>(null);
 
@@ -228,11 +229,15 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
   // 外框寬度三級狀態：0 (預設), 1 (4:3 展開), 2 (放到最大 80vw 全屏視野)
   const [expandLevel, setExpandLevel] = useState<number>(0);
 
-  // 縮放與平移狀態 (上限 500%)
+  // 縮放與平移狀態 (50% ~ 500%)
   const [inlineScale, setInlineScale] = useState(1.0);
   const [inlinePan, setInlinePan] = useState({ x: 0, y: 0 });
   const [isInlineDragging, setIsInlineDragging] = useState(false);
   const inlineDragStart = useRef({ x: 0, y: 0, initialPanX: 0, initialPanY: 0 });
+
+  const MIN_ZOOM = 0.5;
+  const MAX_ZOOM = 5.0;
+  const ZOOM_STEP = 0.25;
 
   // 原始 SVG 尺寸紀錄
   const [, setNativeSvgDim] = useState<{ width: number; height: number } | null>(null);
@@ -247,6 +252,24 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
   const [dynamicWidthStyle, setDynamicWidthStyle] = useState<{ width?: string; marginLeft?: string }>({});
 
   const [renderError, setRenderError] = useState<string | null>(null);
+
+  // Normalize Mermaid SVG after rendering (prevent responsive sizing from restricting 500% zoom)
+  useEffect(() => {
+    if (!svgContent || !containerRef.current) return;
+
+    const timer = window.setTimeout(() => {
+      const svg = containerRef.current?.querySelector('svg') as SVGSVGElement | null;
+      if (!svg) return;
+
+      svg.style.maxWidth = 'none';
+      svg.style.width = 'auto';
+      svg.style.height = 'auto';
+      svg.style.display = 'block';
+      svg.style.flexShrink = '0';
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [svgContent]);
 
   // 依當前放大倍率 (scale) 自動偵測圖表內容真實現有高度，計算消除上下留白後的緊湊高度
   const calculateTightHeight = (scale: number): number | null => {
@@ -457,7 +480,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
           fontFamily: '"Roboto", -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif',
           fontSize: 13.5,
           flowchart: {
-            useMaxWidth: true,
+            useMaxWidth: false,
             htmlLabels: true,
             curve: 'basis',
             nodeSpacing: 45,
@@ -578,9 +601,52 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
     };
   }, [code, index, lineHeight, selectedTheme]);
 
-  // 內聯拖拽平移事件
+  // Zoom functions (50% ~ 500%)
+  const zoomIn = () => {
+    setInlineScale(current =>
+      Math.min(
+        MAX_ZOOM,
+        Number((current + ZOOM_STEP).toFixed(2))
+      )
+    );
+  };
+
+  const zoomOut = () => {
+    setInlineScale(current =>
+      Math.max(
+        MIN_ZOOM,
+        Number((current - ZOOM_STEP).toFixed(2))
+      )
+    );
+  };
+
+  const resetZoom = () => {
+    setInlineScale(1.0);
+    setInlinePan({ x: 0, y: 0 });
+  };
+
+  // Mouse-wheel zoom
+  const handleInlineWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const direction = e.deltaY < 0 ? 1 : -1;
+
+    setInlineScale(current =>
+      Math.max(
+        MIN_ZOOM,
+        Math.min(
+          MAX_ZOOM,
+          Number((current + direction * ZOOM_STEP).toFixed(2))
+        )
+      )
+    );
+  };
+
+  // 內聯拖拽平移事件 (防止文字反白 highlight 與亞像素抖動)
   const handleInlineMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    e.preventDefault(); // 🛑 阻止瀏覽器預設文字選取行爲 (徹底防止拖拽時文字 highlight 閃爍)
     setIsInlineDragging(true);
     inlineDragStart.current = {
       x: e.clientX,
@@ -592,11 +658,12 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
 
   const handleInlineMouseMove = (e: React.MouseEvent) => {
     if (!isInlineDragging) return;
+    e.preventDefault();
     const dx = e.clientX - inlineDragStart.current.x;
     const dy = e.clientY - inlineDragStart.current.y;
     setInlinePan({
-      x: inlineDragStart.current.initialPanX + dx,
-      y: inlineDragStart.current.initialPanY + dy
+      x: Math.round(inlineDragStart.current.initialPanX + dx),
+      y: Math.round(inlineDragStart.current.initialPanY + dy)
     });
   };
 
@@ -680,8 +747,9 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                setInlineScale(s => Math.max(0.5, Number((s - 0.25).toFixed(2))));
+                zoomOut();
               }}
+              disabled={inlineScale <= MIN_ZOOM}
               onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-btn"
               title="Zoom out"
@@ -693,8 +761,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                setInlineScale(1.0);
-                setInlinePan({ x: 0, y: 0 });
+                resetZoom();
               }}
               onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-text min-w-[38px] text-center"
@@ -707,8 +774,9 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                setInlineScale(s => Math.min(5.0, Number((s + 0.25).toFixed(2))));
+                zoomIn();
               }}
+              disabled={inlineScale >= MAX_ZOOM}
               onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-btn"
               title="Zoom in"
@@ -720,8 +788,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                setInlineScale(1.0);
-                setInlinePan({ x: 0, y: 0 });
+                resetZoom();
               }}
               onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-btn"
@@ -850,37 +917,92 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
         </div>
       ) : (
         <div
+          ref={viewportRef}
+          onWheel={handleInlineWheel}
           onMouseDown={handleInlineMouseDown}
           onMouseMove={handleInlineMouseMove}
           onMouseUp={handleInlineMouseUp}
           onMouseLeave={handleInlineMouseUp}
-          onDoubleClick={() => { setInlineScale(1.0); setInlinePan({ x: 0, y: 0 }); }}
+          onDoubleClick={resetZoom}
           style={{
-            minHeight: isReduceMargin ? 'auto' : (expandLevel === 1 ? '420px' : 'auto'),
-            height: isReduceMargin && tightHeight ? `${tightHeight}px` : 'auto',
-            maxHeight: expandLevel === 1 && !isReduceMargin ? '750px' : 'none',
-            padding: isReduceMargin ? '2px 12px' : '6px 12px',
-            transition: isInlineDragging ? 'none' : 'height 0.2s ease-out, min-height 0.2s ease-out'
+            minHeight: isReduceMargin
+              ? 'auto'
+              : expandLevel === 1
+                ? '420px'
+                : 'auto',
+            height:
+              isReduceMargin && tightHeight
+                ? `${tightHeight}px`
+                : 'auto',
+            maxHeight:
+              expandLevel === 1 && !isReduceMargin
+                ? '750px'
+                : 'none',
+            padding:
+              isReduceMargin
+                ? '2px 12px'
+                : '6px 12px',
+            overflow: 'hidden',
+            position: 'relative',
+            transition:
+              isInlineDragging
+                ? 'none'
+                : 'height 0.2s ease-out, min-height 0.2s ease-out',
           }}
-          className={`mermaid-container overflow-hidden relative flex items-center justify-center select-none ${
-            isInlineDragging ? 'cursor-grabbing' : 'cursor-grab'
+          className={`mermaid-container relative flex items-center justify-center select-none ${
+            isInlineDragging
+              ? 'cursor-grabbing'
+              : 'cursor-grab'
           }`}
         >
+          {/* =====================================================
+              ZOOM CANVAS
+              The viewport stays fixed with overflow: hidden.
+              The canvas freely expands: 50% = 0.5 ... 500% = 5.0
+             ===================================================== */}
           <div
-            ref={containerRef}
             style={{
-              transform: `translate(${inlinePan.x}px, ${inlinePan.y}px) scale(${inlineScale})`,
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              width: 'max-content',
+              height: 'max-content',
+              display: 'block',
+              flexShrink: 0,
+              transform: `
+                translate3d(-50%, -50%, 0)
+                translate3d(${inlinePan.x}px, ${inlinePan.y}px, 0)
+                scale(${inlineScale})
+              `,
               transformOrigin: 'center center',
-              transition: isInlineDragging ? 'none' : 'transform 0.15s ease-out',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '100%',
-              height: 'auto'
+              willChange: isInlineDragging ? 'transform' : 'auto',
+              backfaceVisibility: 'hidden',
+              WebkitFontSmoothing: 'antialiased',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              transition:
+                isInlineDragging
+                  ? 'none'
+                  : 'transform 0.15s ease-out',
             }}
-            className="flex items-center justify-center pointer-events-none"
-            dangerouslySetInnerHTML={{ __html: svgContent }}
-          />
+          >
+            {/* =================================================
+                INTRINSIC MERMAID SVG
+               ================================================= */}
+            <div
+              ref={containerRef}
+              style={{
+                width: 'max-content',
+                height: 'max-content',
+                display: 'block',
+                flexShrink: 0,
+              }}
+              className="pointer-events-none"
+              dangerouslySetInnerHTML={{
+                __html: svgContent,
+              }}
+            />
+          </div>
         </div>
       )}
 
@@ -906,10 +1028,11 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      setInlineScale(s => Math.max(0.5, Number((s - 0.25).toFixed(2))));
+                      zoomOut();
                     }}
+                    disabled={inlineScale <= MIN_ZOOM}
                     onDoubleClick={(e) => e.stopPropagation()}
-                    className="p-1 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition cursor-pointer"
+                    className="p-1 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition cursor-pointer disabled:opacity-40"
                     title="Zoom Out"
                   >
                     <ZoomOut className="w-3.5 h-3.5" />
@@ -919,8 +1042,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      setInlineScale(1.0);
-                      setInlinePan({ x: 0, y: 0 });
+                      resetZoom();
                     }}
                     onDoubleClick={(e) => e.stopPropagation()}
                     className="px-1.5 text-xs font-mono font-bold text-slate-600 dark:text-slate-300 hover:text-sky-600 cursor-pointer min-w-[38px] text-center"
@@ -933,10 +1055,11 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      setInlineScale(s => Math.min(5.0, Number((s + 0.25).toFixed(2))));
+                      zoomIn();
                     }}
+                    disabled={inlineScale >= MAX_ZOOM}
                     onDoubleClick={(e) => e.stopPropagation()}
-                    className="p-1 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition cursor-pointer"
+                    className="p-1 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition cursor-pointer disabled:opacity-40"
                     title="Zoom In"
                   >
                     <ZoomIn className="w-3.5 h-3.5" />
@@ -964,26 +1087,55 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
               </div>
             </div>
 
-            {/* 80% 畫布區 */}
+            {/* 80% 畫布區 (Unconstrained Zoom Canvas) */}
             <div
+              onWheel={handleInlineWheel}
               onMouseDown={handleInlineMouseDown}
               onMouseMove={handleInlineMouseMove}
               onMouseUp={handleInlineMouseUp}
+              onMouseLeave={handleInlineMouseUp}
+              onDoubleClick={resetZoom}
               className="flex-1 bg-slate-50/70 dark:bg-slate-950/70 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-inner overflow-hidden relative flex items-center justify-center select-none cursor-grab active:cursor-grabbing p-4"
             >
               <div
                 style={{
-                  transform: `translate(${inlinePan.x}px, ${inlinePan.y}px) scale(${inlineScale})`,
-                  transition: isInlineDragging ? 'none' : 'transform 0.15s ease-out',
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  width: 'max-content',
+                  height: 'max-content',
+                  display: 'block',
+                  flexShrink: 0,
+                  transform: `
+                    translate3d(-50%, -50%, 0)
+                    translate3d(${inlinePan.x}px, ${inlinePan.y}px, 0)
+                    scale(${inlineScale})
+                  `,
+                  transformOrigin: 'center center',
+                  willChange: isInlineDragging ? 'transform' : 'auto',
+                  backfaceVisibility: 'hidden',
+                  WebkitFontSmoothing: 'antialiased',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  transition:
+                    isInlineDragging
+                      ? 'none'
+                      : 'transform 0.15s ease-out',
                 }}
                 className="pointer-events-none"
-                dangerouslySetInnerHTML={{ __html: svgContent }}
-              />
+              >
+                <div
+                  style={{
+                    width: 'max-content',
+                    height: 'max-content',
+                    display: 'block',
+                    flexShrink: 0,
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: svgContent,
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>
