@@ -4742,39 +4742,55 @@ export function App() {
           <button
             type="button"
             onClick={() => setShowDocModal(true)}
-            title="Attach Multi-Tab Excel, PDF, Word, or Text Files"
+            title={activeDocHashes.length > 0 ? `${activeDocHashes.length} document(s) attached` : "Attach Multi-Tab Excel, PDF, Word, or Text Files"}
             style={{
-              padding: "11px 14px",
+              width: 42,
+              height: 42,
               borderRadius: 8,
-              background: activeDocHashes.length > 0 ? "rgba(16, 185, 129, 0.12)" : "var(--bg-card)",
-              border: activeDocHashes.length > 0 ? "1px solid rgba(16, 185, 129, 0.5)" : "1px solid var(--border-color)",
+              background: activeDocHashes.length > 0 ? "rgba(16, 185, 129, 0.15)" : "var(--bg-card)",
+              border: activeDocHashes.length > 0 ? "1.5px solid #10b981" : "1px solid var(--border-color)",
               color: activeDocHashes.length > 0 ? "#10b981" : "var(--text-muted)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: 8,
-              fontSize: 13,
-              fontWeight: 600,
+              justifyContent: "center",
+              position: "relative",
+              flexShrink: 0,
               transition: "all 0.15s ease",
             }}
+            onMouseEnter={(e) => {
+              if (activeDocHashes.length === 0) {
+                e.currentTarget.style.borderColor = "var(--accent)";
+                e.currentTarget.style.color = "var(--accent)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeDocHashes.length === 0) {
+                e.currentTarget.style.borderColor = "var(--border-color)";
+                e.currentTarget.style.color = "var(--text-muted)";
+              }
+            }}
           >
-            <Paperclip size={16} />
-            <span>Attachment</span>
+            <Paperclip size={18} />
             {activeDocHashes.length > 0 && (
               <span
                 style={{
+                  position: "absolute",
+                  top: -4,
+                  right: -4,
                   background: "#10b981",
                   color: "#ffffff",
                   borderRadius: "10px",
-                  padding: "1px 7px",
-                  fontSize: 11,
-                  fontWeight: 700,
+                  padding: "0 5px",
+                  fontSize: 10,
+                  fontWeight: 800,
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  minWidth: 18,
-                  height: 18,
+                  minWidth: 16,
+                  height: 16,
                   lineHeight: 1,
+                  boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
                 }}
               >
                 {activeDocHashes.length}
@@ -4782,7 +4798,7 @@ export function App() {
             )}
           </button>
 
-          {/* 🧠 Thinking Mode Toggle Button (ON / OFF) */}
+          {/* 🧠 Thinking Mode Toggle Button (Compact Icon with ON/OFF badge) */}
           <button
             type="button"
             onClick={() => {
@@ -4795,20 +4811,21 @@ export function App() {
             title={
               enableThinking
                 ? "Thinking is ON: Model performs chain-of-thought reasoning before answering. Click to turn OFF."
-                : "Thinking is OFF: Model answers directly without internal thought scratchpad (ideal for large SVG diagrams). Click to turn ON."
+                : "Thinking is OFF: Model answers directly without internal thought scratchpad. Click to turn ON."
             }
             style={{
-              padding: "11px 14px",
+              width: 42,
+              height: 42,
               borderRadius: 8,
               background: enableThinking ? "rgba(168, 85, 247, 0.15)" : "var(--bg-card)",
-              border: enableThinking ? "1px solid #a855f7" : "1px solid var(--border-color)",
+              border: enableThinking ? "1.5px solid #a855f7" : "1px solid var(--border-color)",
               color: enableThinking ? "#a855f7" : "var(--text-muted)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: 7,
-              fontSize: 13,
-              fontWeight: 600,
+              justifyContent: "center",
+              position: "relative",
+              flexShrink: 0,
               transition: "all 0.15s ease",
             }}
             onMouseEnter={(e) => {
@@ -4824,31 +4841,38 @@ export function App() {
               }
             }}
           >
-            <Brain size={16} color={enableThinking ? "#a855f7" : "var(--text-muted)"} />
-            <span>Thinking</span>
+            <Brain size={18} color={enableThinking ? "#a855f7" : "var(--text-muted)"} />
             <span
               style={{
-                fontSize: 10,
-                padding: "1px 6px",
-                borderRadius: 4,
-                background: enableThinking ? "#a855f7" : "rgba(100, 116, 139, 0.2)",
-                color: enableThinking ? "#ffffff" : "var(--text-muted)",
-                fontWeight: 700,
-                letterSpacing: "0.5px",
+                position: "absolute",
+                bottom: 2,
+                right: 3,
+                fontSize: 8,
+                padding: "0 3px",
+                borderRadius: 3,
+                background: enableThinking ? "#a855f7" : "rgba(100, 116, 139, 0.3)",
+                color: "#ffffff",
+                fontWeight: 800,
+                lineHeight: "11px",
               }}
             >
               {enableThinking ? "ON" : "OFF"}
             </span>
           </button>
 
-          {/* 📊 Mermaid Architecture Diagram Quick Action */}
-          <div style={{ position: "relative" }}>
+          {/* 📊 Mermaid Architecture Diagram Quick Action (Compact Icon with mode badge) */}
+          <div style={{ position: "relative", flexShrink: 0 }}>
             <button
               type="button"
               onClick={() => setShowMermaidMenu((v) => !v)}
-              title="Select Architecture / Diagram Mode"
+              title={
+                selectedDiagramMode
+                  ? `Diagram Mode: ${selectedDiagramMode.label} (Click to change)`
+                  : "Select Architecture / Diagram Mode"
+              }
               style={{
-                padding: "11px 14px",
+                width: 42,
+                height: 42,
                 borderRadius: 8,
                 background: selectedDiagramMode
                   ? selectedDiagramMode.id === "no-diagram"
@@ -4858,7 +4882,7 @@ export function App() {
                   ? "rgba(16, 185, 129, 0.15)"
                   : "var(--bg-card)",
                 border: selectedDiagramMode
-                  ? `1px solid ${selectedDiagramMode.color}`
+                  ? `1.5px solid ${selectedDiagramMode.color}`
                   : showMermaidMenu
                   ? "1px solid #10b981"
                   : "1px solid var(--border-color)",
@@ -4866,26 +4890,31 @@ export function App() {
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: 7,
-                fontSize: 13,
-                fontWeight: 600,
+                justifyContent: "center",
+                position: "relative",
                 transition: "all 0.15s ease",
               }}
             >
-              <GitBranch size={16} color={selectedDiagramMode ? selectedDiagramMode.color : "#10b981"} />
-              <span>Diagram</span>
+              <GitBranch size={18} color={selectedDiagramMode ? selectedDiagramMode.color : "#10b981"} />
               {selectedDiagramMode && (
                 <span
                   style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -4,
                     fontSize: 10,
-                    padding: "1px 5px",
-                    borderRadius: 4,
+                    borderRadius: "10px",
                     background: selectedDiagramMode.color,
                     color: "#fff",
-                    fontWeight: 700,
+                    width: 16,
+                    height: 16,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
                   }}
                 >
-                  {selectedDiagramMode.icon} {selectedDiagramMode.label}
+                  {selectedDiagramMode.icon}
                 </span>
               )}
             </button>
@@ -5344,8 +5373,8 @@ export function App() {
             )}
           </div>
 
-          {/* 🎙️ Voice Language Selector (Cantonese zh-HK, Mandarin zh-CN, English en-US) */}
-          <div style={{ display: "flex", alignItems: "center", position: "relative" }}>
+          {/* 🎙️ Voice Language Selector (Compact Flag-Only Icon) */}
+          <div style={{ display: "flex", alignItems: "center", position: "relative", flexShrink: 0 }}>
             <select
               value={sttLang}
               onChange={(e) => {
@@ -5355,23 +5384,24 @@ export function App() {
                   localStorage.setItem("minibot_stt_lang", val);
                 } catch {}
               }}
-              title="Select Voice-to-Text Language"
+              title={`Voice-to-Text Language: ${sttLang === "zh-HK" ? "Cantonese (粵語)" : sttLang === "zh-CN" ? "Mandarin (國語)" : "English (英語)"}`}
               style={{
                 height: 42,
-                padding: "0 10px",
+                width: 44,
+                padding: "0 2px",
+                textAlign: "center",
                 borderRadius: 8,
                 background: "var(--bg-card)",
                 border: "1px solid var(--border-color)",
                 color: "var(--text-main)",
-                fontSize: 12.5,
-                fontWeight: 600,
+                fontSize: 14,
                 cursor: "pointer",
                 outline: "none",
               }}
             >
-              <option value="zh-HK">🇭🇰 粵語</option>
-              <option value="zh-CN">🇨🇳 國語</option>
-              <option value="en-US">🇺🇸 EN</option>
+              <option value="zh-HK" title="Hong Kong Cantonese (粵語)">🇭🇰</option>
+              <option value="zh-CN" title="Mandarin (國語)">🇨🇳</option>
+              <option value="en-US" title="English (英語)">🇺🇸</option>
             </select>
           </div>
 
@@ -5430,7 +5460,7 @@ export function App() {
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               placeholder={
                 selectedDiagramMode
-                  ? `[${selectedDiagramMode.label} mode active] Type your prompt (e.g. Draw DMZ and core router)...`
+                  ? `[${selectedDiagramMode.label} mode active] Type your prompt...`
                   : "Ask anything or query attached Excel / PDF / Word documents..."
               }
               disabled={loading}
@@ -5467,7 +5497,6 @@ export function App() {
                   }
                 } catch (err) {
                   console.warn("Clipboard paste failed or denied:", err);
-                  // Focus input to let user press Ctrl+V
                   chatInputRef.current?.focus();
                 }
               }}
@@ -5529,7 +5558,7 @@ export function App() {
             )}
           </div>
 
-          {/* 🎙️ Voice-to-Text Microphone Trigger Button */}
+          {/* 🎙️ Voice-to-Text Microphone Trigger Button (Compact Icon) */}
           <button
             type="button"
             onClick={startVoiceRecognition}
@@ -5537,8 +5566,8 @@ export function App() {
             title={isListening ? "Click to stop voice input (Listening...)" : "Voice Input (Click to speak)"}
             className={isListening ? "voice-recording-pulse" : ""}
             style={{
-              padding: "0 14px",
-              height: 44,
+              width: 42,
+              height: 42,
               borderRadius: 8,
               background: isListening ? "#ef4444" : "var(--bg-card)",
               color: isListening ? "#ffffff" : "var(--text-main)",
@@ -5547,23 +5576,21 @@ export function App() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: 6,
-              fontSize: 13,
-              fontWeight: 600,
               transition: "all 0.2s ease",
               flexShrink: 0,
             }}
           >
             {isListening ? <MicOff size={18} /> : <Mic size={18} />}
-            <span style={{ display: "none" }}>Voice</span>
           </button>
 
+          {/* 🚀 Send Button (Compact Icon) */}
           <button
             onClick={() => handleSend()}
             disabled={loading || !inputPrompt.trim()}
+            title="Send message (Enter)"
             style={{
-              padding: "0 22px",
-              height: 44,
+              width: 44,
+              height: 42,
               borderRadius: 8,
               background: loading ? "#94a3b8" : "#1f6feb",
               color: "#ffffff",
@@ -5571,14 +5598,13 @@ export function App() {
               cursor: loading ? "not-allowed" : "pointer",
               display: "flex",
               alignItems: "center",
-              gap: 8,
-              fontWeight: 600,
+              justifyContent: "center",
               boxShadow: loading ? "none" : "0 2px 4px rgba(31, 111, 235, 0.25)",
               transition: "background 0.2s, box-shadow 0.2s",
               flexShrink: 0,
             }}
           >
-            <Send size={16} /> Send
+            <Send size={18} />
           </button>
 
           {/* ⬆️ Upper Arrow Button: Jump to top of last generated session/turn */}
@@ -5587,8 +5613,8 @@ export function App() {
             onClick={scrollToLastGeneratedTurn}
             title="Jump back to top of last generated session"
             style={{
-              width: 44,
-              height: 44,
+              width: 42,
+              height: 42,
               borderRadius: 8,
               background: "var(--bg-card)",
               border: "1px solid var(--border-color)",
