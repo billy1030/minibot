@@ -564,13 +564,34 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
       if (/^\\s*(flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|journey|gitGraph|mindmap|timeline)/i.test(l.trim())) {
         return l;
       }
-      if (/^\\s*subgraph\\b/i.test(l)) {
-        if (/^\\s*subgraph\\s+[A-Za-z0-9_\\-]+\\s+\\["[^"\\]\\n]+"\\]\\s*$/i.test(l.trim())) return l;
-        l = l.replace(/^(\\s*subgraph\\s+)([A-Za-z0-9_\\-]+)\\s*\\((?:\\'|\\")?([^\\)\\n]+?)(?:\\'|\\")?\\)\\s*$/i, function(m, p, name, t) {
+      var subMatch = l.match(/^(\\s*subgraph\\s+)(.+)$/i);
+      if (subMatch) {
+        var prefix = subMatch[1];
+        var rest = subMatch[2].trim();
+
+        if (/^[A-Za-z0-9_\\-]+\\s*\\["[^"\\n]+"\\]\\s*$/i.test(rest)) {
+          return l;
+        }
+
+        var nestedBracket = rest.match(/^([A-Za-z0-9_\\-]+)\\s*\\[\\s*(?:"|')?\\s*\\[\\s*(?:'|")?([^'"\\]\\n]+)(?:'|")?\\s*\\]\\s*(?:"|')?\\s*\\]\\s*$/i);
+        if (nestedBracket) {
+          return prefix + nestedBracket[1] + ' ["' + nestedBracket[2].replace(/"/g, "'").trim() + '"]';
+        }
+
+        var singleBracket = rest.match(/^([A-Za-z0-9_\\-]+)\\s*\\[(?:'|")?([^'"\\]\\n]+)(?:'|")?\\]\\s*$/i);
+        if (singleBracket) {
+          return prefix + singleBracket[1] + ' ["' + singleBracket[2].replace(/"/g, "'").trim() + '"]';
+        }
+
+        var parenMatch = rest.match(/^([A-Za-z0-9_\\-]+)\\s*\\((?:'|")?([^'"\\)\\n]+)(?:'|")?\\)\\s*$/i);
+        if (parenMatch) {
           var safeId = 'sub_' + Math.random().toString(36).substring(2, 7);
-          return p + safeId + ' ["' + name + ' (' + t.trim() + ')"]';
-        });
-        return l;
+          return prefix + safeId + ' ["' + parenMatch[1] + ' (' + parenMatch[2].replace(/"/g, "'").trim() + ')"]';
+        }
+
+        var safeId = 'sub_' + Math.random().toString(36).substring(2, 7);
+        var cleanTitle = rest.replace(/"/g, "'").trim();
+        return prefix + safeId + ' ["' + cleanTitle + '"]';
       }
       l = l.replace(/(\\b[A-Za-z0-9_\\u4e00-\\u9fa5]+)\\[([^"\\]\\n]*[\\(\\)\\?\\:\\/\\-\\s\\uff08\\uff09\\u3001\\uff0c\\+\\=\\#][^"\\]\\n]*)\\]/g, '$1["$2"]');
       l = l.replace(/(\\b[A-Za-z0-9_\\u4e00-\\u9fa5]+)\\{([^"\\}\\n]*[\\(\\)\\?\\:\\/\\-\\s\\uff08\\uff09\\u3001\\uff0c\\+\\=\\#][^"\\}\\n]*)\\}/g, '$1{"$2"}');
