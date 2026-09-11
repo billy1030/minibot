@@ -43,7 +43,6 @@ import {
   ClipboardCheck,
   ClipboardPaste,
   Volume2,
-  VolumeX,
   Square,
   Play,
   Pause,
@@ -61,6 +60,8 @@ import { LoginPage } from "./pages/LoginPage";
 import { TwoFactorSetupModal } from "./components/TwoFactorSetupModal";
 import { UserManagementModal } from "./components/UserManagementModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
+import { ExportHtmlModal } from "./components/ExportHtmlModal";
+import { GitSyncModal } from "./components/GitSyncModal";
 
 interface ToolCallLog {
   id: string;
@@ -182,6 +183,8 @@ export function App() {
   const [mcpJsonText, setMcpJsonText] = useState<string>("");
   const [mcpJsonError, setMcpJsonError] = useState<string | null>(null);
   const [showDocModal, setShowDocModal] = useState<boolean>(false);
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [showGitSyncModal, setShowGitSyncModal] = useState<boolean>(false);
   const [activeDocHashes, setActiveDocHashes] = useState<string[]>([]);
   const [alertPrompt, setAlertPrompt] = useState<Omit<ModalAlertProps, "onClose"> | null>(null);
   const [editingSessionFile, setEditingSessionFile] = useState<string | null>(null);
@@ -205,6 +208,9 @@ export function App() {
       return false;
     }
   });
+
+  // 🐙 External Git CLI Synchronization State
+  const [isGitSyncing, setIsGitSyncing] = useState<boolean>(false);
 
   // 🎙️ Voice-to-Text (STT) 狀態與參照（支援 zh-HK 粵語、zh-CN 國語、en-US 英語）
   const [isListening, setIsListening] = useState<boolean>(false);
@@ -566,6 +572,43 @@ export function App() {
     }
   };
 
+  // 🐙 Execute External Git CLI Synchronization (Full Sync, Push, or Pull with GitHub)
+  const handleGitSync = async (
+    action: "pull" | "push" | "sync" = "sync",
+    message?: string
+  ): Promise<{ success: boolean; output?: string; lastCommit?: string; error?: string }> => {
+    if (isGitSyncing) return { success: false, error: "Sync already in progress." };
+    setIsGitSyncing(true);
+    try {
+      const res = await fetch("/api/git/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action, message }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return {
+          success: true,
+          output: data.output || "Completed successfully.",
+          lastCommit: data.lastCommit,
+        };
+      } else {
+        return {
+          success: false,
+          error: data.error || "Unknown git execution error.",
+        };
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        error: `Network/API error during Git Sync: ${err.message || err}`,
+      };
+    } finally {
+      setIsGitSyncing(false);
+    }
+  };
+
   // Fetch initial configuration, workspaces, and active MCP tools
   useEffect(() => {
     fetchConfig();
@@ -757,7 +800,11 @@ export function App() {
           setConfig({
             ...config,
             voice: {
-              ...config.voice,
+              baseUrl: config.voice?.baseUrl || "https://api.minimaxi.com/v1",
+              model: config.voice?.model || "speech-2.8-hd",
+              voiceId: config.voice?.voiceId || "Cantonese_CuteGirl",
+              speed: config.voice?.speed ?? 1.0,
+              enabled: config.voice?.enabled ?? true,
               apiKey: newKey.trim() ? (newKey.trim().length > 8 ? `${newKey.trim().slice(0, 6)}...****` : "****") : "",
             },
           });
@@ -2849,22 +2896,47 @@ export function App() {
               <Palette size={15} />
             </button>
 
+            {/* 🐙 Execute External Git CLI Sync (Sync update to/from GitHub repository) */}
+            <button
+              onClick={() => setShowGitSyncModal(true)}
+              title="Sync current directory with GitHub (Full Sync, Push, or Pull)"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                background: isGitSyncing ? "rgba(16, 185, 129, 0.15)" : "var(--bg-card)",
+                border: isGitSyncing ? "1px solid #10b981" : "1px solid var(--border-color)",
+                color: isGitSyncing ? "#10b981" : "var(--text-muted)",
+                cursor: isGitSyncing ? "not-allowed" : "pointer",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                if (!isGitSyncing) {
+                  e.currentTarget.style.borderColor = "var(--accent)";
+                  e.currentTarget.style.color = "var(--accent)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isGitSyncing) {
+                  e.currentTarget.style.borderColor = "var(--border-color)";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }
+              }}
+            >
+              {isGitSyncing ? (
+                <Loader2 size={15} className="spin" color="#10b981" />
+              ) : (
+                <GitBranch size={15} />
+              )}
+            </button>
+
             {/* Export Entire Conversation as HTML (Icon-Only, 32x32) */}
             <button
-              onClick={() => {
-                const combinedMarkdown = messages
-                  .map((m) => `### ${m.role === "user" ? "👤 User Query" : "🤖 Assistant Response"}\n\n${m.content}`)
-                  .join("\n\n---\n\n");
-                const html = generateStandaloneExportHtml(
-                  combinedMarkdown,
-                  activeSessionFile ? activeSessionFile.replace(".md", "") : "Chat Session Export"
-                );
-                downloadHtmlFile(
-                  html,
-                  activeSessionFile ? `${activeSessionFile.replace(".md", "")}.html` : `chat-session-${Date.now()}.html`
-                );
-              }}
-              title="Export complete chat session as standalone offline HTML report"
+              onClick={() => setShowExportModal(true)}
+              title="Export complete chat session as standalone offline HTML report (with customizable filter options)"
               style={{
                 width: 32,
                 height: 32,
@@ -3309,7 +3381,7 @@ export function App() {
                             ? "選擇本機聲音 (Voice Profile):"
                             : ttsLang === "mandarin"
                             ? "選擇本機聲音 (Voice Profile):"
-                            : `Voice Profile (${ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"}):`}
+                            : "Voice Profile (English):"}
                         </span>
                         <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
                           {availableLocalVoices.length} {ttsLang === "cantonese" || ttsLang === "mandarin" ? "款可用" : "available"}
@@ -3341,7 +3413,7 @@ export function App() {
                             ? "⚙️ 系統自動判定最佳粵語聲音"
                             : ttsLang === "mandarin"
                             ? "⚙️ 系統自動判定最佳國語聲音"
-                            : `⚙️ Auto (Best match for ${ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"})`}
+                            : "⚙️ Auto (Best match for English)"}
                         </option>
                         {(() => {
                           const filtered = availableLocalVoices.filter((v) => {
@@ -3378,7 +3450,7 @@ export function App() {
                           ? "人格聲線 (Voice Persona):"
                           : ttsLang === "mandarin"
                           ? "人格聲線 (Voice Persona):"
-                          : `Voice Persona (${ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"}):`}
+                          : "Voice Persona (English):"}
                       </span>
                       <select
                         value={ttsVoiceId}
@@ -5735,6 +5807,22 @@ export function App() {
         isOpen={showChangePasswordModal}
         onClose={() => setShowChangePasswordModal(false)}
         showAlert={showAlert}
+      />
+
+      {/* Export HTML Modal with filtering options */}
+      <ExportHtmlModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        messages={messages}
+        sessionFileName={activeSessionFile}
+      />
+
+      {/* GitHub Synchronization Modal */}
+      <GitSyncModal
+        isOpen={showGitSyncModal}
+        onClose={() => setShowGitSyncModal(false)}
+        onGitSync={handleGitSync}
+        isSyncing={isGitSyncing}
       />
     </div>
   );

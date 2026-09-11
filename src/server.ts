@@ -4,6 +4,10 @@ import cors from "cors";
 import path from "node:path";
 import fs from "node:fs";
 import https from "node:https";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 // 🛡️ Global crash guards: prevent unhandled exceptions or rejected promises from killing the server
 process.on("uncaughtException", (err) => {
@@ -1196,6 +1200,115 @@ app.delete("/api/logs/:filename", requireAuth, (req, res) => {
     }
   } catch (err: any) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// GIT CLI REPOSITORY SYNC ENDPOINTS
+// ==========================================
+
+// 12. GET /api/git/status - Query current branch, remote, and commit status
+app.get("/api/git/status", requireAuth, async (req, res) => {
+  try {
+    const cwd = process.cwd();
+    const branchRes = await execFileAsync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd, timeout: 15000 });
+    const currentBranch = branchRes.stdout.trim() || "main";
+
+    let remoteUrl = "";
+    try {
+      const remoteRes = await execFileAsync("git", ["remote", "get-url", "origin"], { cwd, timeout: 10000 });
+      remoteUrl = remoteRes.stdout.trim();
+    } catch {}
+
+    const statusRes = await execFileAsync("git", ["status", "--short"], { cwd, timeout: 15000 });
+    const hasUncommitted = !!statusRes.stdout.trim();
+
+    let lastCommit = "";
+    try {
+      const logRes = await execFileAsync("git", ["log", "-1", "--oneline"], { cwd, timeout: 10000 });
+      lastCommit = logRes.stdout.trim();
+    } catch {}
+
+    res.json({
+      success: true,
+      branch: currentBranch,
+      remoteUrl,
+      hasUncommitted,
+      lastCommit,
+      statusShort: statusRes.stdout.trim(),
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err.stderr?.trim() || err.message || "Failed to inspect git repository status.",
+    });
+  }
+});
+
+// 13. POST /api/git/sync - Execute external Git CLI update / synchronization
+app.post("/api/git/sync", requireAuth, async (req, res) => {
+  try {
+    const cwd = process.cwd();
+    const action = req.body.action || "pull"; // "pull" | "push" | "sync"
+
+    let commandOutput = "";
+    const logs: string[] = [];
+
+    if (action === "pull" || action === "sync") {
+      logs.push("▶ Executing: git pull --stat origin main");
+      const pullRes = await execFileAsync("git", ["pull", "--stat"], {
+        cwd,
+        timeout: 45000,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      });
+      const pullOut = (pullRes.stdout + (pullRes.stderr ? `\n${pullRes.stderr}` : "")).trim();
+      logs.push(pullOut || "Already up to date.");
+    }
+
+    if (action === "push" || action === "sync") {
+      // Stage changed files, commit if needed, and push
+      const statusRes = await execFileAsync("git", ["status", "--porcelain"], { cwd, timeout: 15000 });
+      const hasChanges = !!statusRes.stdout.trim();
+
+      if (hasChanges) {
+        const commitMsg = req.body.message?.trim() || `chore(sync): automated update ${new Date().toISOString()}`;
+        logs.push(`▶ Staging changes and committing: "${commitMsg}"`);
+        await execFileAsync("git", ["add", "-A"], { cwd, timeout: 15000 });
+        await execFileAsync("git", ["commit", "-m", commitMsg], { cwd, timeout: 15000 });
+      }
+
+      logs.push("▶ Executing: git push");
+      const pushRes = await execFileAsync("git", ["push"], {
+        cwd,
+        timeout: 60000,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      });
+      const pushOut = (pushRes.stdout + (pushRes.stderr ? `\n${pushRes.stderr}` : "")).trim();
+      logs.push(pushOut || "Push completed successfully.");
+    }
+
+    // Retrieve updated commit log
+    let lastCommit = "";
+    try {
+      const logRes = await execFileAsync("git", ["log", "-1", "--oneline"], { cwd, timeout: 10000 });
+      lastCommit = logRes.stdout.trim();
+    } catch {}
+
+    commandOutput = logs.join("\n\n");
+
+    res.json({
+      success: true,
+      action,
+      output: commandOutput,
+      lastCommit,
+    });
+  } catch (err: any) {
+    const errorMsg = (err.stderr || err.stdout || err.message || "Failed to execute git synchronization.").trim();
+    res.status(500).json({
+      success: false,
+      error: errorMsg,
+      code: err.code,
+    });
   }
 });
 
