@@ -123,6 +123,7 @@ The pattern owns semantic primitives and its tighter budget; the type owns layou
 | Classes with operations, inheritance, composition (other UML routes elsewhere) | **UML class** | [type-uml-class.md](references/type-uml-class.md) |
 | Narrative backbone sliced into releases, with the cut line | **Story map** | [type-story-map.md](references/type-story-map.md) |
 | Physical tables: SQL types, constraints, indexes, column-level FKs | **Database schema** | [type-db-schema.md](references/type-db-schema.md) |
+| Multi-stage lifecycle overview, executive dashboard poster, journey with metrics, taxonomy manual & foundation matrix | **Infographic Dashboard** | [type-infographic-dashboard.md](references/type-infographic-dashboard.md) |
 
 Rules of thumb:
 

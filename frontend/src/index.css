@@ -840,5 +840,9 @@ html.dark .mermaid-wrapper svg .cluster text {
   animation: pulse-mic 1.4s infinite ease-in-out;
 }
 
-
-
+/* 📱 Responsive Navbar Utilities */
+@media (max-width: 1200px) {
+  .hidden-on-narrow {
+    display: none !important;
+  }
+}

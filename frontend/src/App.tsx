@@ -94,12 +94,12 @@ interface ConfigState {
     maxTokens: number;
   };
   voice?: {
-    baseUrl: string;
+    baseUrl?: string;
     apiKey: string;
-    model: string;
-    voiceId: string;
-    speed: number;
-    enabled: boolean;
+    model?: string;
+    voiceId?: string;
+    speed?: number;
+    enabled?: boolean;
   };
   prompts: {
     systemPrompt: string;
@@ -2647,16 +2647,20 @@ export function App() {
         {/* Header */}
         <header
           style={{
-            height: 60,
+            height: 56,
             borderBottom: "1px solid var(--border-color)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "0 24px",
+            padding: "0 14px",
             background: "var(--bg-secondary)",
+            flexWrap: "nowrap",
+            overflowX: "auto",
+            overflowY: "hidden",
+            gap: 10,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             <div
               style={{
                 width: 8,
@@ -2677,42 +2681,47 @@ export function App() {
                   borderRadius: 12,
                   fontSize: 11,
                   fontWeight: 600,
+                  whiteSpace: "nowrap",
                 }}
               >
-                Iterating: Step {currentStep}
+                Step {currentStep}
               </span>
             )}
           </div>
 
           {/* MCP & Thinking Response View Mode Controls */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {/* Thinking Response Segmented Switch */}
             <div
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 background: "var(--bg-card)",
-                padding: "3px",
+                padding: "2px",
                 borderRadius: 8,
                 border: "1px solid var(--border-color)",
-                gap: 2,
+                gap: 1,
               }}
             >
-              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", padding: "0 6px", display: "flex", alignItems: "center", gap: 4 }}>
-                <Brain size={12} color="#a855f7" /> Thinking:
+              <span
+                style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", padding: "0 4px", display: "flex", alignItems: "center", gap: 3 }}
+                title="Thinking View Mode"
+              >
+                <Brain size={12} color="#a855f7" />
+                <span className="hidden-on-narrow">Think</span>
               </span>
 
               {/* 1. Hide */}
               <button
                 type="button"
                 onClick={() => setThinkingViewMode("hide")}
-                title="Hide model thinking (<think>) completely"
+                title="Thinking: Hide completely"
                 style={{
-                  padding: "4px 8px",
+                  padding: "3px 6px",
                   borderRadius: 6,
                   border: "none",
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: thinkingViewMode === "hide" ? 700 : 500,
                   background: thinkingViewMode === "hide" ? "var(--bg-secondary)" : "transparent",
                   color: thinkingViewMode === "hide" ? "var(--text-main)" : "var(--text-muted)",
@@ -2723,20 +2732,21 @@ export function App() {
                   gap: 3,
                 }}
               >
-                <EyeOff size={11} /> Hide
+                <EyeOff size={11} />
+                <span>Hide</span>
               </button>
 
               {/* 2. Minimize */}
               <button
                 type="button"
                 onClick={() => setThinkingViewMode("minimize")}
-                title="Show thinking as a compact single-line preview snippet"
+                title="Thinking: Minimize snippet"
                 style={{
-                  padding: "4px 8px",
+                  padding: "3px 6px",
                   borderRadius: 6,
                   border: "none",
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: thinkingViewMode === "minimize" ? 700 : 500,
                   background: thinkingViewMode === "minimize" ? "var(--bg-secondary)" : "transparent",
                   color: thinkingViewMode === "minimize" ? "#a855f7" : "var(--text-muted)",
@@ -2747,20 +2757,21 @@ export function App() {
                   gap: 3,
                 }}
               >
-                <ChevronDown size={11} /> Minimize
+                <ChevronDown size={11} />
+                <span>Min</span>
               </button>
 
               {/* 3. Full */}
               <button
                 type="button"
                 onClick={() => setThinkingViewMode("full")}
-                title="Show full collapsible thinking block"
+                title="Thinking: Full expanded block"
                 style={{
-                  padding: "4px 8px",
+                  padding: "3px 6px",
                   borderRadius: 6,
                   border: "none",
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: thinkingViewMode === "full" ? 700 : 500,
                   background: thinkingViewMode === "full" ? "var(--bg-secondary)" : "transparent",
                   color: thinkingViewMode === "full" ? "#a855f7" : "var(--text-muted)",
@@ -2771,7 +2782,8 @@ export function App() {
                   gap: 3,
                 }}
               >
-                <Eye size={11} /> Full
+                <Eye size={11} />
+                <span>Full</span>
               </button>
             </div>
 
@@ -2781,27 +2793,30 @@ export function App() {
                 display: "inline-flex",
                 alignItems: "center",
                 background: "var(--bg-card)",
-                padding: "3px",
+                padding: "2px",
                 borderRadius: 8,
                 border: "1px solid var(--border-color)",
-                gap: 2,
+                gap: 1,
               }}
             >
-              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", padding: "0 6px" }}>
-                MCP Response:
+              <span
+                style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", padding: "0 4px" }}
+                title="MCP Response View Mode"
+              >
+                <span className="hidden-on-narrow">MCP</span>
               </span>
 
               {/* 1. Hide */}
               <button
                 type="button"
                 onClick={() => setMcpViewMode("hide")}
-                title="Hide all MCP tool calls completely"
+                title="MCP: Hide all tool calls"
                 style={{
-                  padding: "4px 8px",
+                  padding: "3px 6px",
                   borderRadius: 6,
                   border: "none",
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: mcpViewMode === "hide" ? 700 : 500,
                   background: mcpViewMode === "hide" ? "var(--bg-secondary)" : "transparent",
                   color: mcpViewMode === "hide" ? "var(--text-main)" : "var(--text-muted)",
@@ -2812,20 +2827,21 @@ export function App() {
                   gap: 3,
                 }}
               >
-                <EyeOff size={11} /> Hide
+                <EyeOff size={11} />
+                <span>Hide</span>
               </button>
 
               {/* 2. Minimize */}
               <button
                 type="button"
                 onClick={() => setMcpViewMode("minimize")}
-                title="Show only tool summary pill / single line"
+                title="MCP: Minimize to summary pill"
                 style={{
-                  padding: "4px 8px",
+                  padding: "3px 6px",
                   borderRadius: 6,
                   border: "none",
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: mcpViewMode === "minimize" ? 700 : 500,
                   background: mcpViewMode === "minimize" ? "var(--bg-secondary)" : "transparent",
                   color: mcpViewMode === "minimize" ? "var(--accent-amber)" : "var(--text-muted)",
@@ -2836,20 +2852,21 @@ export function App() {
                   gap: 3,
                 }}
               >
-                <ChevronDown size={11} /> Minimize
+                <ChevronDown size={11} />
+                <span>Min</span>
               </button>
 
               {/* 3. Full */}
               <button
                 type="button"
                 onClick={() => setMcpViewMode("full")}
-                title="Show full collapsible tool call cards with parameters and raw observations"
+                title="MCP: Full detail view"
                 style={{
-                  padding: "4px 8px",
+                  padding: "3px 6px",
                   borderRadius: 6,
                   border: "none",
                   cursor: "pointer",
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: mcpViewMode === "full" ? 700 : 500,
                   background: mcpViewMode === "full" ? "var(--bg-secondary)" : "transparent",
                   color: mcpViewMode === "full" ? "var(--accent)" : "var(--text-muted)",
@@ -2860,7 +2877,8 @@ export function App() {
                   gap: 3,
                 }}
               >
-                <Eye size={11} /> Full
+                <Eye size={11} />
+                <span>Full</span>
               </button>
             </div>
 
@@ -2872,16 +2890,17 @@ export function App() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 6,
-                  padding: "6px 12px",
+                  gap: 5,
+                  padding: "5px 9px",
                   borderRadius: 8,
                   background: "rgba(37, 99, 235, 0.1)",
                   border: "1px solid var(--accent)",
                   color: "var(--accent)",
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: 600,
                   cursor: "pointer",
                   transition: "all 0.15s ease",
+                  whiteSpace: "nowrap",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "rgba(37, 99, 235, 0.18)";
@@ -2890,7 +2909,8 @@ export function App() {
                   e.currentTarget.style.background = "rgba(37, 99, 235, 0.1)";
                 }}
               >
-                <GitFork size={13} /> Sub Conversations
+                <GitFork size={13} />
+                <span>Sub-Convs</span>
               </button>
             )}
 
