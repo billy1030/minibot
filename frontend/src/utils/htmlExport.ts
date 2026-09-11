@@ -836,7 +836,7 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
 
     if (zoomInBtn) {
       zoomInBtn.onclick = function() {
-        currentScale = Math.min(5.0, parseFloat((currentScale + 0.15).toFixed(2)));
+        currentScale = Math.min(5.0, parseFloat((currentScale + 0.25).toFixed(2)));
         if (resetBtn) resetBtn.textContent = Math.round(currentScale * 100) + '%';
         applyTransform();
       };
@@ -844,7 +844,7 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
 
     if (zoomOutBtn) {
       zoomOutBtn.onclick = function() {
-        currentScale = Math.max(0.2, parseFloat((currentScale - 0.15).toFixed(2)));
+        currentScale = Math.max(0.4, parseFloat((currentScale - 0.2).toFixed(2)));
         if (resetBtn) resetBtn.textContent = Math.round(currentScale * 100) + '%';
         applyTransform();
       };
@@ -1002,7 +1002,7 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
     wrapper.dataset.diagramType = diag.kind;
 
     var numStr = (index + 1).toString().padStart(2, '0');
-    var title = isSvg ? ('SVG Architecture Diagram (' + numStr + ')') : ('Mermaid Diagram (' + numStr + ')');
+    var title = isSvg ? ('SVG Diagram (' + numStr + ')') : ('Diagram (' + numStr + ')');
 
     var topbar = document.createElement('div');
     topbar.className = 'diagram-topbar';
@@ -1013,10 +1013,10 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
       + '<div class="diagram-tools-group">'
       + '<button class="diag-btn" data-action="view"><span style="color:#4f46e5;font-weight:bold;font-family:monospace;">&lt;&gt;</span> Source</button>'
       + '<button class="diag-btn" data-action="copy"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>'
-      + '<div style="display:inline-flex;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0 6px;height:28px;gap:4px;">'
-      + '<button class="diag-btn" data-action="zoom-out" style="border:none;background:transparent;padding:1px 4px;cursor:pointer;">🔍−</button>'
-      + '<span data-action="reset" style="padding:0 4px;font-family:monospace;font-weight:bold;font-size:12px;cursor:pointer;" title="Reset zoom to 100%">100%</span>'
-      + '<button class="diag-btn" data-action="zoom-in" style="border:none;background:transparent;padding:1px 4px;cursor:pointer;">+</button>'
+      + '<div style="display:inline-flex;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0 6px;height:28px;gap:2px;">'
+      + '<button class="diag-btn" data-action="zoom-out" style="border:none;background:transparent;padding:1px 4px;cursor:pointer;" title="Zoom Out">🔍−</button>'
+      + '<span data-action="reset" style="min-width:38px;text-align:center;padding:0 4px;font-family:monospace;font-weight:bold;font-size:12px;cursor:pointer;" title="Reset zoom to 100%">100%</span>'
+      + '<button class="diag-btn" data-action="zoom-in" style="border:none;background:transparent;padding:1px 4px;cursor:pointer;" title="Zoom In">+</button>'
       + '</div>'
       + '</div>';
 

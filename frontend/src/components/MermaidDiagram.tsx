@@ -631,7 +631,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
 
         {/* 🎮 所有操作按鈕群組 (檢視語法、複製代碼、100% 縮放、行距、4:3 展開) 一律靠最右手邊 */}
         <div className="mermaid-topbar-right">
-          {/* 👁️/💻 顯示 / 隱藏 Mermaid 原始代碼按鈕 */}
+          {/* 👁️/💻 顯示 / 隱藏 原始代碼按鈕 */}
           <button
             onClick={() => setIsCodeVisible(v => !v)}
             className={`mm-btn-action ${isCodeVisible ? 'active' : ''}`}
@@ -650,11 +650,11 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
             )}
           </button>
 
-          {/* 📋 複製 Mermaid 代碼按鈕 */}
+          {/* 📋 複製代碼按鈕 */}
           <button
             onClick={copyMermaidCode}
             className="mm-btn-action"
-            title="Copy raw Mermaid code"
+            title="Copy raw diagram code"
           >
             {isCodeCopied ? (
               <>
@@ -669,7 +669,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
             )}
           </button>
 
-          {/* 🎮 內聯直接控制按鈕組 (放大、縮小、復位 100%) */}
+          {/* 🎮 內聯直接控制按鈕組 (放大、縮小、復位 100% - SLS Parity) */}
           <div
             className="mm-btn-group"
             onMouseDown={(e) => e.stopPropagation()}
@@ -680,7 +680,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                setInlineScale(s => Math.max(0.2, Number((s - 0.2).toFixed(2))));
+                setInlineScale(s => Math.max(0.4, Number((s - 0.2).toFixed(2))));
               }}
               onDoubleClick={(e) => e.stopPropagation()}
               className="mm-group-btn"
@@ -697,7 +697,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
                 setInlinePan({ x: 0, y: 0 });
               }}
               onDoubleClick={(e) => e.stopPropagation()}
-              className="mm-group-text"
+              className="mm-group-text min-w-[38px] text-center"
               title="Reset view"
             >
               {Math.round(inlineScale * 100)}%
@@ -832,7 +832,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
           <div className="flex items-center justify-between mb-2 text-[11px] text-slate-400 border-b border-slate-800 pb-1.5">
             <span className="font-bold flex items-center gap-1.5 text-sky-400">
               <Code className="w-3.5 h-3.5" />
-              <span>Mermaid Source Code</span>
+              <span>Source Code</span>
             </span>
             <span className="text-[10px] text-slate-500">{code.split('\n').length} lines</span>
           </div>
@@ -906,7 +906,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      setInlineScale(s => Math.max(0.2, Number((s - 0.2).toFixed(2))));
+                      setInlineScale(s => Math.max(0.4, Number((s - 0.2).toFixed(2))));
                     }}
                     onDoubleClick={(e) => e.stopPropagation()}
                     className="p-1 hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition cursor-pointer"
@@ -923,7 +923,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
                       setInlinePan({ x: 0, y: 0 });
                     }}
                     onDoubleClick={(e) => e.stopPropagation()}
-                    className="px-1.5 text-xs font-mono font-bold text-slate-600 dark:text-slate-300 hover:text-sky-600 cursor-pointer"
+                    className="px-1.5 text-xs font-mono font-bold text-slate-600 dark:text-slate-300 hover:text-sky-600 cursor-pointer min-w-[38px] text-center"
                     title="Reset Zoom (100%)"
                   >
                     {Math.round(inlineScale * 100)}%
