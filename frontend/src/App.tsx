@@ -5065,7 +5065,7 @@ export function App() {
                       icon: "🎨",
                       color: "#eb6c36",
                       prompt:
-                        "Please create a high-fidelity standalone Editorial SVG architecture diagram following the `diagram-design` skill. Apply the flexible layout matrix with Top-Right Header Legend chips or Sidebar to prevent legend collision, clear focal hierarchy, orthogonal connectors, and opaque background badges behind connector labels.",
+                        "Please output a high-fidelity standalone Editorial SVG architecture diagram directly as raw ```xml or ```svg code following the `diagram-design` skill. DO NOT call any image generation tools (DO NOT call `minimax_generate_image`). Output the SVG code directly in your response text. Apply the flexible layout matrix with Top-Right Header Legend chips or Sidebar to prevent legend collision, clear focal hierarchy, orthogonal connectors, and opaque background badges behind connector labels.",
                     })
                   }
                   style={{
@@ -5108,7 +5108,7 @@ export function App() {
                       icon: "🛠️",
                       color: "#10b981",
                       prompt:
-                        "Please inspect and auto-fix the previous SVG diagram: eliminate the legend collision by relocating the legend to the Top-Right Header (x=800..1320, y=35) or expanding the canvas viewBox height dynamically (height >= 1050 for 4 tiers) with at least 40px clearance above the legend. Retain all servers, subnets, and connector styles.",
+                        "Please inspect and auto-fix the previous SVG diagram: eliminate the legend collision by relocating the legend to the Top-Right Header (x=800..1320, y=35) or expanding the canvas viewBox height dynamically (height >= 1050 for 4 tiers) with at least 40px clearance above the legend. DO NOT call `minimax_generate_image`. Output the updated SVG code directly as raw ```xml or ```svg code in text. Retain all servers, subnets, and connector styles.",
                     })
                   }
                   style={{

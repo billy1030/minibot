@@ -626,8 +626,12 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
     setInlinePan({ x: 0, y: 0 });
   };
 
-  // Mouse-wheel zoom logic
+  // 🛑 Mouse-wheel zoom logic (暫時停用：讓使用者在滑鼠滾動時正常上下滾動整個對話頁面，避免攔截滾輪事件)
+  // 若日後需要恢復滾輪縮放，可將 ENABLE_WHEEL_ZOOM 設為 true
+  const ENABLE_WHEEL_ZOOM = false;
+
   const handleWheelZoom = useCallback((e: WheelEvent) => {
+    if (!ENABLE_WHEEL_ZOOM) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -644,8 +648,9 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
     );
   }, []);
 
-  // 綁定原生非被動 (passive: false) wheel 監聽器，確保 100% 阻止頁面滾動且無警告
+  // 綁定原生非被動 (passive: false) wheel 監聽器 (當 ENABLE_WHEEL_ZOOM 為 false 時不綁定，讓頁面自然流暢滾動)
   useEffect(() => {
+    if (!ENABLE_WHEEL_ZOOM) return;
     const inlineEl = viewportRef.current;
     if (inlineEl) {
       inlineEl.addEventListener('wheel', handleWheelZoom, { passive: false });
@@ -658,7 +663,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, index = 0 
   }, [handleWheelZoom]);
 
   useEffect(() => {
-    if (expandLevel !== 2) return;
+    if (!ENABLE_WHEEL_ZOOM || expandLevel !== 2) return;
     const modalEl = modalViewportRef.current;
     if (modalEl) {
       modalEl.addEventListener('wheel', handleWheelZoom, { passive: false });
