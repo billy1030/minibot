@@ -77,6 +77,10 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
   };
 
   const loadSkillContent = async (skillName: string) => {
+    if (selectedSkillContent?.name === skillName) {
+      setSelectedSkillContent(null);
+      return;
+    }
     try {
       const res = await fetch(
         `/api/skills/content?name=${encodeURIComponent(skillName)}&workspace=${encodeURIComponent(currentWorkspace)}`,
@@ -553,25 +557,60 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
               </div>
 
               {isCreatingSkill && (
-                <form onSubmit={handleSaveSkill} style={{ padding: 14, borderRadius: 8, background: "rgba(0,0,0,0.25)", border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <form
+                  onSubmit={handleSaveSkill}
+                  style={{
+                    padding: 18,
+                    borderRadius: 10,
+                    background: "#fff1f2", // 非常淺的粉紅色 (Very light pink)
+                    border: "1px solid #fecdd3", // 淺粉紅邊框
+                    boxShadow: "0 2px 6px rgba(244, 63, 94, 0.06)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 14,
+                  }}
+                >
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                     <div>
-                      <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Skill Name:</label>
+                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#881337", marginBottom: 6 }}>
+                        Skill Name:
+                      </label>
                       <input
                         type="text"
                         placeholder="e.g. data-analyst, code-reviewer"
                         value={newSkillName}
                         onChange={(e) => setNewSkillName(e.target.value)}
-                        style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border-color)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 12.5 }}
+                        style={{
+                          width: "100%",
+                          padding: "9px 12px",
+                          borderRadius: 7,
+                          border: "1px solid #fda4af",
+                          background: "#ffffff",
+                          color: "#0f172a",
+                          fontSize: 13,
+                          outline: "none",
+                        }}
                         required
                       />
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Scope:</label>
+                      <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#881337", marginBottom: 6 }}>
+                        Scope:
+                      </label>
                       <select
                         value={newSkillScope}
                         onChange={(e) => setNewSkillScope(e.target.value as any)}
-                        style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border-color)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 12.5 }}
+                        style={{
+                          width: "100%",
+                          padding: "9px 12px",
+                          borderRadius: 7,
+                          border: "1px solid #fda4af",
+                          background: "#ffffff",
+                          color: "#0f172a",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          outline: "none",
+                        }}
                       >
                         <option value="workspace">Per-Workspace ({currentWorkspace})</option>
                         <option value="global">Global (Available Everywhere)</option>
@@ -580,22 +619,61 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Markdown Recipe / SKILL.md Content:</label>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "#881337", marginBottom: 6 }}>
+                      Markdown Recipe / SKILL.md Content:
+                    </label>
                     <textarea
                       rows={8}
                       placeholder={`---\nname: my-skill\ndescription: How to accomplish task X\ntriggers: ["analyze", "review"]\n---\n\n## Instructions\nWhen the user asks...`}
                       value={newSkillContent}
                       onChange={(e) => setNewSkillContent(e.target.value)}
-                      style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border-color)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 12, fontFamily: "monospace" }}
+                      style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: 7,
+                        border: "1px solid #fda4af",
+                        background: "#ffffff",
+                        color: "#0f172a",
+                        fontSize: 12.5,
+                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                        outline: "none",
+                        lineHeight: 1.5,
+                      }}
                       required
                     />
                   </div>
 
-                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingSkill(false)}
+                      style={{
+                        padding: "7px 14px",
+                        borderRadius: 6,
+                        border: "1px solid #fda4af",
+                        background: "#ffffff",
+                        color: "#881337",
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Cancel
+                    </button>
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                      style={{
+                        padding: "7px 18px",
+                        borderRadius: 6,
+                        border: "none",
+                        background: "linear-gradient(135deg, #e11d48, #be123c)",
+                        color: "#fff",
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        boxShadow: "0 2px 4px rgba(225, 29, 72, 0.25)",
+                      }}
                     >
                       {isSubmitting ? "Saving..." : "Save Skill"}
                     </button>
@@ -608,127 +686,178 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
               ) : skills.length === 0 ? (
                 <div style={{ textAlign: "center", padding: 30, color: "var(--text-muted)" }}>No skills discovered.</div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {skills.map((skill) => (
-                    <div
-                      key={skill.name}
-                      style={{
-                        padding: "14px 18px",
-                        borderRadius: 8,
-                        background: "var(--bg-card, #f8fafc)",
-                        border: "1px solid var(--border-color, #e2e8f0)",
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "flex-start",
-                        gap: 16,
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                          <span
-                            style={{
-                              fontSize: 14,
-                              fontWeight: 800,
-                              color: "#0f172a",
-                              background: "rgba(2, 132, 199, 0.12)",
-                              padding: "2px 8px",
-                              borderRadius: 5,
-                              border: "1px solid rgba(2, 132, 199, 0.25)",
-                            }}
-                          >
-                            {skill.name}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              padding: "2px 7px",
-                              borderRadius: 4,
-                              background: skill.scope === "global" ? "rgba(37, 99, 235, 0.12)" : "rgba(124, 58, 237, 0.12)",
-                              color: skill.scope === "global" ? "#1d4ed8" : "#6d28d9",
-                              border: `1px solid ${skill.scope === "global" ? "rgba(37, 99, 235, 0.25)" : "rgba(124, 58, 237, 0.25)"}`,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 4,
-                            }}
-                          >
-                            {skill.scope === "global" ? <Globe size={11} /> : <Folder size={11} />}
-                            {skill.scope.toUpperCase()}{skill.workspace ? ` (${skill.workspace})` : ""}
-                          </span>
-                        </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {skills.map((skill) => {
+                    const isExpanded = selectedSkillContent?.name === skill.name;
+                    return (
+                      <div
+                        key={skill.name}
+                        style={{
+                          borderRadius: 10,
+                          background: "var(--bg-card, #f8fafc)",
+                          border: isExpanded ? "1px solid #16a34a" : "1px solid var(--border-color, #e2e8f0)",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                          overflow: "hidden",
+                          transition: "border-color 0.2s ease",
+                        }}
+                      >
                         <div
                           style={{
-                            fontSize: 13,
-                            color: "var(--text-main, #1e293b)",
-                            marginTop: 8,
-                            lineHeight: 1.6,
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word",
+                            padding: "16px 20px",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            gap: 16,
                           }}
                         >
-                          {skill.description || "No description provided."}
-                        </div>
-                        {skill.triggers && skill.triggers.length > 0 && (
-                          <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                            {skill.triggers.map((trig) => (
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                               <span
-                                key={trig}
                                 style={{
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  padding: "2px 6px",
-                                  borderRadius: 4,
-                                  background: "rgba(0,0,0,0.06)",
-                                  color: "var(--text-main, #334155)",
-                                  border: "1px solid rgba(0,0,0,0.08)",
+                                  fontSize: 14,
+                                  fontWeight: 800,
+                                  color: "#0f172a",
+                                  background: "rgba(2, 132, 199, 0.12)",
+                                  padding: "2px 8px",
+                                  borderRadius: 5,
+                                  border: "1px solid rgba(2, 132, 199, 0.25)",
                                 }}
                               >
-                                #{trig}
+                                {skill.name}
                               </span>
-                            ))}
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  padding: "2px 7px",
+                                  borderRadius: 4,
+                                  background: skill.scope === "global" ? "rgba(37, 99, 235, 0.12)" : "rgba(124, 58, 237, 0.12)",
+                                  color: skill.scope === "global" ? "#1d4ed8" : "#6d28d9",
+                                  border: `1px solid ${skill.scope === "global" ? "rgba(37, 99, 235, 0.25)" : "rgba(124, 58, 237, 0.25)"}`,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                }}
+                              >
+                                {skill.scope === "global" ? <Globe size={11} /> : <Folder size={11} />}
+                                {skill.scope.toUpperCase()}{skill.workspace ? ` (${skill.workspace})` : ""}
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                color: "var(--text-main, #1e293b)",
+                                marginTop: 8,
+                                lineHeight: 1.6,
+                                whiteSpace: "pre-wrap",
+                                wordBreak: "break-word",
+                              }}
+                            >
+                              {skill.description || "No description provided."}
+                            </div>
+                            {skill.triggers && skill.triggers.length > 0 && (
+                              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                                {skill.triggers.map((trig) => (
+                                  <span
+                                    key={trig}
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      padding: "2px 6px",
+                                      borderRadius: 4,
+                                      background: "rgba(0,0,0,0.06)",
+                                      color: "var(--text-main, #334155)",
+                                      border: "1px solid rgba(0,0,0,0.08)",
+                                    }}
+                                  >
+                                    #{trig}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <button
+                            onClick={() => loadSkillContent(skill.name)}
+                            style={{
+                              padding: "7px 14px",
+                              borderRadius: 7,
+                              border: isExpanded ? "1px solid #16a34a" : "1px solid var(--border-color, #cbd5e1)",
+                              background: isExpanded ? "rgba(22, 163, 74, 0.12)" : "var(--bg-secondary, #ffffff)",
+                              color: isExpanded ? "#15803d" : "var(--text-main, #0f172a)",
+                              fontSize: 12.5,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                              flexShrink: 0,
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <Code size={14} /> {isExpanded ? "Hide Recipe" : "View Recipe"}
+                          </button>
+                        </div>
+
+                        {/* Inline Recipe Preview (Right under this skill card, very light green bg, black text) */}
+                        {isExpanded && (
+                          <div
+                            style={{
+                              borderTop: "1px solid #bbf7d0",
+                              background: "#f0fdf4", // 非常淺的綠色 (Very light green)
+                              padding: "16px 20px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginBottom: 10,
+                              }}
+                            >
+                              <span style={{ fontWeight: 800, fontSize: 13, color: "#166534" }}>
+                                📄 {selectedSkillContent.name} (SKILL.md Recipe Preview)
+                              </span>
+                              <button
+                                onClick={() => setSelectedSkillContent(null)}
+                                title="Close Recipe"
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  color: "#166534",
+                                  cursor: "pointer",
+                                  padding: 4,
+                                  borderRadius: 4,
+                                }}
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                            <pre
+                              style={{
+                                fontSize: 12.5,
+                                color: "#09090b", // 黑色字 (Black text)
+                                background: "#ffffff",
+                                border: "1px solid #bbf7d0",
+                                borderRadius: 8,
+                                padding: 14,
+                                maxHeight: 280,
+                                overflowY: "auto",
+                                whiteSpace: "pre-wrap",
+                                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                                margin: 0,
+                                lineHeight: 1.6,
+                                boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)",
+                              }}
+                            >
+                              {selectedSkillContent.content}
+                            </pre>
                           </div>
                         )}
                       </div>
-
-                      <button
-                        onClick={() => loadSkillContent(skill.name)}
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: 6,
-                          border: "1px solid var(--border-color, #cbd5e1)",
-                          background: "var(--bg-secondary, #ffffff)",
-                          color: "var(--text-main, #0f172a)",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 5,
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Code size={13} /> View Recipe
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {selectedSkillContent && (
-                <div style={{ marginTop: 10, padding: 14, borderRadius: 8, background: "rgba(0,0,0,0.4)", border: "1px solid var(--border-color)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <span style={{ fontWeight: 700, fontSize: 13 }}>📄 {selectedSkillContent.name} (Preview)</span>
-                    <button
-                      onClick={() => setSelectedSkillContent(null)}
-                      style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                  <pre style={{ fontSize: 11.5, color: "#cbd5e1", maxHeight: 220, overflowY: "auto", whiteSpace: "pre-wrap", fontFamily: "monospace", margin: 0 }}>
-                    {selectedSkillContent.content}
-                  </pre>
+                    );
+                  })}
                 </div>
               )}
             </div>
