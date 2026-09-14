@@ -16,7 +16,7 @@ interface SvgDiagramViewerProps {
   index?: number;
 }
 
-export type SvgThemeMode = "original" | "clean-light" | "warm-paper" | "dark-slate";
+export type SvgThemeMode = "clean-light" | "warm-paper" | "dark-slate" | "original";
 
 export interface SvgThemeOption {
   id: SvgThemeMode;
@@ -26,10 +26,10 @@ export interface SvgThemeOption {
 }
 
 export const SVG_THEME_OPTIONS: SvgThemeOption[] = [
-  { id: "original", name: "Default (Original)", dotColor: "#94a3b8", description: "Preserve original colors" },
-  { id: "clean-light", name: "☀️ Clean Light", dotColor: "#2563eb", description: "Pure white canvas & high-contrast navy" },
+  { id: "clean-light", name: "☀️ Clean Light (Default)", dotColor: "#2563eb", description: "Pure white canvas & high-contrast navy" },
   { id: "warm-paper", name: "📜 Warm Paper", dotColor: "#b45309", description: "Ivory cream canvas & warm editorial tones" },
   { id: "dark-slate", name: "🌙 Dark Slate", dotColor: "#38bdf8", description: "Executive dark slate canvas & neon accents" },
+  { id: "original", name: "Original Source", dotColor: "#94a3b8", description: "Preserve raw generated SVG colors" },
 ];
 
 const MIN_ZOOM = 0.4;
@@ -37,50 +37,128 @@ const MAX_ZOOM = 4.0;
 const ZOOM_STEP = 0.2;
 
 /**
- * Dynamically recolors SVG markup across dark <-> light themes
+ * Robust DOM-based SVG recoloring across Light, Warm Paper, and Dark themes.
+ * Uses exact DOM element tag inspection so backgrounds and text are never confused or cross-replaced.
  */
 function recolorSvg(rawSvg: string, theme: SvgThemeMode): string {
   if (theme === "original" || !rawSvg) return rawSvg;
+  if (typeof DOMParser === "undefined") return rawSvg;
 
-  let transformed = rawSvg;
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(rawSvg, "image/svg+xml");
+    const svgEl = doc.querySelector("svg");
+    if (!svgEl) return rawSvg;
 
-  if (theme === "clean-light") {
-    // 1. Convert dark backgrounds to clean light
-    transformed = transformed.replace(/fill="#(0b0f19|0d1117|0f172a|05070f)"/gi, 'fill="#ffffff"');
-    transformed = transformed.replace(/fill="#(111827|1e293b|1f2937|0d1326)"/gi, 'fill="#f8fafc"');
-    // 2. Borders and grid lines
-    transformed = transformed.replace(/stroke="#(1e293b|374151|475569)"/gi, 'stroke="#e2e8f0"');
-    // 3. Typography: light texts to dark slate/navy
-    transformed = transformed.replace(/fill="#(f8fafc|f1f5f9|ffffff|fff)"/gi, 'fill="#0f172a"');
-    transformed = transformed.replace(/fill="#(cbd5e1|94a3b8|64748b)"/gi, 'fill="#475569"');
-    // 4. Sub-cards & badges
-    transformed = transformed.replace(/fill="#(064e3b|78350f|7f1d1d)"/gi, 'fill="#f1f5f9"');
-    transformed = transformed.replace(/fill="#(bbf7d0|fcd34d|fecaca)"/gi, 'fill="#0f172a"');
-  } else if (theme === "warm-paper") {
-    // 1. Convert dark backgrounds to warm cream
-    transformed = transformed.replace(/fill="#(0b0f19|0d1117|0f172a|05070f)"/gi, 'fill="#fcfbf7"');
-    transformed = transformed.replace(/fill="#(111827|1e293b|1f2937|0d1326)"/gi, 'fill="#f6f1e5"');
-    // 2. Borders
-    transformed = transformed.replace(/stroke="#(1e293b|374151|475569)"/gi, 'stroke="#e7dec8"');
-    // 3. Typography
-    transformed = transformed.replace(/fill="#(f8fafc|f1f5f9|ffffff|fff)"/gi, 'fill="#292524"');
-    transformed = transformed.replace(/fill="#(cbd5e1|94a3b8|64748b)"/gi, 'fill="#78716c"');
-    // 4. Sub-cards
-    transformed = transformed.replace(/fill="#(064e3b|78350f|7f1d1d)"/gi, 'fill="#ede4d1"');
-    transformed = transformed.replace(/fill="#(bbf7d0|fcd34d|fecaca)"/gi, 'fill="#44403c"');
-  } else if (theme === "dark-slate") {
-    // 1. Convert white/light backgrounds to dark slate
-    transformed = transformed.replace(/fill="#(ffffff|fff|f8fafc|fcfbf7|f6f1e5)"/gi, 'fill="#0b0f19"');
-    transformed = transformed.replace(/fill="#(f1f5f9|e2e8f0|ede4d1)"/gi, 'fill="#1e293b"');
-    // 2. Borders
-    transformed = transformed.replace(/stroke="#(e2e8f0|e7dec8|cbd5e1)"/gi, 'stroke="#374151"');
-    // 3. Typography: dark texts to crisp white/slate
-    transformed = transformed.replace(/fill="#(0f172a|1e293b|292524|0c4a6e)"/gi, 'fill="#f8fafc"');
-    transformed = transformed.replace(/fill="#(334155|44403c|475569)"/gi, 'fill="#cbd5e1"');
-    transformed = transformed.replace(/fill="#(64748b|78716c)"/gi, 'fill="#94a3b8"');
+    const darkCanvases = new Set(["#0b0f19", "#0d1117", "#0f172a", "#05070f", "#000000", "#000"]);
+    const darkSurfaces = new Set(["#111827", "#1e293b", "#1f2937", "#0d1326", "#182234", "#1a2332", "#374151"]);
+    const lightCanvases = new Set(["#ffffff", "#fff", "#f8fafc", "#fcfbf7", "#fafaf9", "#f1f5f9"]);
+    const lightSurfaces = new Set(["#f6f1e5", "#ede4d1", "#e2e8f0", "#e0f2fe", "#f0fdf4", "#fef3c7"]);
+
+    const allElements = doc.querySelectorAll("*");
+
+    allElements.forEach((el) => {
+      const tagName = el.tagName.toLowerCase();
+      const fill = (el.getAttribute("fill") || "").toLowerCase().trim();
+      const stroke = (el.getAttribute("stroke") || "").toLowerCase().trim();
+
+      if (theme === "clean-light") {
+        // --- CLEAN LIGHT THEME ---
+        if (tagName === "text" || tagName === "tspan") {
+          // Darken text for high contrast on light canvas
+          if (
+            fill === "#ffffff" || fill === "#fff" || fill === "#f8fafc" ||
+            fill === "#f1f5f9" || fill === "#e2e8f0" || fill === "#cbd5e1" ||
+            fill === "#94a3b8" || fill === "#fca5a5" || fill === "#fcd34d" ||
+            fill === "#bbf7d0" || fill === "#86efac" || fill === "#67e8f9"
+          ) {
+            if (fill === "#fca5a5") el.setAttribute("fill", "#dc2626"); // Crimson
+            else if (fill === "#fcd34d") el.setAttribute("fill", "#b45309"); // Warm Amber
+            else if (fill === "#bbf7d0" || fill === "#86efac") el.setAttribute("fill", "#059669"); // Emerald
+            else if (fill === "#94a3b8" || fill === "#cbd5e1") el.setAttribute("fill", "#64748b"); // Muted slate
+            else el.setAttribute("fill", "#0f172a"); // High contrast dark navy
+          }
+        } else if (tagName === "rect") {
+          // Canvas or section background
+          if (darkCanvases.has(fill)) {
+            el.setAttribute("fill", "#ffffff");
+          } else if (darkSurfaces.has(fill)) {
+            el.setAttribute("fill", "#f8fafc");
+          } else if (fill === "#064e3b" || fill === "#78350f" || fill === "#7f1d1d") {
+            // Dark sub-card containers -> clean tinted containers
+            if (fill === "#064e3b") el.setAttribute("fill", "#ecfdf5");
+            else if (fill === "#78350f") el.setAttribute("fill", "#fffbeb");
+            else el.setAttribute("fill", "#fef2f2");
+          }
+
+          if (stroke === "#1e293b" || stroke === "#374151" || stroke === "#475569" || stroke === "#0d1117") {
+            el.setAttribute("stroke", "#e2e8f0");
+          }
+        } else if (tagName === "path" || tagName === "line") {
+          if (stroke === "#1e293b" || stroke === "#374151" || stroke === "#475569") {
+            el.setAttribute("stroke", "#cbd5e1");
+          }
+        }
+      } else if (theme === "warm-paper") {
+        // --- WARM EDITORIAL PAPER THEME ---
+        if (tagName === "text" || tagName === "tspan") {
+          if (
+            fill === "#ffffff" || fill === "#fff" || fill === "#f8fafc" ||
+            fill === "#f1f5f9" || fill === "#e2e8f0" || fill === "#cbd5e1" ||
+            fill === "#94a3b8" || fill === "#fca5a5" || fill === "#fcd34d" ||
+            fill === "#bbf7d0" || fill === "#86efac"
+          ) {
+            if (fill === "#fca5a5") el.setAttribute("fill", "#991b1b");
+            else if (fill === "#fcd34d") el.setAttribute("fill", "#92400e");
+            else if (fill === "#bbf7d0" || fill === "#86efac") el.setAttribute("fill", "#166534");
+            else if (fill === "#94a3b8" || fill === "#cbd5e1") el.setAttribute("fill", "#78716c");
+            else el.setAttribute("fill", "#292524"); // Warm charcoal
+          }
+        } else if (tagName === "rect") {
+          if (darkCanvases.has(fill)) {
+            el.setAttribute("fill", "#fcfbf7"); // Warm cream canvas
+          } else if (darkSurfaces.has(fill)) {
+            el.setAttribute("fill", "#f6f1e5"); // Warmer container
+          } else if (fill === "#064e3b" || fill === "#78350f" || fill === "#7f1d1d") {
+            el.setAttribute("fill", "#ede4d1");
+          }
+
+          if (stroke === "#1e293b" || stroke === "#374151" || stroke === "#475569" || stroke === "#e2e8f0") {
+            el.setAttribute("stroke", "#e7dec8");
+          }
+        } else if (tagName === "path" || tagName === "line") {
+          if (stroke === "#1e293b" || stroke === "#374151" || stroke === "#475569") {
+            el.setAttribute("stroke", "#dcd1ba");
+          }
+        }
+      } else if (theme === "dark-slate") {
+        // --- SLEEK DARK SLATE THEME ---
+        if (tagName === "text" || tagName === "tspan") {
+          if (fill === "#0f172a" || fill === "#1e293b" || fill === "#292524" || fill === "#0c4a6e" || fill === "#334155" || fill === "#44403c" || fill === "#475569") {
+            el.setAttribute("fill", "#f8fafc");
+          } else if (fill === "#64748b" || fill === "#78716c") {
+            el.setAttribute("fill", "#94a3b8");
+          }
+        } else if (tagName === "rect") {
+          if (lightCanvases.has(fill)) {
+            el.setAttribute("fill", "#0b0f19");
+          } else if (lightSurfaces.has(fill)) {
+            el.setAttribute("fill", "#111827");
+          }
+
+          if (stroke === "#e2e8f0" || stroke === "#e7dec8" || stroke === "#cbd5e1" || stroke === "#dcd1ba") {
+            el.setAttribute("stroke", "#374151");
+          }
+        }
+      }
+    });
+
+    const serializer = new XMLSerializer();
+    return serializer.serializeToString(svgEl);
+  } catch (err) {
+    console.warn("[SvgDiagramViewer] DOM recoloring failed, using raw SVG:", err);
+    return rawSvg;
   }
-
-  return transformed;
 }
 
 export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
@@ -92,7 +170,7 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [activeTheme, setActiveTheme] = useState<SvgThemeMode>("original");
+  const [activeTheme, setActiveTheme] = useState<SvgThemeMode>("clean-light");
   const [showThemeMenu, setShowThemeMenu] = useState<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
