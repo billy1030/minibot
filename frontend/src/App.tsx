@@ -48,6 +48,7 @@ import {
   Pause,
   RotateCcw,
   ArrowUp,
+  Save,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
@@ -5812,20 +5813,19 @@ export function App() {
         >
           <div
             style={{
-              width: "min(1160px, 95vw)",
+              width: "min(1380px, 96vw)",
               background: "var(--bg-secondary)",
               border: "1px solid var(--border-color)",
               borderRadius: 14,
-              padding: 28,
               maxHeight: "92vh",
-              overflowY: "auto",
-              boxShadow: "0 15px 35px rgba(0,0,0,0.15)",
               display: "flex",
               flexDirection: "column",
-              gap: 20,
+              boxShadow: "0 20px 45px rgba(0,0,0,0.2)",
+              overflow: "hidden",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: 14 }}>
+            {/* Modal Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", padding: "20px 28px 16px" }}>
               <div>
                 <h3 style={{ fontSize: 19, fontWeight: 700, color: "var(--text-main)" }}>Configuration & AI Skills</h3>
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
@@ -5846,386 +5846,421 @@ export function App() {
               </button>
             </div>
 
-            {/* 2-Column Split: Left = System Prompts & LLM Settings | Right = MCP Servers JSON */}
+            {/* Scrollable Content Body */}
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 24,
-                alignItems: "stretch",
+                flex: 1,
+                overflowY: "auto",
+                padding: "20px 28px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 20,
               }}
             >
-              {/* Left Column: LLM Settings & System Prompts */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
-                      LLM Base URL
-                    </label>
-                    <input
-                      type="text"
-                      value={config.llm.baseUrl}
-                      onChange={(e) =>
-                        setConfig({ ...config, llm: { ...config.llm, baseUrl: e.target.value } })
-                      }
-                      style={{
-                        width: "100%",
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border-color)",
-                        padding: "8px 12px",
-                        borderRadius: 6,
-                        color: "var(--text-main)",
-                        fontSize: 13,
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
-                      LLM Model Name
-                    </label>
-                    <input
-                      type="text"
-                      value={config.llm.model}
-                      onChange={(e) =>
-                        setConfig({ ...config, llm: { ...config.llm, model: e.target.value } })
-                      }
-                      style={{
-                        width: "100%",
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border-color)",
-                        padding: "8px 12px",
-                        borderRadius: 6,
-                        color: "var(--text-main)",
-                        fontSize: 13,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* API Key Input with Eye Toggle */}
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
-                    API Key (MiniMax / LLM Secret)
-                  </label>
-                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                    <input
-                      type={showApiKey ? "text" : "password"}
-                      value={config.llm.apiKey || ""}
-                      onChange={(e) =>
-                        setConfig({ ...config, llm: { ...config.llm, apiKey: e.target.value } })
-                      }
-                      placeholder="sk-cp-..."
-                      style={{
-                        width: "100%",
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border-color)",
-                        padding: "8px 40px 8px 12px",
-                        borderRadius: 6,
-                        color: "var(--text-main)",
-                        fontSize: 13,
-                        fontFamily: showApiKey ? "ui-monospace, monospace" : "inherit",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowApiKey((prev) => !prev)}
-                      title={showApiKey ? "Hide API Key" : "Show API Key"}
-                      style={{
-                        position: "absolute",
-                        right: 8,
-                        background: "transparent",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "var(--text-muted)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: 4,
-                        borderRadius: 4,
-                      }}
-                    >
-                      {showApiKey ? <EyeOff size={16} color="var(--accent)" /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* 🎙️ MiniMax Voice API Key Configuration */}
-                <div style={{ background: "rgba(16, 185, 129, 0.05)", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(16, 185, 129, 0.25)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: "#10b981", display: "flex", alignItems: "center", gap: 5 }}>
-                      <Volume2 size={13} color="#10b981" /> MiniMax Voice API Key (TTS Dedicated Key)
-                    </label>
-                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                      Leave blank to use main LLM API Key
-                    </span>
-                  </div>
-                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                    <input
-                      type={showVoiceApiKey ? "text" : "password"}
-                      value={config.voice?.apiKey || ""}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          voice: {
-                            baseUrl: config.voice?.baseUrl || "https://api.minimaxi.com/v1",
-                            apiKey: e.target.value,
-                            model: config.voice?.model || "speech-2.8-hd",
-                            voiceId: config.voice?.voiceId || "Cantonese_CuteGirl",
-                            speed: config.voice?.speed ?? 1.0,
-                            enabled: config.voice?.enabled ?? true,
-                          },
-                        })
-                      }
-                      placeholder="Leave blank to inherit LLM API Key (e.g. sk-cp-...)"
-                      style={{
-                        width: "100%",
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border-color)",
-                        padding: "8px 40px 8px 12px",
-                        borderRadius: 6,
-                        color: "var(--text-main)",
-                        fontSize: 13,
-                        fontFamily: showVoiceApiKey ? "ui-monospace, monospace" : "inherit",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowVoiceApiKey((prev) => !prev)}
-                      title={showVoiceApiKey ? "Hide Voice API Key" : "Show Voice API Key"}
-                      style={{
-                        position: "absolute",
-                        right: 8,
-                        background: "transparent",
-                        border: "none",
-                        cursor: "pointer",
-                        color: "var(--text-muted)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: 4,
-                        borderRadius: 4,
-                      }}
-                    >
-                      {showVoiceApiKey ? <EyeOff size={16} color="#10b981" /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Loop Execution & Model Parameters (Guardrail & Limits) */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, background: "var(--bg-primary)", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border-color)" }}>
-                  <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-                      <Activity size={12} /> Max Loop Steps
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={config.maxLoopIterations ?? 10}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          maxLoopIterations: Math.max(1, parseInt(e.target.value, 10) || 10),
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border-color)",
-                        padding: "6px 8px",
-                        borderRadius: 6,
-                        color: "var(--text-main)",
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}
-                    />
-                    <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
-                      Guardrail limit (default: 10). Increase to 20-30 for multi-step MCP tasks.
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-                      <Sparkles size={12} color="#a855f7" /> Temperature
-                    </label>
-                    <input
-                      type="number"
-                      step="0.05"
-                      min={0}
-                      max={2}
-                      value={config.llm.temperature ?? 0.7}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          llm: { ...config.llm, temperature: parseFloat(e.target.value) || 0 },
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border-color)",
-                        padding: "6px 8px",
-                        borderRadius: 6,
-                        color: "var(--text-main)",
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}
-                    />
-                    <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
-                      Randomness (0 = precise, 1 = creative).
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-                      <Cpu size={12} color="#10b981" /> Max Tokens
-                    </label>
-                    <input
-                      type="number"
-                      step="512"
-                      min={512}
-                      max={65536}
-                      value={config.llm.maxTokens ?? 4096}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          llm: { ...config.llm, maxTokens: parseInt(e.target.value, 10) || 4096 },
-                        })
-                      }
-                      style={{
-                        width: "100%",
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border-color)",
-                        padding: "6px 8px",
-                        borderRadius: 6,
-                        color: "var(--text-main)",
-                        fontSize: 13,
-                        fontWeight: 600,
-                      }}
-                    />
-                    <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
-                      Max completion tokens per call.
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
-                    System Prompt
-                  </label>
-                  <textarea
-                    rows={5}
-                    value={config.prompts.systemPrompt}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        prompts: { ...config.prompts, systemPrompt: e.target.value },
-                      })
-                    }
-                    placeholder="Enter the system behavior instructions..."
-                    style={{
-                      width: "100%",
-                      background: "var(--bg-card)",
-                      border: "1px solid var(--border-color)",
-                      padding: 10,
-                      borderRadius: 6,
-                      color: "var(--text-main)",
-                      fontSize: 13,
-                      lineHeight: 1.5,
-                      resize: "vertical",
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
-                    AI Skills & Protocols Prompt
-                  </label>
-                  <textarea
-                    rows={6}
-                    value={config.prompts.skillsPrompt}
-                    onChange={(e) =>
-                      setConfig({
-                        ...config,
-                        prompts: { ...config.prompts, skillsPrompt: e.target.value },
-                      })
-                    }
-                    placeholder="Enter skills and reasoning protocols..."
-                    style={{
-                      width: "100%",
-                      background: "var(--bg-card)",
-                      border: "1px solid var(--border-color)",
-                      padding: 10,
-                      borderRadius: 6,
-                      color: "var(--text-main)",
-                      fontFamily: "ui-monospace, monospace",
-                      fontSize: 12,
-                      lineHeight: 1.5,
-                      resize: "vertical",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Right Column: MCP & Skill Hub Hub Shortcut */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ border: "1px solid var(--border-color)", background: "var(--bg-primary)", borderRadius: 10, padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(37, 99, 235, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#3b82f6" }}>
-                      <Wrench size={18} />
-                    </div>
+              {/* 2-Column Split: Left = System Prompts & LLM Settings | Right = AI Skills & Protocols + Tool Hub */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 24,
+                  alignItems: "stretch",
+                }}
+              >
+                {/* Left Column: LLM Settings & System Prompt */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>
-                        Agentic Tools & Skills Hub
-                      </div>
-                      <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
-                        Unified Manager for MCP Servers & AI Workflows
-                      </div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
+                        LLM Base URL
+                      </label>
+                      <input
+                        type="text"
+                        value={config.llm.baseUrl}
+                        onChange={(e) =>
+                          setConfig({ ...config, llm: { ...config.llm, baseUrl: e.target.value } })
+                        }
+                        style={{
+                          width: "100%",
+                          background: "var(--bg-card)",
+                          border: "1px solid var(--border-color)",
+                          padding: "8px 12px",
+                          borderRadius: 6,
+                          color: "var(--text-main)",
+                          fontSize: 13,
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
+                        LLM Model Name
+                      </label>
+                      <input
+                        type="text"
+                        value={config.llm.model}
+                        onChange={(e) =>
+                          setConfig({ ...config, llm: { ...config.llm, model: e.target.value } })
+                        }
+                        style={{
+                          width: "100%",
+                          background: "var(--bg-card)",
+                          border: "1px solid var(--border-color)",
+                          padding: "8px 12px",
+                          borderRadius: 6,
+                          color: "var(--text-main)",
+                          fontSize: 13,
+                        }}
+                      />
                     </div>
                   </div>
 
-                  <p style={{ fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
-                    MCP Server registration and Skills management are now centrally consolidated in the <strong>Agentic Tools & Skills Hub</strong>. You can inspect all mounted tools, connect new servers via GUI or raw JSON, and manage global/workspace skills without restarting.
-                  </p>
+                  {/* API Key Input with Eye Toggle */}
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
+                      API Key (MiniMax / LLM Secret)
+                    </label>
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                      <input
+                        type={showApiKey ? "text" : "password"}
+                        value={config.llm.apiKey || ""}
+                        onChange={(e) =>
+                          setConfig({ ...config, llm: { ...config.llm, apiKey: e.target.value } })
+                        }
+                        placeholder="sk-cp-..."
+                        style={{
+                          width: "100%",
+                          background: "var(--bg-card)",
+                          border: "1px solid var(--border-color)",
+                          padding: "8px 40px 8px 12px",
+                          borderRadius: 6,
+                          color: "var(--text-main)",
+                          fontSize: 13,
+                          fontFamily: showApiKey ? "ui-monospace, monospace" : "inherit",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey((prev) => !prev)}
+                        title={showApiKey ? "Hide API Key" : "Show API Key"}
+                        style={{
+                          position: "absolute",
+                          right: 8,
+                          background: "transparent",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "var(--text-muted)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: 4,
+                          borderRadius: 4,
+                        }}
+                      >
+                        {showApiKey ? <EyeOff size={16} color="var(--accent)" /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
 
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-card)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border-color)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <CheckCircle2 size={16} color="#10b981" />
-                      <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)" }}>
-                        {activeToolsList.length} Active Tools Mounted
+                  {/* 🎙️ MiniMax Voice API Key Configuration */}
+                  <div style={{ background: "rgba(16, 185, 129, 0.05)", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(16, 185, 129, 0.25)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: "#10b981", display: "flex", alignItems: "center", gap: 5 }}>
+                        <Volume2 size={13} color="#10b981" /> MiniMax Voice API Key (TTS Dedicated Key)
+                      </label>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                        Leave blank to use main LLM API Key
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowConfig(false);
-                        setShowToolHubModal(true);
-                      }}
+                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                      <input
+                        type={showVoiceApiKey ? "text" : "password"}
+                        value={config.voice?.apiKey || ""}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            voice: {
+                              baseUrl: config.voice?.baseUrl || "https://api.minimaxi.com/v1",
+                              apiKey: e.target.value,
+                              model: config.voice?.model || "speech-2.8-hd",
+                              voiceId: config.voice?.voiceId || "Cantonese_CuteGirl",
+                              speed: config.voice?.speed ?? 1.0,
+                              enabled: config.voice?.enabled ?? true,
+                            },
+                          })
+                        }
+                        placeholder="Leave blank to inherit LLM API Key (e.g. sk-cp-...)"
+                        style={{
+                          width: "100%",
+                          background: "var(--bg-card)",
+                          border: "1px solid var(--border-color)",
+                          padding: "8px 40px 8px 12px",
+                          borderRadius: 6,
+                          color: "var(--text-main)",
+                          fontSize: 13,
+                          fontFamily: showVoiceApiKey ? "ui-monospace, monospace" : "inherit",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowVoiceApiKey((prev) => !prev)}
+                        title={showVoiceApiKey ? "Hide Voice API Key" : "Show Voice API Key"}
+                        style={{
+                          position: "absolute",
+                          right: 8,
+                          background: "transparent",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "var(--text-muted)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: 4,
+                          borderRadius: 4,
+                        }}
+                      >
+                        {showVoiceApiKey ? <EyeOff size={16} color="#10b981" /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Loop Execution & Model Parameters (Guardrail & Limits) */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, background: "var(--bg-primary)", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                    <div>
+                      <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                        <Activity size={12} /> Max Loop Steps
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={config.maxLoopIterations ?? 10}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            maxLoopIterations: Math.max(1, parseInt(e.target.value, 10) || 10),
+                          })
+                        }
+                        style={{
+                          width: "100%",
+                          background: "var(--bg-card)",
+                          border: "1px solid var(--border-color)",
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          color: "var(--text-main)",
+                          fontSize: 13,
+                          fontWeight: 600,
+                        }}
+                      />
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
+                        Guardrail limit (default: 10). Increase to 20-30 for multi-step MCP tasks.
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                        <Sparkles size={12} color="#a855f7" /> Temperature
+                      </label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        min={0}
+                        max={2}
+                        value={config.llm.temperature ?? 0.7}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            llm: { ...config.llm, temperature: parseFloat(e.target.value) || 0 },
+                          })
+                        }
+                        style={{
+                          width: "100%",
+                          background: "var(--bg-card)",
+                          border: "1px solid var(--border-color)",
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          color: "var(--text-main)",
+                          fontSize: 13,
+                          fontWeight: 600,
+                        }}
+                      />
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
+                        Randomness (0 = precise, 1 = creative).
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                        <Cpu size={12} color="#10b981" /> Max Tokens
+                      </label>
+                      <input
+                        type="number"
+                        step="512"
+                        min={512}
+                        max={65536}
+                        value={config.llm.maxTokens ?? 4096}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            llm: { ...config.llm, maxTokens: parseInt(e.target.value, 10) || 4096 },
+                          })
+                        }
+                        style={{
+                          width: "100%",
+                          background: "var(--bg-card)",
+                          border: "1px solid var(--border-color)",
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          color: "var(--text-main)",
+                          fontSize: 13,
+                          fontWeight: 600,
+                        }}
+                      />
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
+                        Max completion tokens per call.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
+                      System Prompt
+                    </label>
+                    <textarea
+                      rows={6}
+                      value={config.prompts.systemPrompt}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          prompts: { ...config.prompts, systemPrompt: e.target.value },
+                        })
+                      }
+                      placeholder="Enter the system behavior instructions..."
                       style={{
-                        padding: "6px 14px",
+                        width: "100%",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border-color)",
+                        padding: 10,
                         borderRadius: 6,
-                        border: "none",
-                        background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                        color: "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: "pointer",
+                        color: "var(--text-main)",
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                        resize: "vertical",
                       }}
-                    >
-                      Open Tool Hub →
-                    </button>
+                    />
                   </div>
                 </div>
 
-                {/* Additional tips */}
-                <div style={{ fontSize: 11.5, color: "var(--text-muted)", padding: "8px 12px", background: "rgba(0,0,0,0.03)", borderRadius: 8, border: "1px solid var(--border-color)" }}>
-                  💡 <strong>Tip:</strong> MiniBot can also autonomously search, install, and mount MCP servers during reasoning loops on the fly.
+                {/* Right Column: AI Skills & Protocols Prompt + MCP Hub Shortcut */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {/* AI Skills & Protocols Prompt placed on the right */}
+                  <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: "var(--accent, #0284c7)", display: "flex", alignItems: "center", gap: 6 }}>
+                        <Sparkles size={14} /> AI Skills & Protocols Prompt
+                      </label>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        Agent dynamic skill discovery & execution rules
+                      </span>
+                    </div>
+                    <textarea
+                      rows={10}
+                      value={config.prompts.skillsPrompt}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          prompts: { ...config.prompts, skillsPrompt: e.target.value },
+                        })
+                      }
+                      placeholder="Enter skills and reasoning protocols..."
+                      style={{
+                        width: "100%",
+                        flex: 1,
+                        minHeight: 180,
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border-color)",
+                        padding: 10,
+                        borderRadius: 6,
+                        color: "var(--text-main)",
+                        fontFamily: "ui-monospace, monospace",
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+
+                  {/* MCP & Skill Hub Hub Shortcut */}
+                  <div style={{ border: "1px solid var(--border-color)", background: "var(--bg-primary)", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(2, 132, 199, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent, #0284c7)" }}>
+                        <Wrench size={16} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)" }}>
+                          Agentic Tools & Skills Hub
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                          Unified Manager for MCP Servers & AI Workflows
+                        </div>
+                      </div>
+                    </div>
+
+                    <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, margin: 0 }}>
+                      MCP Server registration and Skills management are now centrally consolidated in the <strong>Agentic Tools & Skills Hub</strong>.
+                    </p>
+
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-card)", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <CheckCircle2 size={15} color="#10b981" />
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-main)" }}>
+                          {activeToolsList.length} Active Tools Mounted
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowConfig(false);
+                          setShowToolHubModal(true);
+                        }}
+                        style={{
+                          padding: "6px 14px",
+                          borderRadius: 6,
+                          border: "none",
+                          background: "linear-gradient(135deg, var(--accent, #0284c7), #0369a1)",
+                          color: "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          boxShadow: "0 2px 4px rgba(2, 132, 199, 0.25)",
+                        }}
+                      >
+                        Open Tool Hub →
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Additional tips */}
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "8px 12px", background: "rgba(0,0,0,0.02)", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                    💡 <strong>Tip:</strong> MiniBot can also autonomously search, install, and mount MCP servers during reasoning loops on the fly.
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, borderTop: "1px solid var(--border-color)", paddingTop: 16 }}>
+            {/* Sticky Bottom Action Bar with Always Visible Save Button */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                alignItems: "center",
+                gap: 12,
+                borderTop: "1px solid var(--border-color)",
+                padding: "14px 28px",
+                background: "var(--bg-secondary)",
+                boxShadow: "0 -4px 12px rgba(0,0,0,0.05)",
+                zIndex: 10,
+              }}
+            >
               <button
                 onClick={() => setShowConfig(false)}
                 style={{
@@ -6244,17 +6279,21 @@ export function App() {
               <button
                 onClick={saveConfig}
                 style={{
-                  padding: "9px 20px",
+                  padding: "9px 24px",
                   borderRadius: 6,
-                  background: "#1f6feb",
+                  background: "linear-gradient(135deg, var(--accent, #0284c7), #0369a1)",
                   border: "none",
                   color: "#fff",
                   cursor: "pointer",
-                  fontWeight: 600,
+                  fontWeight: 700,
                   fontSize: 13,
-                  boxShadow: "0 2px 4px rgba(31, 111, 235, 0.25)",
+                  boxShadow: "0 2px 6px rgba(2, 132, 199, 0.35)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
                 }}
               >
+                <Save size={15} />
                 Save Changes
               </button>
             </div>
