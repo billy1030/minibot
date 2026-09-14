@@ -138,10 +138,23 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     }
   };
 
+  const fetchCurrentMcpConfig = async () => {
+    try {
+      const res = await fetch("/api/config", { credentials: "include" });
+      const data = await res.json();
+      if (data?.mcpServers) {
+        setRawJsonText(JSON.stringify(data.mcpServers, null, 2));
+      }
+    } catch (e) {
+      console.warn("Could not fetch current MCP config:", e);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setMessage(null);
       fetchSkills();
+      fetchCurrentMcpConfig();
     }
   }, [isOpen, currentWorkspace]);
 
@@ -159,7 +172,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     setIsRefreshing(true);
     setMessage(null);
     try {
-      await Promise.all([onRefreshTools(), fetchSkills()]);
+      await Promise.all([onRefreshTools(), fetchSkills(), fetchCurrentMcpConfig()]);
       setMessage({ text: "Tools and Skills refreshed successfully!", isError: false });
     } catch (err: any) {
       setMessage({ text: err.message || "Failed to refresh", isError: true });
