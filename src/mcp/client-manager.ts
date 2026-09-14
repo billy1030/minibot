@@ -318,6 +318,14 @@ export class MCPClientManager {
           toolsAdded.push(tool.name);
         }
         console.log(`[MCP Dynamic] Registered stdio server "${serverName}" (${toolsAdded.length} tools)`);
+        // Also attach in-process meta-tools for web-search/minimax if applicable
+        const builtins = BUILTIN_INPROCESS_TOOLS.filter((t) => t.serverName === serverName);
+        for (const tool of builtins) {
+          if (!this.tools.has(tool.name)) {
+            this.tools.set(tool.name, tool);
+            toolsAdded.push(tool.name);
+          }
+        }
         return { success: true, toolsAdded };
       } else {
         // In-process fallback or virtual server
