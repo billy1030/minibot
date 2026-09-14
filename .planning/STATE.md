@@ -22,6 +22,9 @@
   - Token and character count estimation metrics in chat bubble footers
 
 ## Next Phase
-- **Phase 5: Dynamic Agentic Tool & Skill Hub (Self-Equipping Agent)** [IN PLANNING]
-  - Hot-reloadable MCP client manager, autonomous tool discovery & installation meta-tools, dynamic markdown skill ingestion, and frontend Tool & Skill Hub.
+- **Phase 5: Dynamic Agentic Tool & Skill Hub (Self-Equipping Agent)** [IN PROGRESS - Tasks 1, 2, 3 Implemented & Tested]
+  - Task 1: Hot-reloadable MCP client manager (`registerServerDynamically`, `unregisterServer`).
+  - Task 2: Self-equipping meta-tools (`search_available_tools`, `install_mcp_package`, `list_active_tools`, `download_remote_file`, `read_office_document`, `create_excel_spreadsheet`).
+  - Task 3: Dual-scope Skill Store (`global` and per-`workspace` in `.minibot/skills` & `logs/[user]/[workspace]/.skills/`) with dynamic frontmatter parsing and prompt injection.
+  - Task 4 & 5: REST API endpoints (`/api/skills`, `/api/tools`) and UI Tools & Skills Hub drawer with live capability badges.
 

@@ -231,3 +231,35 @@ export async function installMcpPackage(
     return `Error during tool installation: ${err.message}`;
   }
 }
+
+/**
+ * Autonomously save or update an agent skill recipe into Global or Workspace scope
+ */
+export async function installSkillTool(
+  skillName: string,
+  content: string,
+  scope: "global" | "workspace" = "global",
+  workspace: string = "default"
+): Promise<string> {
+  const { globalSkillManager } = await import("../skills/skill-manager.js");
+  const res = globalSkillManager.saveSkill(skillName, content, scope, workspace);
+  if (!res.success) {
+    return `❌ Failed to save skill: ${res.error}`;
+  }
+  return `✨ Skill "${skillName}" successfully saved to ${scope.toUpperCase()} scope at \`${res.filePath}\`! It will be automatically injected whenever relevant tasks are run.`;
+}
+
+/**
+ * List all skills available in the environment
+ */
+export async function listSkillsTool(workspace: string = "default"): Promise<string> {
+  const { globalSkillManager } = await import("../skills/skill-manager.js");
+  const skills = globalSkillManager.listAvailableSkills(workspace);
+  if (skills.length === 0) return "No skills are currently registered.";
+
+  const lines = skills.map(
+    (s) => `• **${s.name}** [${s.scope.toUpperCase()}${s.workspace ? ` / ${s.workspace}` : ""}]: ${s.description || "No description"}`
+  );
+  return `### 📚 Available Skills (${skills.length}):\n${lines.join("\n")}`;
+}
+

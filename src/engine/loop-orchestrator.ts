@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { LoopConfig } from "../config/schema.js";
 import { LLMClient } from "../llm/client.js";
 import { MCPClientManager } from "../mcp/client-manager.js";
+import { globalSkillManager } from "../skills/skill-manager.js";
 
 export interface LoopEventCallbacks {
   onStepStart?: (iteration: number) => void;
@@ -31,7 +32,9 @@ export class LoopOrchestrator {
     callbacks?: LoopEventCallbacks,
     history?: Array<{ role: "user" | "assistant"; content: string }>,
     attachedContext?: string,
-    enableThinking: boolean = true
+    enableThinking: boolean = true,
+    workspace: string = "default",
+    userNumber: string = "00000"
   ): Promise<{ answer: string; iterations: number; history: OpenAI.Chat.Completions.ChatCompletionMessageParam[] }> {
     // 1. Build initial system message combining system prompt, attached docs, and AI skills
     const systemPromptParts = [this.config.prompts.systemPrompt];
@@ -48,6 +51,16 @@ export class LoopOrchestrator {
       "\n--- Active AI Skills & Instructions ---\n",
       this.config.prompts.skillsPrompt
     );
+
+    // Dynamically resolve and inject global & workspace-scoped skills
+    const resolvedSkills = globalSkillManager.resolveSkillPromptSection(
+      userPrompt,
+      workspace || "default",
+      userNumber || "00000"
+    );
+    if (resolvedSkills && resolvedSkills.trim().length > 0) {
+      systemPromptParts.push("\n" + resolvedSkills);
+    }
 
     if (!enableThinking) {
       systemPromptParts.push(

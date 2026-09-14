@@ -476,6 +476,29 @@ export const BUILTIN_INPROCESS_TOOLS: DiscoveredTool[] = [
       properties: {},
     },
   },
+  {
+    serverName: "web-search",
+    name: "install_skill",
+    description: "Save or create a reusable agent workflow skill recipe into Global or Workspace scope. The skill will be automatically activated when relevant tasks or triggers are encountered.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        skillName: { type: "string", description: "Identifier name for the skill (e.g. data-analyst, bigfix-patching-sop)" },
+        content: { type: "string", description: "Full Markdown instruction content for the skill (can include frontmatter with name, description, triggers)" },
+        scope: { type: "string", enum: ["global", "workspace"], description: "Storage scope ('global' available everywhere, or 'workspace' for the current workspace only)" },
+      },
+      required: ["skillName", "content"],
+    },
+  },
+  {
+    serverName: "web-search",
+    name: "list_skills",
+    description: "List all available skills (Global and Workspace-scoped) registered in MiniBot.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
 ];
 
 export async function executeInProcessTool(name: string, args: Record<string, any>, mcpManager?: any): Promise<string | null> {
@@ -509,6 +532,19 @@ export async function executeInProcessTool(name: string, args: Record<string, an
         Array.isArray(args?.args) ? args.args : [],
         args?.env
       );
+    }
+    case "install_skill": {
+      const { installSkillTool } = await import("./meta-tools.js");
+      return await installSkillTool(
+        String(args?.skillName || ""),
+        String(args?.content || ""),
+        (args?.scope as any) || "global",
+        args?.workspace || "default"
+      );
+    }
+    case "list_skills": {
+      const { listSkillsTool } = await import("./meta-tools.js");
+      return await listSkillsTool(args?.workspace || "default");
     }
     case "minimax_search":
       return await minimaxSearch(String(args?.query || ""));

@@ -36,6 +36,7 @@ import {
   renameWorkspace,
 } from "./logger/conversation-logger.js";
 import { DocumentManager } from "./documents/document-manager.js";
+import { globalSkillManager } from "./skills/skill-manager.js";
 import {
   getUsers,
   saveUsers,
@@ -802,6 +803,56 @@ app.delete("/api/tools/:serverName", requireAuth, async (req, res) => {
   }
 });
 
+// ==========================================
+// 3c. Dual-Scope Skills Endpoints (Global & Per-Workspace)
+// ==========================================
+app.get("/api/skills", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const workspace = String(req.query.workspace || "default");
+    const skills = globalSkillManager.listAvailableSkills(workspace, userNumber);
+    res.json({ success: true, skills, workspace });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/skills/content", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const skillName = String(req.query.name || "");
+    const workspace = String(req.query.workspace || "default");
+    if (!skillName) return res.status(400).json({ success: false, error: "Skill name required." });
+
+    const content = globalSkillManager.getSkillContent(skillName, workspace, userNumber);
+    if (!content) return res.status(404).json({ success: false, error: "Skill not found." });
+
+    res.json({ success: true, name: skillName, content });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/skills", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const { name, content, scope = "global", workspace = "default" } = req.body;
+    if (!name || !content) {
+      return res.status(400).json({ success: false, error: "Name and content are required." });
+    }
+
+    const result = globalSkillManager.saveSkill(name, content, scope, workspace, userNumber);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, name, scope, workspace, filePath: result.filePath });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 
 // 3b. Server-side LLM Proxy & Health Test (Bypasses all client-side CORS and protects API keys)
 app.post("/api/llm/completions", requireAuth, async (req, res) => {
@@ -1046,7 +1097,9 @@ app.post("/api/chat", requireAuth, async (req, res) => {
       },
       history,
       attachedContext,
-      enableThinking
+      enableThinking,
+      workspace || "default",
+      userNumber
     );
   } catch (err: any) {
     sendEvent("error", { message: err.message });

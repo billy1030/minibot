@@ -6458,6 +6458,7 @@ export function App() {
         onRefreshTools={fetchTools}
         onInstallServer={handleInstallMcpServer}
         onDeleteServer={handleDeleteMcpServer}
+        currentWorkspace={currentWorkspace}
       />
     </div>
   );

@@ -1,11 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { Wrench, X, RefreshCw, Plus, Trash2, CheckCircle2, AlertCircle, Box } from "lucide-react";
+import { Wrench, X, RefreshCw, Plus, Trash2, CheckCircle2, AlertCircle, Box, BookOpen, Globe, Folder, Code } from "lucide-react";
 
 export interface ToolItem {
   serverName: string;
   name: string;
   description?: string;
   inputSchema?: any;
+}
+
+export interface SkillItem {
+  name: string;
+  description: string;
+  scope: "global" | "workspace";
+  workspace?: string;
+  dirPath: string;
+  filePath: string;
+  triggers?: string[];
 }
 
 interface ToolHubModalProps {
@@ -15,6 +25,7 @@ interface ToolHubModalProps {
   onRefreshTools: () => Promise<void>;
   onInstallServer: (serverData: { name: string; command?: string; args?: string[]; url?: string; description?: string }) => Promise<{ success: boolean; error?: string }>;
   onDeleteServer: (serverName: string) => Promise<{ success: boolean; error?: string }>;
+  currentWorkspace?: string;
 }
 
 export const ToolHubModal: React.FC<ToolHubModalProps> = ({
@@ -24,11 +35,21 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
   onRefreshTools,
   onInstallServer,
   onDeleteServer,
+  currentWorkspace = "default",
 }) => {
-  const [activeTab, setActiveTab] = useState<"installed" | "install">("installed");
+  const [activeTab, setActiveTab] = useState<"installed" | "skills" | "install">("installed");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+  // Skills state
+  const [skills, setSkills] = useState<SkillItem[]>([]);
+  const [selectedSkillContent, setSelectedSkillContent] = useState<{ name: string; content: string } | null>(null);
+  const [isLoadingSkills, setIsLoadingSkills] = useState<boolean>(false);
+  const [isCreatingSkill, setIsCreatingSkill] = useState<boolean>(false);
+  const [newSkillName, setNewSkillName] = useState("");
+  const [newSkillScope, setNewSkillScope] = useState<"global" | "workspace">("workspace");
+  const [newSkillContent, setNewSkillContent] = useState("");
 
   // Form states for installing an MCP server
   const [serverName, setServerName] = useState("");
@@ -38,11 +59,80 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
 
+  const fetchSkills = async () => {
+    setIsLoadingSkills(true);
+    try {
+      const res = await fetch(`/api/skills?workspace=${encodeURIComponent(currentWorkspace)}`, {
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (data.skills) {
+        setSkills(data.skills);
+      }
+    } catch (e) {
+      console.error("Failed to load skills:", e);
+    } finally {
+      setIsLoadingSkills(false);
+    }
+  };
+
+  const loadSkillContent = async (skillName: string) => {
+    try {
+      const res = await fetch(
+        `/api/skills/content?name=${encodeURIComponent(skillName)}&workspace=${encodeURIComponent(currentWorkspace)}`,
+        { credentials: "include" }
+      );
+      const data = await res.json();
+      if (data.success && data.content) {
+        setSelectedSkillContent({ name: skillName, content: data.content });
+      }
+    } catch (err: any) {
+      alert("Failed to fetch skill content: " + err.message);
+    }
+  };
+
+  const handleSaveSkill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSkillName.trim() || !newSkillContent.trim()) {
+      setMessage({ text: "Skill name and markdown content are required", isError: true });
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          name: newSkillName.trim(),
+          content: newSkillContent.trim(),
+          scope: newSkillScope,
+          workspace: currentWorkspace,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({ text: `Skill "${newSkillName}" created successfully!`, isError: false });
+        setIsCreatingSkill(false);
+        setNewSkillName("");
+        setNewSkillContent("");
+        await fetchSkills();
+      } else {
+        setMessage({ text: data.error || "Failed to save skill", isError: true });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Network error", isError: true });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setMessage(null);
+      fetchSkills();
     }
-  }, [isOpen]);
+  }, [isOpen, currentWorkspace]);
 
   if (!isOpen) return null;
 
@@ -58,10 +148,10 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     setIsRefreshing(true);
     setMessage(null);
     try {
-      await onRefreshTools();
-      setMessage({ text: "Tools refreshed successfully!", isError: false });
+      await Promise.all([onRefreshTools(), fetchSkills()]);
+      setMessage({ text: "Tools and Skills refreshed successfully!", isError: false });
     } catch (err: any) {
-      setMessage({ text: err.message || "Failed to refresh tools", isError: true });
+      setMessage({ text: err.message || "Failed to refresh", isError: true });
     } finally {
       setIsRefreshing(false);
     }
@@ -136,14 +226,14 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     >
       <div
         style={{
-          width: "100%",
-          maxWidth: 820,
-          maxHeight: "88vh",
-          backgroundColor: "var(--bg-card, #1e2433)",
-          color: "var(--text-main, #f8fafc)",
+          width: "82vw",
+          maxWidth: "82vw",
+          maxHeight: "90vh",
+          backgroundColor: "var(--bg-secondary, #ffffff)",
+          color: "var(--text-main, #0f172a)",
           borderRadius: 14,
-          border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-          boxShadow: "0 20px 40px rgba(0, 0, 0, 0.4)",
+          border: "1px solid var(--border-color, #cbd5e1)",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -152,12 +242,12 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
         {/* Header */}
         <div
           style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.08))",
+            padding: "16px 24px",
+            borderBottom: "1px solid var(--border-color, #e2e8f0)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            background: "rgba(0,0,0,0.15)",
+            background: "var(--bg-card, #f8fafc)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -180,18 +270,18 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                 <span
                   style={{
                     fontSize: 11,
-                    padding: "2px 8px",
-                    borderRadius: 12,
                     background: "rgba(59, 130, 246, 0.2)",
                     color: "#60a5fa",
-                    border: "1px solid rgba(59, 130, 246, 0.3)",
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    fontWeight: 600,
                   }}
                 >
-                  {tools.length} Active Tools
+                  {tools.length} Tools Active • {skills.length} Skills
                 </span>
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-muted, #94a3b8)" }}>
-                Hot-reloadable Model Context Protocol (MCP) servers & autonomous document tools
+              <div style={{ fontSize: 11, color: "var(--text-muted, #94a3b8)", marginTop: 2 }}>
+                Dual-Scope MCP Hot-Reloading & Persistent Agent Skills (Workspace: <code>{currentWorkspace}</code>)
               </div>
             </div>
           </div>
@@ -200,7 +290,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              title="Refresh tools from active servers"
+              title="Refresh tools and skills"
               style={{
                 background: "transparent",
                 border: "1px solid var(--border-color, rgba(255,255,255,0.15))",
@@ -236,9 +326,10 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
         <div
           style={{
             display: "flex",
-            gap: 12,
-            padding: "10px 20px 0 20px",
-            borderBottom: "1px solid var(--border-color, rgba(255, 255, 255, 0.08))",
+            gap: 8,
+            padding: "8px 24px 0 24px",
+            borderBottom: "1px solid var(--border-color, #e2e8f0)",
+            background: "var(--bg-secondary, #ffffff)",
           }}
         >
           <button
@@ -246,33 +337,51 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
             style={{
               background: "none",
               border: "none",
-              borderBottom: activeTab === "installed" ? "2px solid #3b82f6" : "2px solid transparent",
-              color: activeTab === "installed" ? "#60a5fa" : "var(--text-muted, #94a3b8)",
-              padding: "8px 12px",
+              borderBottom: activeTab === "installed" ? "2px solid #1d4ed8" : "2px solid transparent",
+              color: activeTab === "installed" ? "#1d4ed8" : "var(--text-muted, #64748b)",
+              padding: "10px 14px",
               fontSize: 13,
-              fontWeight: 600,
+              fontWeight: 700,
               cursor: "pointer",
             }}
           >
-            Active Servers & Capabilities ({Object.keys(groupedTools).length})
+            Active MCP Servers ({Object.keys(groupedTools).length})
           </button>
           <button
-            onClick={() => setActiveTab("install")}
+            onClick={() => setActiveTab("skills")}
             style={{
               background: "none",
               border: "none",
-              borderBottom: activeTab === "install" ? "2px solid #3b82f6" : "2px solid transparent",
-              color: activeTab === "install" ? "#60a5fa" : "var(--text-muted, #94a3b8)",
-              padding: "8px 12px",
+              borderBottom: activeTab === "skills" ? "2px solid #1d4ed8" : "2px solid transparent",
+              color: activeTab === "skills" ? "#1d4ed8" : "var(--text-muted, #64748b)",
+              padding: "10px 14px",
               fontSize: 13,
-              fontWeight: 600,
+              fontWeight: 700,
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               gap: 6,
             }}
           >
-            <Plus size={14} /> Add / Connect MCP Server
+            <BookOpen size={15} /> Skills Library ({skills.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("install")}
+            style={{
+              background: "none",
+              border: "none",
+              borderBottom: activeTab === "install" ? "2px solid #1d4ed8" : "2px solid transparent",
+              color: activeTab === "install" ? "#1d4ed8" : "var(--text-muted, #64748b)",
+              padding: "10px 14px",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Plus size={15} /> Connect MCP Server
           </button>
         </div>
 
@@ -301,88 +410,334 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
         <div style={{ padding: 20, overflowY: "auto", flex: 1 }}>
           {activeTab === "installed" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {Object.entries(groupedTools).map(([sName, sTools]) => (
-                <div
-                  key={sName}
-                  style={{
-                    borderRadius: 10,
-                    border: "1px solid var(--border-color, rgba(255, 255, 255, 0.1))",
-                    background: "var(--bg-surface, rgba(255, 255, 255, 0.03))",
-                    padding: 16,
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Box size={16} color="#3b82f6" />
-                      <span style={{ fontWeight: 700, fontSize: 14 }}>{sName}</span>
-                      <span
-                        style={{
-                          fontSize: 11,
-                          padding: "2px 7px",
-                          borderRadius: 6,
-                          background: "rgba(34, 197, 94, 0.15)",
-                          color: "#4ade80",
-                          fontWeight: 600,
-                        }}
-                      >
-                        ● Connected ({sTools.length} tools)
-                      </span>
+              {Object.keys(groupedTools).length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+                  No active tools mounted.
+                </div>
+              ) : (
+                Object.entries(groupedTools).map(([sName, sTools]) => (
+                  <div
+                    key={sName}
+                    style={{
+                      borderRadius: 10,
+                      border: "1px solid var(--border-color, #e2e8f0)",
+                      background: "var(--bg-secondary, #ffffff)",
+                      overflow: "hidden",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "14px 18px",
+                        background: "var(--bg-card, #f8fafc)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        borderBottom: "1px solid var(--border-color, #e2e8f0)",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <Box size={18} color="#1d4ed8" />
+                        <span style={{ fontWeight: 700, fontSize: 15, color: "var(--text-main, #0f172a)" }}>{sName}</span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            padding: "2px 8px",
+                            borderRadius: 6,
+                            background: "rgba(22, 163, 74, 0.12)",
+                            color: "#15803d",
+                            border: "1px solid rgba(22, 163, 74, 0.3)",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {sTools.length} tools
+                        </span>
+                      </div>
+
+                      {sName !== "web-search" && sName !== "minimax-multimodal" && (
+                        <button
+                          onClick={() => handleDelete(sName)}
+                          title="Unregister this server"
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "#dc2626",
+                            cursor: "pointer",
+                            padding: 6,
+                            borderRadius: 6,
+                          }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
 
-                    {!["web-search", "minimax-multimodal"].includes(sName) && (
+                    <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                      {sTools.map((tool) => (
+                        <div
+                          key={tool.name}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                            padding: "12px 16px",
+                            borderRadius: 8,
+                            background: "var(--bg-card, #f8fafc)",
+                            border: "1px solid var(--border-color, #e2e8f0)",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <code
+                              style={{
+                                fontSize: 13.5,
+                                color: "#0f172a",
+                                fontWeight: 800,
+                                background: "rgba(2, 132, 199, 0.12)",
+                                padding: "2px 8px",
+                                borderRadius: 5,
+                                border: "1px solid rgba(2, 132, 199, 0.25)",
+                                letterSpacing: "0.2px",
+                              }}
+                            >
+                              {tool.name}
+                            </code>
+                          </div>
+                          {tool.description && (
+                            <div
+                              style={{
+                                fontSize: 13,
+                                color: "var(--text-main, #1e293b)",
+                                lineHeight: 1.6,
+                                whiteSpace: "pre-wrap",
+                                wordBreak: "break-word",
+                                marginTop: 2,
+                              }}
+                            >
+                              {tool.description}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {activeTab === "skills" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
+                  Skills are automatically resolved and injected when relevant prompts or triggers are detected.
+                </div>
+                <button
+                  onClick={() => setIsCreatingSkill(!isCreatingSkill)}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    border: "none",
+                    background: "var(--accent, #2563eb)",
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Plus size={13} /> {isCreatingSkill ? "Cancel" : "Add New Skill"}
+                </button>
+              </div>
+
+              {isCreatingSkill && (
+                <form onSubmit={handleSaveSkill} style={{ padding: 14, borderRadius: 8, background: "rgba(0,0,0,0.25)", border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Skill Name:</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. data-analyst, code-reviewer"
+                        value={newSkillName}
+                        onChange={(e) => setNewSkillName(e.target.value)}
+                        style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border-color)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 12.5 }}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Scope:</label>
+                      <select
+                        value={newSkillScope}
+                        onChange={(e) => setNewSkillScope(e.target.value as any)}
+                        style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border-color)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 12.5 }}
+                      >
+                        <option value="workspace">Per-Workspace ({currentWorkspace})</option>
+                        <option value="global">Global (Available Everywhere)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Markdown Recipe / SKILL.md Content:</label>
+                    <textarea
+                      rows={8}
+                      placeholder={`---\nname: my-skill\ndescription: How to accomplish task X\ntriggers: ["analyze", "review"]\n---\n\n## Instructions\nWhen the user asks...`}
+                      value={newSkillContent}
+                      onChange={(e) => setNewSkillContent(e.target.value)}
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid var(--border-color)", background: "rgba(0,0,0,0.3)", color: "#fff", fontSize: 12, fontFamily: "monospace" }}
+                      required
+                    />
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#10b981", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                    >
+                      {isSubmitting ? "Saving..." : "Save Skill"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {isLoadingSkills ? (
+                <div style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>Loading skills...</div>
+              ) : skills.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 30, color: "var(--text-muted)" }}>No skills discovered.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {skills.map((skill) => (
+                    <div
+                      key={skill.name}
+                      style={{
+                        padding: "14px 18px",
+                        borderRadius: 8,
+                        background: "var(--bg-card, #f8fafc)",
+                        border: "1px solid var(--border-color, #e2e8f0)",
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: 16,
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 800,
+                              color: "#0f172a",
+                              background: "rgba(2, 132, 199, 0.12)",
+                              padding: "2px 8px",
+                              borderRadius: 5,
+                              border: "1px solid rgba(2, 132, 199, 0.25)",
+                            }}
+                          >
+                            {skill.name}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: "2px 7px",
+                              borderRadius: 4,
+                              background: skill.scope === "global" ? "rgba(37, 99, 235, 0.12)" : "rgba(124, 58, 237, 0.12)",
+                              color: skill.scope === "global" ? "#1d4ed8" : "#6d28d9",
+                              border: `1px solid ${skill.scope === "global" ? "rgba(37, 99, 235, 0.25)" : "rgba(124, 58, 237, 0.25)"}`,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            {skill.scope === "global" ? <Globe size={11} /> : <Folder size={11} />}
+                            {skill.scope.toUpperCase()}{skill.workspace ? ` (${skill.workspace})` : ""}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            color: "var(--text-main, #1e293b)",
+                            marginTop: 8,
+                            lineHeight: 1.6,
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {skill.description || "No description provided."}
+                        </div>
+                        {skill.triggers && skill.triggers.length > 0 && (
+                          <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                            {skill.triggers.map((trig) => (
+                              <span
+                                key={trig}
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  padding: "2px 6px",
+                                  borderRadius: 4,
+                                  background: "rgba(0,0,0,0.06)",
+                                  color: "var(--text-main, #334155)",
+                                  border: "1px solid rgba(0,0,0,0.08)",
+                                }}
+                              >
+                                #{trig}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
                       <button
-                        onClick={() => handleDelete(sName)}
-                        title="Unregister MCP Server"
+                        onClick={() => loadSkillContent(skill.name)}
                         style={{
-                          background: "rgba(239, 68, 68, 0.1)",
-                          border: "1px solid rgba(239, 68, 68, 0.3)",
-                          color: "#f87171",
+                          padding: "6px 12px",
                           borderRadius: 6,
-                          padding: "4px 8px",
+                          border: "1px solid var(--border-color, #cbd5e1)",
+                          background: "var(--bg-secondary, #ffffff)",
+                          color: "var(--text-main, #0f172a)",
+                          fontSize: 12,
+                          fontWeight: 600,
                           cursor: "pointer",
                           display: "flex",
                           alignItems: "center",
-                          gap: 4,
-                          fontSize: 11.5,
+                          gap: 5,
+                          flexShrink: 0,
                         }}
                       >
-                        <Trash2 size={12} /> Remove
+                        <Code size={13} /> View Recipe
                       </button>
-                    )}
-                  </div>
-
-                  {/* List of tools */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 8 }}>
-                    {sTools.map((t) => (
-                      <div
-                        key={t.name}
-                        style={{
-                          padding: "8px 12px",
-                          borderRadius: 6,
-                          background: "rgba(0, 0, 0, 0.2)",
-                          border: "1px solid rgba(255, 255, 255, 0.05)",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                          <span style={{ fontFamily: "monospace", fontSize: 12.5, fontWeight: 600, color: "#93c5fd" }}>
-                            {t.name}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 11.5, color: "var(--text-muted, #94a3b8)", lineHeight: 1.4 }}>
-                          {t.description || "No description provided."}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+
+              {selectedSkillContent && (
+                <div style={{ marginTop: 10, padding: 14, borderRadius: 8, background: "rgba(0,0,0,0.4)", border: "1px solid var(--border-color)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>📄 {selectedSkillContent.name} (Preview)</span>
+                    <button
+                      onClick={() => setSelectedSkillContent(null)}
+                      style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <pre style={{ fontSize: 11.5, color: "#cbd5e1", maxHeight: 220, overflowY: "auto", whiteSpace: "pre-wrap", fontFamily: "monospace", margin: 0 }}>
+                    {selectedSkillContent.content}
+                  </pre>
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === "install" && (
             <form onSubmit={handleInstall} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
-                <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text-main, #0f172a)", marginBottom: 6 }}>
                   Server Identifier / Name:
                 </label>
                 <input
@@ -392,11 +747,11 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                   onChange={(e) => setServerName(e.target.value)}
                   style={{
                     width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: 7,
-                    border: "1px solid var(--border-color, rgba(255,255,255,0.15))",
-                    background: "rgba(0,0,0,0.25)",
-                    color: "#fff",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "1px solid var(--border-color, #cbd5e1)",
+                    background: "var(--bg-card, #f8fafc)",
+                    color: "var(--text-main, #0f172a)",
                     fontSize: 13,
                     outline: "none",
                   }}
@@ -405,11 +760,11 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text-main, #0f172a)", marginBottom: 6 }}>
                   Transport Type:
                 </label>
-                <div style={{ display: "flex", gap: 16 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                <div style={{ display: "flex", gap: 20 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-main, #1e293b)", cursor: "pointer", fontWeight: 600 }}>
                     <input
                       type="radio"
                       name="transportType"
@@ -418,7 +773,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                     />
                     Stdio (Local Process / npx / python)
                   </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-main, #1e293b)", cursor: "pointer", fontWeight: 600 }}>
                     <input
                       type="radio"
                       name="transportType"
@@ -433,7 +788,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
               {installType === "stdio" ? (
                 <>
                   <div>
-                    <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text-main, #0f172a)", marginBottom: 6 }}>
                       Command / Executable:
                     </label>
                     <input
@@ -443,11 +798,11 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                       onChange={(e) => setCommand(e.target.value)}
                       style={{
                         width: "100%",
-                        padding: "8px 12px",
-                        borderRadius: 7,
-                        border: "1px solid var(--border-color, rgba(255,255,255,0.15))",
-                        background: "rgba(0,0,0,0.25)",
-                        color: "#fff",
+                        padding: "10px 14px",
+                        borderRadius: 8,
+                        border: "1px solid var(--border-color, #cbd5e1)",
+                        background: "var(--bg-card, #f8fafc)",
+                        color: "var(--text-main, #0f172a)",
                         fontSize: 13,
                         outline: "none",
                       }}
@@ -456,45 +811,46 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
-                      Arguments (one per line):
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text-main, #0f172a)", marginBottom: 6 }}>
+                      Command Arguments (one per line):
                     </label>
                     <textarea
-                      placeholder={"-y\n@modelcontextprotocol/server-sqlite\n--db-path\ntest.db"}
+                      rows={3}
+                      placeholder={`-y\n@modelcontextprotocol/server-sqlite\n--db-path\nstorage/mydata.db`}
                       value={argsText}
                       onChange={(e) => setArgsText(e.target.value)}
-                      rows={4}
                       style={{
                         width: "100%",
-                        padding: "8px 12px",
-                        borderRadius: 7,
-                        border: "1px solid var(--border-color, rgba(255,255,255,0.15))",
-                        background: "rgba(0,0,0,0.25)",
-                        color: "#fff",
+                        padding: "10px 14px",
+                        borderRadius: 8,
+                        border: "1px solid var(--border-color, #cbd5e1)",
+                        background: "var(--bg-card, #f8fafc)",
+                        color: "var(--text-main, #0f172a)",
                         fontSize: 13,
                         fontFamily: "monospace",
                         outline: "none",
+                        lineHeight: 1.5,
                       }}
                     />
                   </div>
                 </>
               ) : (
                 <div>
-                  <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
-                    MCP Server URL:
+                  <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text-main, #0f172a)", marginBottom: 6 }}>
+                    Server URL (HTTP/SSE):
                   </label>
                   <input
                     type="url"
-                    placeholder="https://my-mcp-server.internal/mcp"
+                    placeholder="https://my-mcp-server.com/sse"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     style={{
                       width: "100%",
-                      padding: "8px 12px",
-                      borderRadius: 7,
-                      border: "1px solid var(--border-color, rgba(255,255,255,0.15))",
-                      background: "rgba(0,0,0,0.25)",
-                      color: "#fff",
+                      padding: "10px 14px",
+                      borderRadius: 8,
+                      border: "1px solid var(--border-color, #cbd5e1)",
+                      background: "var(--bg-card, #f8fafc)",
+                      color: "var(--text-main, #0f172a)",
                       fontSize: 13,
                       outline: "none",
                     }}
@@ -504,21 +860,21 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
               )}
 
               <div>
-                <label style={{ display: "block", fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
-                  Description / Purpose (Optional):
+                <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text-main, #0f172a)", marginBottom: 6 }}>
+                  Description (optional):
                 </label>
                 <input
                   type="text"
-                  placeholder="Provides SQLite local database queries"
+                  placeholder="Optional brief description of what this server provides"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   style={{
                     width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: 7,
-                    border: "1px solid var(--border-color, rgba(255,255,255,0.15))",
-                    background: "rgba(0,0,0,0.25)",
-                    color: "#fff",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "1px solid var(--border-color, #cbd5e1)",
+                    background: "var(--bg-card, #f8fafc)",
+                    color: "var(--text-main, #0f172a)",
                     fontSize: 13,
                     outline: "none",
                   }}
@@ -530,12 +886,13 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                   type="button"
                   onClick={() => setActiveTab("installed")}
                   style={{
-                    padding: "8px 16px",
-                    borderRadius: 7,
-                    border: "1px solid var(--border-color, rgba(255,255,255,0.15))",
-                    background: "transparent",
-                    color: "var(--text-main)",
+                    padding: "9px 18px",
+                    borderRadius: 8,
+                    border: "1px solid var(--border-color, #cbd5e1)",
+                    background: "var(--bg-card, #f8fafc)",
+                    color: "var(--text-main, #0f172a)",
                     fontSize: 13,
+                    fontWeight: 600,
                     cursor: "pointer",
                   }}
                 >
@@ -545,20 +902,21 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                   type="submit"
                   disabled={isSubmitting}
                   style={{
-                    padding: "8px 20px",
-                    borderRadius: 7,
+                    padding: "9px 22px",
+                    borderRadius: 8,
                     border: "none",
-                    background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+                    background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
                     color: "#fff",
-                    fontWeight: 600,
+                    fontWeight: 700,
                     fontSize: 13,
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
+                    boxShadow: "0 2px 4px rgba(37, 99, 235, 0.25)",
                   }}
                 >
-                  {isSubmitting ? <RefreshCw size={14} className="spin" /> : <Plus size={14} />}
+                  {isSubmitting ? <RefreshCw size={15} className="spin" /> : <Plus size={15} />}
                   Connect & Hot-Reload
                 </button>
               </div>
