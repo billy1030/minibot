@@ -194,6 +194,41 @@ export class SkillManager {
   }
 
   /**
+   * Delete a skill by name from either workspace or global scope
+   */
+  public deleteSkill(
+    skillName: string,
+    workspace: string = "default",
+    userNumber: string = "00000"
+  ): { success: boolean; error?: string } {
+    try {
+      const cleanName = skillName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+      if (!cleanName) return { success: false, error: "Invalid skill name" };
+
+      // 1. Try workspace first
+      const wsDir = getWorkspaceDir(workspace, "logs", userNumber);
+      const wsSkillDir = path.join(wsDir, ".skills", cleanName);
+      if (fs.existsSync(wsSkillDir)) {
+        fs.rmSync(wsSkillDir, { recursive: true, force: true });
+        return { success: true };
+      }
+
+      // 2. Try global
+      for (const globalDir of this.globalDirs) {
+        const globalSkillDir = path.join(globalDir, cleanName);
+        if (fs.existsSync(globalSkillDir)) {
+          fs.rmSync(globalSkillDir, { recursive: true, force: true });
+          return { success: true };
+        }
+      }
+
+      return { success: false, error: `Skill "${skillName}" not found.` };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
    * Selects relevant skills based on user prompt and injects full instructions,
    * while injecting summaries for non-matching skills to save token context.
    */

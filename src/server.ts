@@ -852,6 +852,24 @@ app.post("/api/skills", requireAuth, (req, res) => {
   }
 });
 
+app.delete("/api/skills/:name", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const skillName = String(req.params.name || "");
+    const workspace = String(req.query.workspace || "default");
+    if (!skillName) return res.status(400).json({ success: false, error: "Skill name required." });
+
+    const result = globalSkillManager.deleteSkill(skillName, workspace, userNumber);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({ success: true, name: skillName, workspace });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 
 // 3b. Server-side LLM Proxy & Health Test (Bypasses all client-side CORS and protects API keys)
@@ -1057,6 +1075,22 @@ app.post("/api/chat", requireAuth, async (req, res) => {
             result,
             timestamp: Date.now(),
           });
+
+          // 📡 Task 4 SSE Notification: Emit dynamic update event when agent installs tool or skill mid-loop
+          if (toolName === "install_mcp_package") {
+            sendEvent("tool_installed", {
+              toolName,
+              serverName,
+              timestamp: Date.now(),
+              totalTools: mcpManager.getOpenAITools().length,
+            });
+          } else if (toolName === "install_skill") {
+            sendEvent("skill_installed", {
+              toolName,
+              workspace: workspace || "default",
+              timestamp: Date.now(),
+            });
+          }
         },
         onComplete: (answer, iterations) => {
           let savedFile = sessionFile;

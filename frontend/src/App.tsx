@@ -190,8 +190,6 @@ export function App() {
       return false;
     }
   });
-  const [mcpJsonText, setMcpJsonText] = useState<string>("");
-  const [mcpJsonError, setMcpJsonError] = useState<string | null>(null);
   const [showDocModal, setShowDocModal] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showGitSyncModal, setShowGitSyncModal] = useState<boolean>(false);
@@ -760,9 +758,6 @@ export function App() {
       const res = await fetch("/api/config", { credentials: "include" });
       const data = await res.json();
       setConfig(data);
-      if (data?.mcpServers) {
-        setMcpJsonText(JSON.stringify(data.mcpServers, null, 2));
-      }
 
       // If no valid LLM API key is configured yet, directly pop up the LLM setup screen
       const apiKey = data?.llm?.apiKey;
@@ -832,24 +827,27 @@ export function App() {
     }
   };
 
+  const handleDeleteSkill = async (skillName: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`/api/skills/${encodeURIComponent(skillName)}?workspace=${encodeURIComponent(currentWorkspace)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true };
+      }
+      return { success: false, error: data.error || "Failed to delete skill" };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Network error" };
+    }
+  };
+
   const saveConfig = async () => {
     if (!config) return;
 
-    let updatedMcpServers = config.mcpServers;
-    if (mcpJsonText) {
-      try {
-        updatedMcpServers = JSON.parse(mcpJsonText);
-        setMcpJsonError(null);
-      } catch (jsonErr: any) {
-        setMcpJsonError(jsonErr.message);
-        showAlert(`Invalid MCP JSON syntax, please correct it before saving:\n${jsonErr.message}`, "error", "JSON Syntax Error");
-        return;
-      }
-    }
-
     const payload = {
       ...config,
-      mcpServers: updatedMcpServers,
     };
 
     try {
@@ -1615,6 +1613,13 @@ export function App() {
                   : m
               )
             );
+          } else if (event === "tool_installed") {
+            console.log("[SSE] 🛠️ Tool dynamically installed by agent:", data);
+            fetchTools();
+            fetchConfig();
+          } else if (event === "skill_installed") {
+            console.log("[SSE] 📚 Skill dynamically installed by agent:", data);
+            fetchTools();
           } else if (event === "complete") {
             const totalDurationSec = Math.max(0.1, (Date.now() - requestStartTime) / 1000);
             const estTokens = Math.round((data.answer?.length || 0) / 3.5);
@@ -6163,52 +6168,60 @@ export function App() {
                 </div>
               </div>
 
-              {/* Right Column: Active MCP Servers Registry JSON */}
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-                    Active MCP Servers Registry (Flexible JSON)
-                  </label>
-                  <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 600 }}>Hot-reloaded automatically</span>
+              {/* Right Column: MCP & Skill Hub Hub Shortcut */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ border: "1px solid var(--border-color)", background: "var(--bg-primary)", borderRadius: 10, padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(37, 99, 235, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "#3b82f6" }}>
+                      <Wrench size={18} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)" }}>
+                        Agentic Tools & Skills Hub
+                      </div>
+                      <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                        Unified Manager for MCP Servers & AI Workflows
+                      </div>
+                    </div>
+                  </div>
+
+                  <p style={{ fontSize: 12.5, color: "var(--text-muted)", lineHeight: 1.6, margin: 0 }}>
+                    MCP Server registration and Skills management are now centrally consolidated in the <strong>Agentic Tools & Skills Hub</strong>. You can inspect all mounted tools, connect new servers via GUI or raw JSON, and manage global/workspace skills without restarting.
+                  </p>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-card)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <CheckCircle2 size={16} color="#10b981" />
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)" }}>
+                        {activeToolsList.length} Active Tools Mounted
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowConfig(false);
+                        setShowToolHubModal(true);
+                      }}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: 6,
+                        border: "none",
+                        background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                        color: "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Open Tool Hub →
+                    </button>
+                  </div>
                 </div>
-                <textarea
-                  value={mcpJsonText}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setMcpJsonText(val);
-                    try {
-                      JSON.parse(val);
-                      setMcpJsonError(null);
-                    } catch (err: any) {
-                      setMcpJsonError(err.message);
-                    }
-                  }}
-                  placeholder='{\n  "server-name": {\n    "command": "node",\n    "args": [...],\n    "enabled": true\n  }\n}'
-                  spellCheck={false}
-                  style={{
-                    flex: 1,
-                    minHeight: 330,
-                    width: "100%",
-                    background: "var(--bg-primary)",
-                    border: mcpJsonError ? "1px solid var(--accent-rose, #ef4444)" : "1px solid var(--border-color)",
-                    padding: 12,
-                    borderRadius: 6,
-                    color: "var(--accent-emerald)",
-                    fontFamily: "ui-monospace, monospace",
-                    fontSize: 12.5,
-                    lineHeight: 1.55,
-                    resize: "vertical",
-                  }}
-                />
-                {mcpJsonError ? (
-                  <div style={{ fontSize: 11, color: "#f87171", marginTop: 6, lineHeight: 1.3 }}>
-                    ⚠️ Syntax error: {mcpJsonError}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8, lineHeight: 1.4 }}>
-                    💡 Plug in any MCP server here (e.g. SQLite, GitHub, Brave Search, Filesystem, or Custom Python/Node scripts).
-                  </div>
-                )}
+
+                {/* Additional tips */}
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)", padding: "8px 12px", background: "rgba(0,0,0,0.03)", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                  💡 <strong>Tip:</strong> MiniBot can also autonomously search, install, and mount MCP servers during reasoning loops on the fly.
+                </div>
               </div>
             </div>
 
@@ -6458,6 +6471,7 @@ export function App() {
         onRefreshTools={fetchTools}
         onInstallServer={handleInstallMcpServer}
         onDeleteServer={handleDeleteMcpServer}
+        onDeleteSkill={handleDeleteSkill}
         currentWorkspace={currentWorkspace}
       />
     </div>

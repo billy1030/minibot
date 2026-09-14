@@ -26,6 +26,7 @@ interface ToolHubModalProps {
   onInstallServer: (serverData: { name: string; command?: string; args?: string[]; url?: string; description?: string }) => Promise<{ success: boolean; error?: string }>;
   onDeleteServer: (serverName: string) => Promise<{ success: boolean; error?: string }>;
   currentWorkspace?: string;
+  onDeleteSkill?: (skillName: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 export const ToolHubModal: React.FC<ToolHubModalProps> = ({
@@ -36,6 +37,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
   onInstallServer,
   onDeleteServer,
   currentWorkspace = "default",
+  onDeleteSkill,
 }) => {
   const [activeTab, setActiveTab] = useState<"installed" | "skills" | "install">("installed");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -50,6 +52,11 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
   const [newSkillName, setNewSkillName] = useState("");
   const [newSkillScope, setNewSkillScope] = useState<"global" | "workspace">("workspace");
   const [newSkillContent, setNewSkillContent] = useState("");
+
+  // Connect tab: switch between GUI form and Raw JSON paste
+  const [connectMode, setConnectMode] = useState<"form" | "json">("form");
+  const [rawJsonText, setRawJsonText] = useState("");
+  const [rawJsonError, setRawJsonError] = useState<string | null>(null);
 
   // Form states for installing an MCP server
   const [serverName, setServerName] = useState("");
@@ -197,6 +204,64 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     }
   };
 
+  const handleInstallJson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRawJsonError(null);
+    let parsed: Record<string, any>;
+    try {
+      parsed = JSON.parse(rawJsonText);
+    } catch (err: any) {
+      setRawJsonError("Invalid JSON: " + err.message);
+      return;
+    }
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      setRawJsonError("JSON must be an object with server definitions, e.g. {\"my-server\": { \"command\": \"node\", \"args\": [...] }}");
+      return;
+    }
+
+    const entries = Object.entries(parsed);
+    if (entries.length === 0) {
+      setRawJsonError("Please provide at least one server definition in the JSON object.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setMessage(null);
+    let successCount = 0;
+    const errors: string[] = [];
+
+    for (const [name, def] of entries) {
+      const serverDef = def as any;
+      const res = await onInstallServer({
+        name,
+        command: serverDef.command,
+        args: Array.isArray(serverDef.args) ? serverDef.args : undefined,
+        url: serverDef.url,
+        description: serverDef.description,
+      });
+      if (res.success) {
+        successCount++;
+      } else {
+        errors.push(`${name}: ${res.error || "Failed"}`);
+      }
+    }
+
+    setIsSubmitting(false);
+    if (errors.length === 0) {
+      setMessage({ text: `Successfully registered ${successCount} server(s) via JSON!`, isError: false });
+      setRawJsonText("");
+      await onRefreshTools();
+      setActiveTab("installed");
+    } else {
+      setMessage({
+        text: `Registered ${successCount} server(s). Failed (${errors.length}): ${errors.join("; ")}`,
+        isError: successCount === 0,
+      });
+      await onRefreshTools();
+    }
+  };
+
   const handleDelete = async (sName: string) => {
     if (confirm(`Are you sure you want to unregister server "${sName}"?`)) {
       const res = await onDeleteServer(sName);
@@ -205,6 +270,35 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
       } else {
         alert(res.error || "Failed to remove server");
       }
+    }
+  };
+
+  const handleDeleteSkillItem = async (skillName: string) => {
+    if (!confirm(`Are you sure you want to delete skill "${skillName}"?`)) return;
+    try {
+      if (onDeleteSkill) {
+        const res = await onDeleteSkill(skillName);
+        if (!res.success) {
+          alert(res.error || "Failed to delete skill");
+          return;
+        }
+      } else {
+        const res = await fetch(`/api/skills/${encodeURIComponent(skillName)}?workspace=${encodeURIComponent(currentWorkspace)}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.error || "Failed to delete skill");
+          return;
+        }
+      }
+      if (selectedSkillContent?.name === skillName) {
+        setSelectedSkillContent(null);
+      }
+      await fetchSkills();
+    } catch (err: any) {
+      alert("Error deleting skill: " + err.message);
     }
   };
 
@@ -777,26 +871,54 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                             )}
                           </div>
 
-                          <button
-                            onClick={() => loadSkillContent(skill.name)}
-                            style={{
-                              padding: "7px 14px",
-                              borderRadius: 7,
-                              border: isExpanded ? "1px solid #16a34a" : "1px solid var(--border-color, #cbd5e1)",
-                              background: isExpanded ? "rgba(22, 163, 74, 0.12)" : "var(--bg-secondary, #ffffff)",
-                              color: isExpanded ? "#15803d" : "var(--text-main, #0f172a)",
-                              fontSize: 12.5,
-                              fontWeight: 700,
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                              flexShrink: 0,
-                              transition: "all 0.15s ease",
-                            }}
-                          >
-                            <Code size={14} /> {isExpanded ? "Hide Recipe" : "View Recipe"}
-                          </button>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <button
+                              onClick={() => loadSkillContent(skill.name)}
+                              style={{
+                                padding: "7px 14px",
+                                borderRadius: 7,
+                                border: isExpanded ? "1px solid #16a34a" : "1px solid var(--border-color, #cbd5e1)",
+                                background: isExpanded ? "rgba(22, 163, 74, 0.12)" : "var(--bg-secondary, #ffffff)",
+                                color: isExpanded ? "#15803d" : "var(--text-main, #0f172a)",
+                                fontSize: 12.5,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                flexShrink: 0,
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              <Code size={14} /> {isExpanded ? "Hide Recipe" : "View Recipe"}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSkillItem(skill.name)}
+                              title={`Delete skill ${skill.name}`}
+                              style={{
+                                padding: "7px 10px",
+                                borderRadius: 7,
+                                border: "1px solid var(--border-color, #cbd5e1)",
+                                background: "var(--bg-secondary, #ffffff)",
+                                color: "#ef4444",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = "#f87171";
+                                e.currentTarget.style.background = "rgba(239, 68, 68, 0.08)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = "var(--border-color, #cbd5e1)";
+                                e.currentTarget.style.background = "var(--bg-secondary, #ffffff)";
+                              }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </div>
 
                         {/* Inline Recipe Preview (Right under this skill card, very light green bg, black text) */}
@@ -864,8 +986,139 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
           )}
 
           {activeTab === "install" && (
-            <form onSubmit={handleInstall} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Mode Switcher: GUI Form vs Raw JSON Paste */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border-color, #cbd5e1)", paddingBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text-main, #0f172a)" }}>
+                    Add MCP Server Configuration
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted, #64748b)", marginTop: 2 }}>
+                    Configure a new tool server via intuitive GUI fields or paste raw JSON directly.
+                  </div>
+                </div>
+                <div style={{ display: "flex", background: "rgba(0,0,0,0.06)", padding: 3, borderRadius: 8, border: "1px solid var(--border-color, #cbd5e1)" }}>
+                  <button
+                    type="button"
+                    onClick={() => setConnectMode("form")}
+                    style={{
+                      padding: "5px 12px",
+                      borderRadius: 6,
+                      border: "none",
+                      fontSize: 12,
+                      fontWeight: connectMode === "form" ? 700 : 500,
+                      background: connectMode === "form" ? "#ffffff" : "transparent",
+                      color: connectMode === "form" ? "#2563eb" : "var(--text-muted, #64748b)",
+                      boxShadow: connectMode === "form" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    GUI Form Mode
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConnectMode("json")}
+                    style={{
+                      padding: "5px 12px",
+                      borderRadius: 6,
+                      border: "none",
+                      fontSize: 12,
+                      fontWeight: connectMode === "json" ? 700 : 500,
+                      background: connectMode === "json" ? "#ffffff" : "transparent",
+                      color: connectMode === "json" ? "#2563eb" : "var(--text-muted, #64748b)",
+                      boxShadow: connectMode === "json" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    Raw JSON Paste Mode
+                  </button>
+                </div>
+              </div>
+
+              {connectMode === "json" ? (
+                <form onSubmit={handleInstallJson} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text-main, #0f172a)", marginBottom: 6 }}>
+                      JSON Definition:
+                    </label>
+                    <textarea
+                      rows={12}
+                      spellCheck={false}
+                      placeholder={`{\n  "my-sqlite-db": {\n    "command": "npx",\n    "args": ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "data.db"],\n    "description": "Local SQLite query server"\n  }\n}`}
+                      value={rawJsonText}
+                      onChange={(e) => {
+                        setRawJsonText(e.target.value);
+                        setRawJsonError(null);
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        borderRadius: 8,
+                        border: rawJsonError ? "1px solid #ef4444" : "1px solid var(--border-color, #cbd5e1)",
+                        background: "#0f172a",
+                        color: "#38bdf8",
+                        fontSize: 12.5,
+                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                        outline: "none",
+                        lineHeight: 1.55,
+                      }}
+                      required
+                    />
+                    {rawJsonError && (
+                      <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6, fontWeight: 600 }}>
+                        ⚠️ {rawJsonError}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11.5, color: "var(--text-muted, #64748b)", marginTop: 6 }}>
+                      💡 Paste any standard MCP server definition dictionary. Newly configured servers will be immediately tested, mounted, and hot-reloaded into the running system.
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("installed")}
+                      style={{
+                        padding: "9px 18px",
+                        borderRadius: 8,
+                        border: "1px solid var(--border-color, #cbd5e1)",
+                        background: "var(--bg-card, #f8fafc)",
+                        color: "var(--text-main, #0f172a)",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      style={{
+                        padding: "9px 22px",
+                        borderRadius: 8,
+                        border: "none",
+                        background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                        color: "#fff",
+                        fontWeight: 700,
+                        fontSize: 13,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        boxShadow: "0 2px 4px rgba(37, 99, 235, 0.25)",
+                      }}
+                    >
+                      {isSubmitting ? <RefreshCw size={15} className="spin" /> : <Plus size={15} />}
+                      Install JSON Server(s)
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleInstall} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text-main, #0f172a)", marginBottom: 6 }}>
                   Server Identifier / Name:
                 </label>
@@ -1049,7 +1302,9 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                   Connect & Hot-Reload
                 </button>
               </div>
-            </form>
+                </form>
+              )}
+            </div>
           )}
         </div>
       </div>
