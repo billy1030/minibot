@@ -3155,6 +3155,7 @@ export function App() {
             >
               <Wrench size={14} />
               <span
+                title={`${activeToolsList.length || 29} Active Tools`}
                 style={{
                   fontSize: 10,
                   fontWeight: 700,
@@ -3165,6 +3166,19 @@ export function App() {
                 }}
               >
                 {activeToolsList.length || 29}
+              </span>
+              <span
+                title={`${activeSkillsList.length} Active Skills`}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  background: "rgba(168, 85, 247, 0.25)",
+                  color: "#c084fc",
+                  padding: "1px 5px",
+                  borderRadius: 10,
+                }}
+              >
+                {activeSkillsList.length}
               </span>
             </button>
 
