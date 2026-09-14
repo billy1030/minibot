@@ -8,6 +8,7 @@ import {
   Maximize2,
   Minimize2,
   Download,
+  Palette,
 } from "lucide-react";
 
 interface SvgDiagramViewerProps {
@@ -15,9 +16,72 @@ interface SvgDiagramViewerProps {
   index?: number;
 }
 
+export type SvgThemeMode = "original" | "clean-light" | "warm-paper" | "dark-slate";
+
+export interface SvgThemeOption {
+  id: SvgThemeMode;
+  name: string;
+  dotColor: string;
+  description: string;
+}
+
+export const SVG_THEME_OPTIONS: SvgThemeOption[] = [
+  { id: "original", name: "Default (Original)", dotColor: "#94a3b8", description: "Preserve original colors" },
+  { id: "clean-light", name: "☀️ Clean Light", dotColor: "#2563eb", description: "Pure white canvas & high-contrast navy" },
+  { id: "warm-paper", name: "📜 Warm Paper", dotColor: "#b45309", description: "Ivory cream canvas & warm editorial tones" },
+  { id: "dark-slate", name: "🌙 Dark Slate", dotColor: "#38bdf8", description: "Executive dark slate canvas & neon accents" },
+];
+
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 4.0;
 const ZOOM_STEP = 0.2;
+
+/**
+ * Dynamically recolors SVG markup across dark <-> light themes
+ */
+function recolorSvg(rawSvg: string, theme: SvgThemeMode): string {
+  if (theme === "original" || !rawSvg) return rawSvg;
+
+  let transformed = rawSvg;
+
+  if (theme === "clean-light") {
+    // 1. Convert dark backgrounds to clean light
+    transformed = transformed.replace(/fill="#(0b0f19|0d1117|0f172a|05070f)"/gi, 'fill="#ffffff"');
+    transformed = transformed.replace(/fill="#(111827|1e293b|1f2937|0d1326)"/gi, 'fill="#f8fafc"');
+    // 2. Borders and grid lines
+    transformed = transformed.replace(/stroke="#(1e293b|374151|475569)"/gi, 'stroke="#e2e8f0"');
+    // 3. Typography: light texts to dark slate/navy
+    transformed = transformed.replace(/fill="#(f8fafc|f1f5f9|ffffff|fff)"/gi, 'fill="#0f172a"');
+    transformed = transformed.replace(/fill="#(cbd5e1|94a3b8|64748b)"/gi, 'fill="#475569"');
+    // 4. Sub-cards & badges
+    transformed = transformed.replace(/fill="#(064e3b|78350f|7f1d1d)"/gi, 'fill="#f1f5f9"');
+    transformed = transformed.replace(/fill="#(bbf7d0|fcd34d|fecaca)"/gi, 'fill="#0f172a"');
+  } else if (theme === "warm-paper") {
+    // 1. Convert dark backgrounds to warm cream
+    transformed = transformed.replace(/fill="#(0b0f19|0d1117|0f172a|05070f)"/gi, 'fill="#fcfbf7"');
+    transformed = transformed.replace(/fill="#(111827|1e293b|1f2937|0d1326)"/gi, 'fill="#f6f1e5"');
+    // 2. Borders
+    transformed = transformed.replace(/stroke="#(1e293b|374151|475569)"/gi, 'stroke="#e7dec8"');
+    // 3. Typography
+    transformed = transformed.replace(/fill="#(f8fafc|f1f5f9|ffffff|fff)"/gi, 'fill="#292524"');
+    transformed = transformed.replace(/fill="#(cbd5e1|94a3b8|64748b)"/gi, 'fill="#78716c"');
+    // 4. Sub-cards
+    transformed = transformed.replace(/fill="#(064e3b|78350f|7f1d1d)"/gi, 'fill="#ede4d1"');
+    transformed = transformed.replace(/fill="#(bbf7d0|fcd34d|fecaca)"/gi, 'fill="#44403c"');
+  } else if (theme === "dark-slate") {
+    // 1. Convert white/light backgrounds to dark slate
+    transformed = transformed.replace(/fill="#(ffffff|fff|f8fafc|fcfbf7|f6f1e5)"/gi, 'fill="#0b0f19"');
+    transformed = transformed.replace(/fill="#(f1f5f9|e2e8f0|ede4d1)"/gi, 'fill="#1e293b"');
+    // 2. Borders
+    transformed = transformed.replace(/stroke="#(e2e8f0|e7dec8|cbd5e1)"/gi, 'stroke="#374151"');
+    // 3. Typography: dark texts to crisp white/slate
+    transformed = transformed.replace(/fill="#(0f172a|1e293b|292524|0c4a6e)"/gi, 'fill="#f8fafc"');
+    transformed = transformed.replace(/fill="#(334155|44403c|475569)"/gi, 'fill="#cbd5e1"');
+    transformed = transformed.replace(/fill="#(64748b|78716c)"/gi, 'fill="#94a3b8"');
+  }
+
+  return transformed;
+}
 
 export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
   svgContent,
@@ -28,8 +92,24 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [activeTheme, setActiveTheme] = useState<SvgThemeMode>("original");
+  const [showThemeMenu, setShowThemeMenu] = useState<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close theme dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as Node)) {
+        setShowThemeMenu(false);
+      }
+    };
+    if (showThemeMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showThemeMenu]);
 
   // Auto-clean raw SVG: ensure strict <svg> bounds and fix unescaped ampersands
   const cleanSvg = useMemo(() => {
@@ -37,8 +117,9 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
     const startIdx = svgContent.indexOf("<svg");
     const endIdx = svgContent.lastIndexOf("</svg>");
     let isolated = startIdx !== -1 && endIdx !== -1 ? svgContent.slice(startIdx, endIdx + 6) : svgContent;
-    return isolated.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, "&amp;");
-  }, [svgContent]);
+    isolated = isolated.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, "&amp;");
+    return recolorSvg(isolated, activeTheme);
+  }, [svgContent, activeTheme]);
 
   const zoomIn = (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -270,6 +351,105 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
             >
               <RotateCcw size={12} />
             </button>
+          </div>
+
+          {/* Dynamic Theme Switcher Dropdown */}
+          <div style={{ position: "relative" }} ref={themeMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowThemeMenu(!showThemeMenu)}
+              title="Change SVG Color Theme dynamically"
+              style={{
+                height: 28,
+                padding: "0 8px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                borderRadius: 7,
+                border: "1px solid var(--border-color, #cbd5e1)",
+                background: "var(--bg-secondary, #ffffff)",
+                color: activeTheme !== "original" ? "#0284c7" : "var(--text-main, #475569)",
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              <Palette size={13} color={SVG_THEME_OPTIONS.find((t) => t.id === activeTheme)?.dotColor || "#0284c7"} />
+              <span>{SVG_THEME_OPTIONS.find((t) => t.id === activeTheme)?.name.replace(/^[^\s]+\s*/, "") || "Theme"}</span>
+            </button>
+
+            {showThemeMenu && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  right: 0,
+                  marginTop: 4,
+                  width: 210,
+                  background: "var(--bg-secondary, #ffffff)",
+                  border: "1px solid var(--border-color, #cbd5e1)",
+                  borderRadius: 8,
+                  boxShadow: "0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1)",
+                  padding: "4px",
+                  zIndex: 100000,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                }}
+              >
+                <div style={{ padding: "4px 8px 2px", fontSize: 10, fontWeight: 700, color: "var(--text-muted, #64748b)", textTransform: "uppercase" }}>
+                  Color Theme
+                </div>
+                {SVG_THEME_OPTIONS.map((themeOpt) => {
+                  const isSelected = activeTheme === themeOpt.id;
+                  return (
+                    <button
+                      key={themeOpt.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveTheme(themeOpt.id);
+                        setShowThemeMenu(false);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 8px",
+                        borderRadius: 6,
+                        border: "none",
+                        background: isSelected ? "rgba(2, 132, 199, 0.1)" : "transparent",
+                        color: isSelected ? "#0284c7" : "var(--text-main, #334155)",
+                        cursor: "pointer",
+                        fontSize: 11.5,
+                        fontWeight: isSelected ? 700 : 500,
+                        textAlign: "left",
+                        width: "100%",
+                        transition: "background 0.15s ease",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 9,
+                          height: 9,
+                          borderRadius: "50%",
+                          background: themeOpt.dotColor,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                        <span>{themeOpt.name}</span>
+                        <span style={{ fontSize: 9.5, color: "var(--text-muted, #94a3b8)", fontWeight: 400 }}>
+                          {themeOpt.description}
+                        </span>
+                      </div>
+                      {isSelected && <Check size={12} color="#0284c7" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Fullscreen Button */}
