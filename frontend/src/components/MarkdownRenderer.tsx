@@ -35,15 +35,21 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     // Isolate SVG blocks (both inside ```svg/xml/html fences and standalone <svg>...</svg>)
     const svgBlocks: string[] = [];
 
+    // Sanitize raw SVG to prevent XML entity parsing errors (e.g. unescaped '&' inside text elements)
+    const sanitizeSvgXML = (svg: string): string => {
+      // Replace bare & not followed by standard xml entity (amp, lt, gt, quot, apos, #123, #x123)
+      return svg.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, '&amp;');
+    };
+
     clean = clean.replace(/`{3,}(?:xml|html|svg)?\s*([\s\S]*?<\/svg>[\s\S]*?)\s*`{3,}/gi, (_, svgContent) => {
       const token = `MINIBOTSVGBLOCKTOKEN${svgBlocks.length}ENDTOKEN`;
-      svgBlocks.push(svgContent.trim());
+      svgBlocks.push(sanitizeSvgXML(svgContent.trim()));
       return `\n\n${token}\n\n`;
     });
 
     clean = clean.replace(/(<div[\s\S]*?<svg[\s\S]*?<\/svg>[\s\S]*?<\/div>|<svg[\s\S]*?<\/svg>)/gi, (match) => {
       const token = `MINIBOTSVGBLOCKTOKEN${svgBlocks.length}ENDTOKEN`;
-      svgBlocks.push(match.trim());
+      svgBlocks.push(sanitizeSvgXML(match.trim()));
       return `\n\n${token}\n\n`;
     });
 

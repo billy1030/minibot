@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   ZoomIn,
   ZoomOut,
@@ -31,32 +31,43 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const zoomIn = () => {
+  // Auto-clean raw SVG: fix unescaped ampersands inside SVG text elements that break XML parsers
+  const cleanSvg = useMemo(() => {
+    if (!svgContent) return "";
+    return svgContent.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, "&amp;");
+  }, [svgContent]);
+
+  const zoomIn = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setScale((prev) => Math.min(MAX_ZOOM, Number((prev + ZOOM_STEP).toFixed(2))));
   };
 
-  const zoomOut = () => {
+  const zoomOut = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setScale((prev) => Math.max(MIN_ZOOM, Number((prev - ZOOM_STEP).toFixed(2))));
   };
 
-  const resetZoom = () => {
+  const resetZoom = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setScale(1.0);
     setPan({ x: 0, y: 0 });
   };
 
-  const handleCopySvg = async () => {
+  const handleCopySvg = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     try {
-      await navigator.clipboard.writeText(svgContent);
+      await navigator.clipboard.writeText(cleanSvg);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (e) {
-      console.error("Failed to copy SVG source:", e);
+    } catch (err) {
+      console.error("Failed to copy SVG source:", err);
     }
   };
 
-  const handleDownloadSvg = () => {
+  const handleDownloadSvg = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     try {
-      const blob = new Blob([svgContent], { type: "image/svg+xml;charset=utf-8" });
+      const blob = new Blob([cleanSvg], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -65,8 +76,8 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("Failed to download SVG:", e);
+    } catch (err) {
+      console.error("Failed to download SVG:", err);
     }
   };
 
@@ -131,10 +142,11 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
           borderBottom: "1px solid var(--border-color, #e2e8f0)",
           userSelect: "none",
           gap: 8,
-          flexWrap: "wrap",
+          flexWrap: "nowrap",
+          overflowX: "auto",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <span
             style={{
               fontSize: 10.5,
@@ -146,6 +158,7 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
               background: "rgba(2, 132, 199, 0.12)",
               color: "#0284c7",
               border: "1px solid rgba(2, 132, 199, 0.25)",
+              whiteSpace: "nowrap",
             }}
           >
             EDITORIAL SVG
@@ -156,6 +169,7 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
                 fontSize: 11,
                 color: "var(--text-muted, #64748b)",
                 fontFamily: "monospace",
+                whiteSpace: "nowrap",
               }}
             >
               (Drag canvas to pan)
@@ -164,10 +178,9 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
         </div>
 
         {/* Action Controls: Zoom Out, Percentage, Zoom In, Reset, Fullscreen, Copy, Download */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           {/* Zoom Control Group */}
           <div
-            className="mm-btn-group"
             style={{
               height: 28,
               display: "inline-flex",
@@ -177,13 +190,13 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
               border: "1px solid var(--border-color, #cbd5e1)",
               borderRadius: 8,
               padding: "0 4px",
+              flexShrink: 0,
             }}
           >
             <button
               type="button"
               onClick={zoomOut}
               disabled={scale <= MIN_ZOOM}
-              className="mm-group-btn"
               title="Zoom out (Reduct)"
               style={{
                 background: "transparent",
@@ -202,7 +215,6 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
             <button
               type="button"
               onClick={resetZoom}
-              className="mm-group-text"
               title="Reset Zoom to 100%"
               style={{
                 background: "transparent",
@@ -224,7 +236,6 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
               type="button"
               onClick={zoomIn}
               disabled={scale >= MAX_ZOOM}
-              className="mm-group-btn"
               title="Zoom in (Enlarge)"
               style={{
                 background: "transparent",
@@ -243,7 +254,6 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
             <button
               type="button"
               onClick={resetZoom}
-              className="mm-group-btn"
               title="Reset view"
               style={{
                 background: "transparent",
@@ -263,7 +273,6 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
           <button
             type="button"
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="mm-btn-icon"
             title={isFullscreen ? "Exit Fullscreen (Esc)" : "Expand to Fullscreen"}
             style={{
               height: 28,
@@ -276,6 +285,7 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
               background: "var(--bg-secondary, #ffffff)",
               color: "var(--text-main, #475569)",
               cursor: "pointer",
+              flexShrink: 0,
             }}
           >
             {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -285,7 +295,6 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
           <button
             type="button"
             onClick={handleCopySvg}
-            className="mm-btn-icon"
             title="Copy SVG XML Source"
             style={{
               height: 28,
@@ -300,6 +309,8 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
               fontSize: 11,
               fontWeight: 600,
               cursor: "pointer",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
             }}
           >
             {copied ? <Check size={12} color="#10b981" /> : <Copy size={12} />}
@@ -310,7 +321,6 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
           <button
             type="button"
             onClick={handleDownloadSvg}
-            className="mm-btn-icon"
             title="Download SVG file"
             style={{
               height: 28,
@@ -323,6 +333,7 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
               background: "var(--bg-secondary, #ffffff)",
               color: "var(--text-main, #475569)",
               cursor: "pointer",
+              flexShrink: 0,
             }}
           >
             <Download size={13} />
@@ -359,8 +370,9 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
             justifyContent: "center",
             alignItems: "center",
             maxWidth: "100%",
+            width: "100%",
           }}
-          dangerouslySetInnerHTML={{ __html: svgContent }}
+          dangerouslySetInnerHTML={{ __html: cleanSvg }}
         />
       </div>
     </div>
