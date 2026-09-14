@@ -16,7 +16,7 @@ interface SvgDiagramViewerProps {
   index?: number;
 }
 
-export type SvgThemeMode = "clean-light" | "warm-paper" | "dark-slate" | "original";
+export type SvgThemeMode = "dark-slate" | "clean-light" | "warm-paper" | "ft-salmon" | "original";
 
 export interface SvgThemeOption {
   id: SvgThemeMode;
@@ -29,6 +29,7 @@ export const SVG_THEME_OPTIONS: SvgThemeOption[] = [
   { id: "dark-slate", name: "🌙 Dark Slate (Default)", dotColor: "#38bdf8", description: "Executive dark slate canvas & neon accents" },
   { id: "clean-light", name: "☀️ Clean Light", dotColor: "#2563eb", description: "Pure white canvas & high-contrast navy" },
   { id: "warm-paper", name: "📜 Warm Paper", dotColor: "#b45309", description: "Ivory cream canvas & warm editorial tones" },
+  { id: "ft-salmon", name: "📰 FT Financial Editorial", dotColor: "#990f3d", description: "FT salmon canvas (#fff1e5), oxford navy & claret crimson" },
   { id: "original", name: "Original Source", dotColor: "#94a3b8", description: "Preserve raw generated SVG colors" },
 ];
 
@@ -202,6 +203,55 @@ function recolorSvg(rawSvg: string, theme: SvgThemeMode): string {
 
           if (stroke === "#e2e8f0" || stroke === "#e7dec8" || stroke === "#cbd5e1" || stroke === "#dcd1ba") {
             el.setAttribute("stroke", "#374151");
+          }
+        }
+      } else if (theme === "ft-salmon") {
+        // --- FINANCIAL TIMES & THE ECONOMIST EDITORIAL PALETTE ---
+        if (tagName === "text" || tagName === "tspan") {
+          if (
+            fill === "#ffffff" || fill === "#fff" || fill === "#f8fafc" ||
+            fill === "#f1f5f9" || fill === "#e2e8f0" || fill === "#0f172a"
+          ) {
+            el.setAttribute("fill", "#0d2240"); // Oxford Deep Navy
+          } else if (fill === "#94a3b8" || fill === "#cbd5e1" || fill === "#64748b") {
+            el.setAttribute("fill", "#4b5563"); // Deep Charcoal
+          } else if (
+            fill === "#fca5a5" || fill === "#fecaca" || fill === "#f87171" ||
+            fill === "#ef4444" || fill === "#e11d48"
+          ) {
+            el.setAttribute("fill", "#990f3d"); // FT Claret Crimson
+            el.setAttribute("font-weight", "700");
+          } else if (
+            fill === "#fcd34d" || fill === "#fef3c7" || fill === "#fbbf24" ||
+            fill === "#f59e0b" || fill === "#d97706"
+          ) {
+            el.setAttribute("fill", "#b45309"); // FT Amber Ochre
+            el.setAttribute("font-weight", "700");
+          } else if (
+            fill === "#bbf7d0" || fill === "#86efac" || fill === "#34d399" ||
+            fill === "#10b981" || fill === "#059669"
+          ) {
+            el.setAttribute("fill", "#096f5b"); // Olive Emerald
+            el.setAttribute("font-weight", "700");
+          } else if (fill === "#67e8f9" || fill === "#38bdf8" || fill === "#0ea5e9") {
+            el.setAttribute("fill", "#0f5499"); // Dark Cyan Teal
+            el.setAttribute("font-weight", "700");
+          }
+        } else if (tagName === "rect") {
+          if (darkCanvases.has(fill) || lightCanvases.has(fill)) {
+            el.setAttribute("fill", "#fff1e5"); // FT Signature Salmon
+          } else if (darkSurfaces.has(fill) || lightSurfaces.has(fill)) {
+            el.setAttribute("fill", "#ffffff"); // Pure white elevated card
+          } else if (fill === "#fef2f2" || fill === "#fff1f2") {
+            el.setAttribute("fill", "#fce4e8"); // Soft Claret tint
+          }
+
+          if (stroke === "#1e293b" || stroke === "#374151" || stroke === "#475569" || stroke === "#e2e8f0") {
+            el.setAttribute("stroke", "#e2d5c5"); // Pale slate border
+          }
+        } else if (tagName === "path" || tagName === "line") {
+          if (stroke === "#1e293b" || stroke === "#374151" || stroke === "#475569" || stroke === "#94a3b8") {
+            el.setAttribute("stroke", "#0d2240");
           }
         }
       }
@@ -672,7 +722,14 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          background: activeTheme === "dark-slate" ? "#0b0f19" : activeTheme === "warm-paper" ? "#fcfbf7" : "#ffffff",
+          background:
+            activeTheme === "dark-slate"
+              ? "#0b0f19"
+              : activeTheme === "warm-paper"
+              ? "#fcfbf7"
+              : activeTheme === "ft-salmon"
+              ? "#fff1e5"
+              : "#ffffff",
           cursor: isDragging ? "grabbing" : scale > 1.0 ? "grab" : "default",
           minHeight: isFullscreen ? "calc(100vh - 45px)" : 280,
           userSelect: "none",
