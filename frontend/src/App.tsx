@@ -6225,6 +6225,108 @@ export function App() {
                     {/* Quick Color Preset Injection Chips */}
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-muted)" }}>Palette Presets:</span>
+                      
+                      {/* 1. Clean Light (Default) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const modernCleanPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
+1. Palette & Theming (Clean Light Minimalist - DEFAULT):
+   - Canvas Background: Pure White #ffffff or Soft Off-White #f8fafc with subtle border stroke="#e2e8f0"
+   - Primary Accents: Royal Ocean Blue #2563eb, Forest Emerald #059669, Vivid Violet #7c3aed, Amber Bronze #d97706, Ruby Crimson #e11d48
+   - Neutral Card Containers: #f8fafc (cards), #f1f5f9 (active highlights), #ffffff (inner sub-cards), #e2e8f0 (card borders)
+   - Typography: Title #0f172a (dark navy), Body #334155 (slate), Subtitle/Labels #64748b, Muted Badges #94a3b8
+2. Quality Protocols:
+   - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
+   - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
+   - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
+                          setConfig({
+                            ...config,
+                            prompts: { ...config.prompts, svgPrompt: modernCleanPreset },
+                          });
+                        }}
+                        style={{
+                          fontSize: 10,
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          background: "#ffffff",
+                          color: "#2563eb",
+                          border: "1px solid #93c5fd",
+                          cursor: "pointer",
+                          fontWeight: 700,
+                          boxShadow: "0 1px 2px rgba(37,99,235,0.1)",
+                        }}
+                      >
+                        ☀️ Clean Light (Default)
+                      </button>
+
+                      {/* 2. Warm Editorial Paper */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const warmPaperPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
+1. Palette & Theming (Warm Editorial Paper & Cream):
+   - Canvas Background: Warm Cream Ivory #fcfbf7 with earthy border stroke="#e7dec8"
+   - Primary Accents: Terracotta Red #c2410c, Olive Botanical #4d7c0f, Warm Amber Gold #b45309, Indigo Slate #4338ca, Deep Teal #0f766e
+   - Neutral Card Containers: #f6f1e5 (cards), #ede4d1 (active highlights), #ffffff (inner sub-cards), #dcd1ba (card borders)
+   - Typography: Title #292524 (warm charcoal), Body #44403c (warm slate), Subtitle/Labels #78716c, Muted Badges #a8a29e
+2. Quality Protocols:
+   - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
+   - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
+   - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
+                          setConfig({
+                            ...config,
+                            prompts: { ...config.prompts, svgPrompt: warmPaperPreset },
+                          });
+                        }}
+                        style={{
+                          fontSize: 10,
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          background: "#fcfbf7",
+                          color: "#b45309",
+                          border: "1px solid #e7dec8",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        📜 Warm Editorial
+                      </button>
+
+                      {/* 3. Corporate Navy Professional */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const corporateNavyPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
+1. Palette & Theming (Corporate Navy & Soft Ice Blue):
+   - Canvas Background: Crisp White #ffffff with subtle tech grid border stroke="#cbd5e1"
+   - Primary Accents: Executive Deep Navy #1e3a8a, Cyan Highlight #0284c7, Soft Sage #10b981, Cobalt Accent #3b82f6, Burgundy #9f1239
+   - Neutral Card Containers: #f0f9ff (ice blue cards), #e0f2fe (active highlight cards), #ffffff (inner modules), #bfdbfe (accent borders)
+   - Typography: Title #0c4a6e, Body #1e293b, Subtitle/Labels #475569, Muted Badges #64748b
+2. Quality Protocols:
+   - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
+   - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
+   - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
+                          setConfig({
+                            ...config,
+                            prompts: { ...config.prompts, svgPrompt: corporateNavyPreset },
+                          });
+                        }}
+                        style={{
+                          fontSize: 10,
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          background: "#f0f9ff",
+                          color: "#0284c7",
+                          border: "1px solid #bae6fd",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        🏛️ Corporate Navy
+                      </button>
+
+                      {/* 4. Sleek Dark Slate */}
                       <button
                         type="button"
                         onClick={() => {
@@ -6254,39 +6356,10 @@ export function App() {
                           fontWeight: 600,
                         }}
                       >
-                        🌙 Dark Slate (Default)
+                        🌙 Dark Slate
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const modernCleanPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
-1. Palette & Theming (Clean Light Minimalist):
-   - Canvas Background: Pure White #ffffff with soft border stroke="#e2e8f0"
-   - Primary Accents: Ocean Blue #2563eb, Forest Teal #059669, Royal Violet #7c3aed, Amber Bronze #d97706, Ruby Red #e11d48
-   - Neutral Card Containers: #f8fafc (cards), #f1f5f9 (active highlights), #e2e8f0 (sub-borders)
-   - Typography: Title #0f172a, Body #334155, Subtitle/Labels #64748b, Muted Badges #94a3b8
-2. Quality Protocols:
-   - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
-   - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
-   - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
-                          setConfig({
-                            ...config,
-                            prompts: { ...config.prompts, svgPrompt: modernCleanPreset },
-                          });
-                        }}
-                        style={{
-                          fontSize: 10,
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                          background: "#ffffff",
-                          color: "#2563eb",
-                          border: "1px solid #cbd5e1",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                      >
-                        ☀️ Clean Light
-                      </button>
+
+                      {/* 5. Cyber Neon */}
                       <button
                         type="button"
                         onClick={() => {

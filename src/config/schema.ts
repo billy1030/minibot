@@ -37,11 +37,11 @@ export const PromptsConfigSchema = z.object({
   ),
   svgPrompt: z.string().optional().default(
     "### Standalone Editorial SVG Generation & Color System Guidelines:\n" +
-    "1. Palette & Theming (Default: Sleek Dark Slate Executive):\n" +
-    "   - Canvas Background: Deep Tech `#0b0f19` or `#0f172a` with subtle border `stroke=\"#1e293b\"`\n" +
-    "   - Primary Accents: Electric Blue `#38bdf8`, Emerald Green `#34d399`, Vivid Purple `#a855f7`, Warm Amber `#fbbf24`, Rose Crimson `#f43f5e`\n" +
-    "   - Neutral Card Containers: `#1e293b` (cards), `#0c1f2e` (active highlights), `#111827` (sidebars)\n" +
-    "   - Typography: Title `#ffffff`, Body `#cbd5e1`, Subtitle/Labels `#94a3b8`, Muted Badges `#64748b`\n" +
+    "1. Palette & Theming (Default: Clean Light Minimalist):\n" +
+    "   - Canvas Background: Pure White `#ffffff` or Soft Slate `#f8fafc` with crisp border `stroke=\"#e2e8f0\"`\n" +
+    "   - Primary Accents: Ocean Blue `#2563eb`, Forest Emerald `#059669`, Royal Violet `#7c3aed`, Warm Amber `#d97706`, Crimson Red `#e11d48`\n" +
+    "   - Neutral Card Containers: `#f8fafc` (cards), `#f1f5f9` (active highlights), `#ffffff` (sub-cards), `#e2e8f0` (border lines)\n" +
+    "   - Typography: Title `#0f172a`, Body `#334155`, Subtitle/Labels `#64748b`, Muted Badges `#94a3b8`\n" +
     "2. Quality Protocols:\n" +
     "   - Always escape XML entities in text nodes: use `&amp;` instead of `&` (e.g., `lasers &amp; fiber`).\n" +
     "   - Explicit `viewBox` with ample height padding (+60px to 80px) to prevent bottom cutoff.\n" +
