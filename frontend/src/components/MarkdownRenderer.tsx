@@ -35,18 +35,29 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     // Isolate SVG blocks (both inside ```svg/xml/html fences and standalone <svg>...</svg>)
     const svgBlocks: string[] = [];
 
-    // Sanitize raw SVG to prevent XML entity parsing errors (e.g. unescaped '&' inside text elements)
+    // Sanitize and auto-repair raw SVG (including truncated SVG streams from model limits)
     const sanitizeSvgXML = (svg: string): string => {
-      // Ensure SVG only starts from <svg and ends at </svg>
       const startIdx = svg.indexOf('<svg');
-      const endIdx = svg.lastIndexOf('</svg>');
-      let cleanSvgStr = startIdx !== -1 && endIdx !== -1 ? svg.slice(startIdx, endIdx + 6) : svg;
+      if (startIdx === -1) return svg;
+      let cleanSvgStr = svg.slice(startIdx);
+      const endIdx = cleanSvgStr.lastIndexOf('</svg>');
+      if (endIdx !== -1) {
+        cleanSvgStr = cleanSvgStr.slice(0, endIdx + 6);
+      } else {
+        // SVG was truncated mid-generation: close open tags and add </svg> so it can render safely
+        cleanSvgStr = cleanSvgStr.trim();
+        // Remove trailing incomplete tag if cut off mid-attribute e.g. <text font-size="
+        cleanSvgStr = cleanSvgStr.replace(/<[^>]*$/, '');
+        cleanSvgStr += '\n</g>\n</svg>';
+      }
       // Replace bare & not followed by standard xml entity (amp, lt, gt, quot, apos, #123, #x123)
       return cleanSvgStr.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, '&amp;');
     };
 
-    // First safely capture fenced SVG blocks (ensuring the opening fence is immediately before <svg)
-    clean = clean.replace(/`{3,}(?:xml|html|svg)?\s*(<svg[\s\S]*?<\/svg>)\s*`{3,}/gi, (_, svgContent) => {
+    // First capture fenced SVG blocks (both completed and unclosed/truncated fences)
+    clean = clean.replace(/`{3,}(?:xml|html|svg)?\s*([\s\S]*?<svg[\s\S]*?)(?:<\/svg>\s*`{3,}|`{3,}|$)/gi, (match, svgContent) => {
+      // Only treat as SVG if it has <svg tag
+      if (!svgContent.includes('<svg')) return match;
       const token = `MINIBOTSVGBLOCKTOKEN${svgBlocks.length}ENDTOKEN`;
       svgBlocks.push(sanitizeSvgXML(svgContent.trim()));
       return `\n\n${token}\n\n`;
