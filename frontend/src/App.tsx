@@ -48,6 +48,7 @@ import {
   Pause,
   RotateCcw,
   ArrowUp,
+  ArrowDown,
   Save,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
@@ -650,11 +651,61 @@ export function App() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const lastGeneratedTurnRef = useRef<HTMLDivElement>(null);
 
-  const scrollToLastGeneratedTurn = () => {
-    if (lastGeneratedTurnRef.current) {
-      lastGeneratedTurnRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+  // 🧭 Multi-Turn Sequential Scroll Navigation (Jump up / Jump down between turns)
+  const navigateTurn = (direction: "up" | "down" = "up") => {
+    // Collect all assistant turns (or all message elements) with DOM IDs
+    const turnElements = messages
+      .map((m) => document.getElementById(`msg-turn-${m.id}`))
+      .filter((el): el is HTMLElement => el !== null);
+
+    if (turnElements.length === 0) {
+      if (chatEndRef.current) {
+        chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+      }
+      return;
+    }
+
+    // Determine current scroll position relative to turn elements
+    const THRESHOLD = 60; // Margin in px to decide if element is above current viewport top
+    if (direction === "up") {
+      // Find the turn element right above the viewport top
+      const above = turnElements.filter((el) => {
+        const rect = el.getBoundingClientRect();
+        return rect.top < -THRESHOLD;
+      });
+
+      if (above.length > 0) {
+        // Jump to the closest turn above
+        const target = above[above.length - 1];
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        // If already near or past the earliest turn, check if the first turn is partially visible
+        const firstTurn = turnElements[0];
+        const rect = firstTurn.getBoundingClientRect();
+        if (rect.top < 0) {
+          firstTurn.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          // Wrap around or go to the very last generated turn
+          const lastAssistant = turnElements[turnElements.length - 1];
+          lastAssistant.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }
+    } else {
+      // Direction "down": find the next turn below current view
+      const below = turnElements.filter((el) => {
+        const rect = el.getBoundingClientRect();
+        return rect.top > THRESHOLD;
+      });
+
+      if (below.length > 0) {
+        const target = below[0];
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        // Scroll to the bottom of the conversation
+        if (chatEndRef.current) {
+          chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+      }
     }
   };
 
@@ -4405,6 +4456,7 @@ export function App() {
               return (
                 <div
                   key={m.id}
+                  id={`msg-turn-${m.id}`}
                   ref={isTargetTurn ? lastGeneratedTurnRef : undefined}
                   style={{
                     display: "flex",
@@ -6111,11 +6163,11 @@ export function App() {
             <Send size={15} />
           </button>
 
-          {/* ⬆️ Upper Arrow Button: Jump to top of last generated session/turn */}
+          {/* ⬆️ Upper Arrow Button: Step / Jump up to previous conversation turn */}
           <button
             type="button"
-            onClick={scrollToLastGeneratedTurn}
-            title="Jump back to top of last generated session"
+            onClick={() => navigateTurn("up")}
+            title="Jump to previous turn (click repeatedly to step up)"
             style={{
               width: 34,
               height: 34,
@@ -6142,6 +6194,39 @@ export function App() {
             }}
           >
             <ArrowUp size={15} />
+          </button>
+
+          {/* ⬇️ Down Arrow Button: Step / Jump down to next turn or bottom */}
+          <button
+            type="button"
+            onClick={() => navigateTurn("down")}
+            title="Jump to next turn / bottom (click repeatedly to step down)"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 7,
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
+              color: "var(--text-main)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "var(--accent)";
+              e.currentTarget.style.color = "var(--accent)";
+              e.currentTarget.style.background = "var(--bg-secondary)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--border-color)";
+              e.currentTarget.style.color = "var(--text-main)";
+              e.currentTarget.style.background = "var(--bg-card)";
+            }}
+          >
+            <ArrowDown size={15} />
           </button>
           </div>
         </div>
