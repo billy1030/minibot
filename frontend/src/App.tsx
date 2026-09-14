@@ -239,7 +239,14 @@ export function App() {
   } | null>(null);
   const mermaidMenuRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
+  const slashMenuRef = useRef<HTMLDivElement>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+  // 🪄 Slash Commands ("/") for explicitly invoking Skills
+  const [showSlashMenu, setShowSlashMenu] = useState<boolean>(false);
+  const [slashFilter, setSlashFilter] = useState<string>("");
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState<number>(0);
+  const [selectedSkillBadge, setSelectedSkillBadge] = useState<SkillItem | null>(null);
 
   // 🎨 是否顯示 Mermaid 圖表頂部操作列按鈕群組 (預設 false 隱藏，遵循 SLS hide-mermaid-tools 設計)
   const [showMermaidTools, setShowMermaidTools] = useState<boolean>(() => {
@@ -403,6 +410,29 @@ export function App() {
       return () => document.removeEventListener("mousedown", handleClickOutsideTts);
     }
   }, [showTtsMenu]);
+
+  useEffect(() => {
+    const handleClickOutsideSlash = (e: MouseEvent) => {
+      if (slashMenuRef.current && !slashMenuRef.current.contains(e.target as Node)) {
+        setShowSlashMenu(false);
+      }
+    };
+    if (showSlashMenu) {
+      document.addEventListener("mousedown", handleClickOutsideSlash);
+      return () => document.removeEventListener("mousedown", handleClickOutsideSlash);
+    }
+  }, [showSlashMenu]);
+
+  const handleSelectSkillSlash = (skill: SkillItem) => {
+    setSelectedSkillBadge(skill);
+    setShowSlashMenu(false);
+    // Remove the leading "/" or "/keyword" from input
+    setInputPrompt((prev) => {
+      const clean = prev.replace(/^\/\S*\s*/, "");
+      return clean;
+    });
+    setTimeout(() => chatInputRef.current?.focus(), 50);
+  };
 
   const handleSelectDiagramMode = (item: { id: string; label: string; prompt: string; icon: string; color: string }) => {
     // Toggle off if already selected
@@ -1534,10 +1564,15 @@ export function App() {
     const assistantMessageId = "asst-" + Date.now();
     const baseQuery = rawQuery.trim();
 
-    // If a diagram mode badge is active, append instructions seamlessly behind the scenes
+    // If an explicit skill is selected via "/" slash command, inject its direct instruction
     let finalQuery = baseQuery;
+    if (selectedSkillBadge) {
+      finalQuery = `${baseQuery}\n\n[Explicit User Skill Directive: Prioritize and strictly adopt the rules, protocols, and workflows of skill \`${selectedSkillBadge.name}\` (${selectedSkillBadge.description || ""}) for completing this task.]`;
+    }
+
+    // If a diagram mode badge is active, append instructions seamlessly behind the scenes
     if (selectedDiagramMode?.prompt) {
-      finalQuery = `${baseQuery}\n\n[System Instruction: ${selectedDiagramMode.prompt}]`;
+      finalQuery = `${finalQuery}\n\n[System Instruction: ${selectedDiagramMode.prompt}]`;
     }
 
     const now = Date.now();
@@ -1561,6 +1596,7 @@ export function App() {
 
     setInputPrompt("");
     setSelectedDiagramMode(null);
+    setSelectedSkillBadge(null);
     setLoading(true);
     setCurrentStep(1);
 
@@ -5724,16 +5760,207 @@ export function App() {
                 </button>
               </div>
             )}
+            {/* 🌟 Active Explicit Skill Badge (Selected via "/" slash command) */}
+            {selectedSkillBadge && (
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 8px)",
+                  left: selectedDiagramMode ? 260 : 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "4px 10px",
+                  borderRadius: 16,
+                  background: "var(--bg-secondary)",
+                  border: "1px solid #10b981",
+                  color: "#10b981",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                  zIndex: 20,
+                  animation: "fadeIn 0.2s ease",
+                }}
+              >
+                <Sparkles size={13} color="#10b981" />
+                <span>Skill: {selectedSkillBadge.name}</span>
+                <span style={{ fontSize: 10, opacity: 0.8, background: "rgba(16, 185, 129, 0.15)", padding: "1px 5px", borderRadius: 4 }}>
+                  {selectedSkillBadge.scope.toUpperCase()}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSkillBadge(null)}
+                  title="Remove explicit skill modifier"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    padding: "0 2px",
+                    display: "flex",
+                    alignItems: "center",
+                    fontSize: 14,
+                    lineHeight: 1,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#ef4444")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* 🪄 Slash Command ("/") Dropdown Menu for Skills */}
+            {showSlashMenu && (() => {
+              const filteredSkills = activeSkillsList.filter((s) => {
+                const query = slashFilter.toLowerCase();
+                return (
+                  s.name.toLowerCase().includes(query) ||
+                  (s.description && s.description.toLowerCase().includes(query)) ||
+                  (s.triggers && s.triggers.some((t) => t.toLowerCase().includes(query)))
+                );
+              });
+
+              return (
+                <div
+                  ref={slashMenuRef}
+                  style={{
+                    position: "absolute",
+                    bottom: "calc(100% + 8px)",
+                    left: 0,
+                    width: "min(460px, 90vw)",
+                    maxHeight: 280,
+                    overflowY: "auto",
+                    background: "var(--bg-secondary, #1e293b)",
+                    border: "1px solid var(--border-color, #334155)",
+                    borderRadius: 10,
+                    boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
+                    zIndex: 100,
+                    display: "flex",
+                    flexDirection: "column",
+                    padding: "6px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderBottom: "1px solid var(--border-color)", marginBottom: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color: "var(--accent, #0284c7)" }}>
+                      <Sparkles size={14} />
+                      <span>SELECT AI SKILL ({filteredSkills.length})</span>
+                    </div>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>↑↓ Navigate • Enter Select • Esc Close</span>
+                  </div>
+
+                  {filteredSkills.length === 0 ? (
+                    <div style={{ padding: "14px", textAlign: "center", fontSize: 12, color: "var(--text-muted)" }}>
+                      No skills matching "<strong>{slashFilter}</strong>"
+                    </div>
+                  ) : (
+                    filteredSkills.map((skill, idx) => {
+                      const isSelected = idx === slashSelectedIndex;
+                      return (
+                        <div
+                          key={skill.name}
+                          onClick={() => handleSelectSkillSlash(skill)}
+                          onMouseEnter={() => setSlashSelectedIndex(idx)}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 2,
+                            padding: "8px 12px",
+                            borderRadius: 6,
+                            background: isSelected ? "rgba(2, 132, 199, 0.15)" : "transparent",
+                            border: isSelected ? "1px solid rgba(2, 132, 199, 0.35)" : "1px solid transparent",
+                            cursor: "pointer",
+                            transition: "all 0.1s ease",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: isSelected ? "var(--accent, #0284c7)" : "var(--text-main)" }}>
+                              /{skill.name}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                fontWeight: 700,
+                                padding: "1px 5px",
+                                borderRadius: 4,
+                                background: skill.scope === "workspace" ? "rgba(16, 185, 129, 0.15)" : "rgba(100, 116, 139, 0.15)",
+                                color: skill.scope === "workspace" ? "#10b981" : "var(--text-muted)",
+                              }}
+                            >
+                              {skill.scope.toUpperCase()}
+                            </span>
+                          </div>
+                          {skill.description && (
+                            <div style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {skill.description}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              );
+            })()}
+
             <input
               ref={chatInputRef}
               type="text"
               value={inputPrompt}
-              onChange={(e) => setInputPrompt(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              onChange={(e) => {
+                const val = e.target.value;
+                setInputPrompt(val);
+                // Check if user is typing a slash command at the start
+                if (val.startsWith("/")) {
+                  setShowSlashMenu(true);
+                  setSlashFilter(val.slice(1).trim());
+                  setSlashSelectedIndex(0);
+                } else if (showSlashMenu) {
+                  setShowSlashMenu(false);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (showSlashMenu) {
+                  const filteredSkills = activeSkillsList.filter((s) => {
+                    const query = slashFilter.toLowerCase();
+                    return (
+                      s.name.toLowerCase().includes(query) ||
+                      (s.description && s.description.toLowerCase().includes(query)) ||
+                      (s.triggers && s.triggers.some((t) => t.toLowerCase().includes(query)))
+                    );
+                  });
+
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setSlashSelectedIndex((prev) => (prev + 1) % Math.max(1, filteredSkills.length));
+                    return;
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSlashSelectedIndex((prev) => (prev - 1 + filteredSkills.length) % Math.max(1, filteredSkills.length));
+                    return;
+                  } else if (e.key === "Enter" || e.key === "Tab") {
+                    if (filteredSkills.length > 0 && filteredSkills[slashSelectedIndex]) {
+                      e.preventDefault();
+                      handleSelectSkillSlash(filteredSkills[slashSelectedIndex]);
+                      return;
+                    }
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setShowSlashMenu(false);
+                    return;
+                  }
+                }
+
+                if (e.key === "Enter") {
+                  handleSend();
+                }
+              }}
               placeholder={
-                selectedDiagramMode
-                  ? `[${selectedDiagramMode.label} mode active] Type your prompt...`
-                  : "Ask anything or query attached Excel / PDF / Word documents..."
+                selectedSkillBadge
+                  ? `[Skill /${selectedSkillBadge.name} attached] Type your prompt...`
+                  : selectedDiagramMode
+                  ? `[${selectedDiagramMode.label} mode active] Type your prompt (or type "/" for skills)...`
+                  : "Ask anything, type \"/\" for skills, or query attached documents..."
               }
               disabled={loading}
               style={{
@@ -5741,11 +5968,15 @@ export function App() {
                 height: 34,
                 background: isListening
                   ? "rgba(239, 68, 68, 0.05)"
+                  : selectedSkillBadge
+                  ? "rgba(16, 185, 129, 0.03)"
                   : selectedDiagramMode
                   ? "rgba(235, 108, 54, 0.03)"
                   : "var(--bg-card)",
                 border: isListening
                   ? "1.5px solid #ef4444"
+                  : selectedSkillBadge
+                  ? "1.5px solid #10b981"
                   : selectedDiagramMode
                   ? `1.5px solid ${selectedDiagramMode.color}`
                   : "1px solid var(--border-color)",
