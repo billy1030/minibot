@@ -366,7 +366,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                 width: 34,
                 height: 34,
                 borderRadius: 8,
-                background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+                background: "linear-gradient(135deg, var(--accent, #0284c7), #0369a1)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -380,17 +380,17 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                 <span
                   style={{
                     fontSize: 11,
-                    background: "rgba(59, 130, 246, 0.2)",
-                    color: "#60a5fa",
+                    background: "rgba(2, 132, 199, 0.15)",
+                    color: "var(--accent, #0284c7)",
                     padding: "2px 8px",
                     borderRadius: 999,
-                    fontWeight: 600,
+                    fontWeight: 700,
                   }}
                 >
                   {tools.length} Tools Active • {skills.length} Skills
                 </span>
               </div>
-              <div style={{ fontSize: 11, color: "var(--text-muted, #94a3b8)", marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginTop: 2 }}>
                 Dual-Scope MCP Hot-Reloading & Persistent Agent Skills (Workspace: <code>{currentWorkspace}</code>)
               </div>
             </div>
@@ -403,7 +403,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
               title="Refresh tools and skills"
               style={{
                 background: "transparent",
-                border: "1px solid var(--border-color, rgba(255,255,255,0.15))",
+                border: "1px solid var(--border-color, #e2e8f0)",
                 color: "var(--text-main)",
                 borderRadius: 7,
                 padding: "6px 12px",
@@ -422,7 +422,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
               style={{
                 background: "none",
                 border: "none",
-                color: "var(--text-muted, #94a3b8)",
+                color: "var(--text-muted, #64748b)",
                 cursor: "pointer",
                 padding: 4,
               }}
@@ -447,8 +447,8 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
             style={{
               background: "none",
               border: "none",
-              borderBottom: activeTab === "installed" ? "2px solid #1d4ed8" : "2px solid transparent",
-              color: activeTab === "installed" ? "#1d4ed8" : "var(--text-muted, #64748b)",
+              borderBottom: activeTab === "installed" ? "2px solid var(--accent, #0284c7)" : "2px solid transparent",
+              color: activeTab === "installed" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
               padding: "10px 14px",
               fontSize: 13,
               fontWeight: 700,
@@ -462,8 +462,8 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
             style={{
               background: "none",
               border: "none",
-              borderBottom: activeTab === "skills" ? "2px solid #1d4ed8" : "2px solid transparent",
-              color: activeTab === "skills" ? "#1d4ed8" : "var(--text-muted, #64748b)",
+              borderBottom: activeTab === "skills" ? "2px solid var(--accent, #0284c7)" : "2px solid transparent",
+              color: activeTab === "skills" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
               padding: "10px 14px",
               fontSize: 13,
               fontWeight: 700,
@@ -480,8 +480,8 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
             style={{
               background: "none",
               border: "none",
-              borderBottom: activeTab === "install" ? "2px solid #1d4ed8" : "2px solid transparent",
-              color: activeTab === "install" ? "#1d4ed8" : "var(--text-muted, #64748b)",
+              borderBottom: activeTab === "install" ? "2px solid var(--accent, #0284c7)" : "2px solid transparent",
+              color: activeTab === "install" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
               padding: "10px 14px",
               fontSize: 13,
               fontWeight: 700,
@@ -1020,7 +1020,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                       fontSize: 12,
                       fontWeight: connectMode === "form" ? 700 : 500,
                       background: connectMode === "form" ? "#ffffff" : "transparent",
-                      color: connectMode === "form" ? "#2563eb" : "var(--text-muted, #64748b)",
+                      color: connectMode === "form" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
                       boxShadow: connectMode === "form" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                       cursor: "pointer",
                       transition: "all 0.15s ease",
@@ -1038,7 +1038,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                       fontSize: 12,
                       fontWeight: connectMode === "json" ? 700 : 500,
                       background: connectMode === "json" ? "#ffffff" : "transparent",
-                      color: connectMode === "json" ? "#2563eb" : "var(--text-muted, #64748b)",
+                      color: connectMode === "json" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
                       boxShadow: connectMode === "json" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
                       cursor: "pointer",
                       transition: "all 0.15s ease",
@@ -1112,7 +1112,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                         padding: "9px 22px",
                         borderRadius: 8,
                         border: "none",
-                        background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                        background: "linear-gradient(135deg, var(--accent, #0284c7), #0369a1)",
                         color: "#fff",
                         fontWeight: 700,
                         fontSize: 13,
@@ -1120,7 +1120,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                         display: "flex",
                         alignItems: "center",
                         gap: 6,
-                        boxShadow: "0 2px 4px rgba(37, 99, 235, 0.25)",
+                        boxShadow: "0 2px 4px rgba(2, 132, 199, 0.25)",
                       }}
                     >
                       {isSubmitting ? <RefreshCw size={15} className="spin" /> : <Plus size={15} />}
@@ -1299,7 +1299,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                     padding: "9px 22px",
                     borderRadius: 8,
                     border: "none",
-                    background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                    background: "linear-gradient(135deg, var(--accent, #0284c7), #0369a1)",
                     color: "#fff",
                     fontWeight: 700,
                     fontSize: 13,
@@ -1307,7 +1307,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
-                    boxShadow: "0 2px 4px rgba(37, 99, 235, 0.25)",
+                    boxShadow: "0 2px 4px rgba(2, 132, 199, 0.25)",
                   }}
                 >
                   {isSubmitting ? <RefreshCw size={15} className="spin" /> : <Plus size={15} />}
