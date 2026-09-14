@@ -734,6 +734,75 @@ app.get("/api/tools", (req, res) => {
   res.json({ tools, discoveredTools });
 });
 
+// 3a. Dynamically Install / Register an MCP Server at Runtime (No Restart Required)
+app.post("/api/tools/install", requireAuth, async (req, res) => {
+  try {
+    const { name, command, args = [], url, headers, env, description } = req.body;
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({ success: false, error: "Server name is required." });
+    }
+
+    const serverDef: MCPServerDef = {
+      type: url ? "streamable-http" : "stdio",
+      command: command || undefined,
+      args: Array.isArray(args) ? args : [],
+      url: url || undefined,
+      headers: headers || undefined,
+      env: env || undefined,
+      description: description || undefined,
+      enabled: true,
+      strictSSL: false,
+    };
+
+    const result = await mcpManager.registerServerDynamically(name, serverDef);
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error || "Failed to register MCP server." });
+    }
+
+    // Persist into config so it survives server reboots
+    config.mcpServers[name] = serverDef;
+    try {
+      saveConfigToDisk(config);
+    } catch (saveErr: any) {
+      console.warn("[Config] Note: Could not persist new server to disk:", saveErr.message);
+    }
+
+    res.json({
+      success: true,
+      serverName: name,
+      toolsAdded: result.toolsAdded,
+      totalTools: mcpManager.getOpenAITools().length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3b. Dynamically Unregister an MCP Server at Runtime
+app.delete("/api/tools/:serverName", requireAuth, async (req, res) => {
+  try {
+    const serverName = String(req.params.serverName);
+    const success = await mcpManager.unregisterServer(serverName);
+
+    // Remove from in-memory config & persist
+    if (config.mcpServers[serverName]) {
+      delete config.mcpServers[serverName];
+      try {
+        saveConfigToDisk(config);
+      } catch {}
+    }
+
+    res.json({
+      success,
+      serverName,
+      totalTools: mcpManager.getOpenAITools().length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 // 3b. Server-side LLM Proxy & Health Test (Bypasses all client-side CORS and protects API keys)
 app.post("/api/llm/completions", requireAuth, async (req, res) => {
   try {
@@ -1331,7 +1400,7 @@ app.use((req, res) => {
   }
   res.send(`
     <div style="font-family: sans-serif; padding: 40px; text-align: center;">
-      <h2>Mini Chat Bot API Server is running on port ${PORT}</h2>
+      <h2>Minibot API Server is running on port ${PORT}</h2>
       <p>Frontend is currently building or running via Vite.</p>
       <p>Try querying <code>/api/config</code> or <code>/api/tools</code>.</p>
     </div>

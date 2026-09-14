@@ -13,7 +13,7 @@
  * 8. Comprehensive post-render SVG validation layer with diagnostic logging.
  * 9. Retains Dark/Light mode, Print/PDF, zoom/pan controls, and smart text wrapping.
  */
-export function generateStandaloneExportHtml(markdownContent: string, title: string = "Mini Chat Bot Export"): string {
+export function generateStandaloneExportHtml(markdownContent: string, title: string = "Minibot Export"): string {
   const encoded = encodeURIComponent(markdownContent);
 
   return `<!DOCTYPE html>

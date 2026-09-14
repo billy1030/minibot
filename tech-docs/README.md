@@ -24,6 +24,8 @@ Welcome to the **MiniBot** technical documentation. This directory provides in-d
 | [16. Security Hardening, SSRF Defense, HSTS & API Authorization Architecture](./16-security-hardening-and-ssrf-defense.md) | Comprehensive security posture: HTTP security headers, conditional HSTS, dynamic CORS origin verification, Secure session cookies, SSRF host filters, and route-level `requireAuth` guards. |
 | [17. Voice Recognition (STT), Copy-Paste Ergonomics & Interactive UI Enhancement](./17-voice-recognition-and-copy-paste-ergonomics.md) | Web Speech API STT integration (Cantonese, Mandarin, English), floating transcript pill, pulsing mic animation, output copy buttons, code-block copy icons, and prompt paste button. |
 | [18. Server-Side LLM Proxy & Cross-Origin (CORS) Security Architecture](./18-server-side-llm-proxy-and-cors-architecture.md) | Rationale and implementation for moving 100% of LLM operations server-side, preflight OPTIONS caching, dynamic CORS origin handling, and cross-origin fetch credentials. |
+| [19. Autonomous Self-Equipping Tools, Dynamic MCP Hot-Reloading & Document Processing Architecture](./19-autonomous-self-equipping-tools-and-dynamic-mcp-architecture.md) | Zero-downtime MCP hot-reloading, self-equipping meta-tools (`search_available_tools`, `install_mcp_package`, `list_active_tools`), remote file download, Word/Excel/PDF parsers, and Tools Hub drawer UI. |
+
 
 ---
 

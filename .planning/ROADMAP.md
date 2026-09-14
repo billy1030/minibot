@@ -1,5 +1,7 @@
 # Roadmap: Loop Engineering Chatbot with MCP
 
+> 📌 **Mid-Term Strategic Vision**: See [.planning/MID_TERM_OBJECTIVE.md](file:///c:/ai/loop-engg/.planning/MID_TERM_OBJECTIVE.md) for the 4-pillar roadmap to graduate MiniBot into a self-evolving autonomous engineering agent.
+
 ## Phases Overview
 
 ### Phase 1: Core Loop Protocol Engine & MCP Client Setup
@@ -29,3 +31,12 @@
 - End-to-end verification of user providing custom LLM config + custom prompt/skills + internet search MCP.
 - Produce documentation for extending with custom AI skills and external MCP servers.
 - **Deliverable**: Complete, battle-tested prototype ready for production customization.
+
+### Phase 5: Dynamic Agentic Tool & Skill Hub (Self-Equipping Agent)
+- Dynamic MCP Hot-Reloading: Add, remove, and reload MCP servers on the fly without restarting backend.
+- Agentic Meta-Tools: Expose `install_mcp_package`, `manage_minibot_tools`, and `search_tools_registry` so the LLM can autonomously equip itself with new tools mid-session.
+- Dynamic Skills System: Store, discover, and dynamically inject markdown-based skill contracts/recipes from `.agents/skills/` or online registries.
+- Tool & Skill Hub UI: Modern frontend drawer/modal allowing one-click tool management, server health monitoring, and skill activation.
+- Safe Execution & Sandboxing: Environment isolation, dependency check, and human-in-the-loop (HITL) approval toggles for dynamic package installation.
+- **Deliverable**: Autonomous self-equipping agent capability where MiniBot can download, install, and immediately use tools and skills on demand.
+

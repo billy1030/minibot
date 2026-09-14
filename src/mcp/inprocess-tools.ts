@@ -1,6 +1,10 @@
+import fs from "node:fs";
+import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import * as XLSX from "xlsx";
 import { DiscoveredTool } from "./client-manager.js";
+import { preprocessDocument } from "../documents/preprocessor.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -190,7 +194,112 @@ async function minimaxGenerateMusic(prompt: string): Promise<string> {
 }
 
 // ==========================================
-// 3. Exported In-Process Tool Definitions & Dispatcher
+// 3. Document Download & Office File Parsers (Word, Excel, PDF)
+// ==========================================
+
+async function downloadRemoteFile(url: string, customFileName?: string): Promise<string> {
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return `Failed to download: Protocol "${parsed.protocol}" is not supported.`;
+    }
+    if (isPrivateOrReservedHost(parsed.hostname)) {
+      return `Access to local, private, or metadata network addresses (${parsed.hostname}) is restricted for security.`;
+    }
+
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+      signal: AbortSignal.timeout(30000), // 30s timeout for downloads
+    });
+
+    if (!res.ok) {
+      return `Failed to download file from ${url}: HTTP ${res.status} ${res.statusText}`;
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Determine filename
+    let fileName = customFileName?.trim();
+    if (!fileName) {
+      const pathname = parsed.pathname;
+      fileName = path.basename(pathname) || `downloaded_${Date.now()}`;
+    }
+
+    // Save to storage/downloads/
+    const downloadDir = path.resolve(process.cwd(), "storage/downloads");
+    if (!fs.existsSync(downloadDir)) {
+      fs.mkdirSync(downloadDir, { recursive: true });
+    }
+
+    const filePath = path.join(downloadDir, fileName);
+    fs.writeFileSync(filePath, buffer);
+
+    // Auto-parse preview if it's an office doc (pdf, docx, xlsx, etc.)
+    let parsedSummary = "";
+    try {
+      const preprocessed = await preprocessDocument(buffer, fileName);
+      parsedSummary = `\n\n📄 **Document Preview & Summary:**\n${preprocessed.previewSnippet.slice(0, 2000)}`;
+    } catch {}
+
+    return `✅ Successfully downloaded file "${fileName}" (${(buffer.length / 1024).toFixed(1)} KB) to \`${filePath}\`.${parsedSummary}`;
+  } catch (err: any) {
+    return `Error downloading file from ${url}: ${err.message}`;
+  }
+}
+
+async function readOfficeDocument(filePath: string): Promise<string> {
+  try {
+    const resolvedPath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+    if (!fs.existsSync(resolvedPath)) {
+      // Check in storage/downloads as fallback
+      const inDownloads = path.resolve(process.cwd(), "storage/downloads", path.basename(filePath));
+      if (!fs.existsSync(inDownloads)) {
+        return `File not found at path: ${filePath}`;
+      }
+      return await readOfficeDocument(inDownloads);
+    }
+
+    const buffer = fs.readFileSync(resolvedPath);
+    const fileName = path.basename(resolvedPath);
+    const result = await preprocessDocument(buffer, fileName);
+
+    return result.text;
+  } catch (err: any) {
+    return `Failed to read document "${filePath}": ${err.message}`;
+  }
+}
+
+async function createExcelSpreadsheet(fileName: string, sheets: Array<{ sheetName: string; rows: any[][] }>): Promise<string> {
+  try {
+    let safeName = fileName.trim();
+    if (!safeName.endsWith(".xlsx")) safeName += ".xlsx";
+
+    const exportDir = path.resolve(process.cwd(), "storage/exports");
+    if (!fs.existsSync(exportDir)) {
+      fs.mkdirSync(exportDir, { recursive: true });
+    }
+
+    const filePath = path.join(exportDir, safeName);
+    const workbook = XLSX.utils.book_new();
+
+    for (const s of sheets) {
+      const ws = XLSX.utils.aoa_to_sheet(s.rows || []);
+      XLSX.utils.book_append_sheet(workbook, ws, s.sheetName || "Sheet1");
+    }
+
+    XLSX.writeFile(workbook, filePath);
+    return `✅ Excel spreadsheet successfully created at: \`${filePath}\` (Sheets: ${sheets.map((s) => s.sheetName).join(", ")})`;
+  } catch (err: any) {
+    return `Failed to create Excel spreadsheet: ${err.message}`;
+  }
+}
+
+// ==========================================
+// 4. Exported In-Process Tool Definitions & Dispatcher
 // ==========================================
 
 export const BUILTIN_INPROCESS_TOOLS: DiscoveredTool[] = [
@@ -269,14 +378,138 @@ export const BUILTIN_INPROCESS_TOOLS: DiscoveredTool[] = [
       required: ["prompt"],
     },
   },
+  // 📥 Autonomous Document Tools (Download, Parse Word/PDF/Excel, Export Excel)
+  {
+    serverName: "web-search",
+    name: "download_remote_file",
+    description: "Download any remote file (Word .docx, PDF .pdf, Excel .xlsx/.csv, text) from a public URL to local storage and return its path and content summary.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "The direct public HTTP/HTTPS URL of the file to download" },
+        customFileName: { type: "string", description: "Optional desired local file name (e.g. quarterly_report.xlsx)" },
+      },
+      required: ["url"],
+    },
+  },
+  {
+    serverName: "web-search",
+    name: "read_office_document",
+    description: "Extract and convert any local Word document (.docx), PDF (.pdf), or Excel spreadsheet (.xlsx, .xls, .csv) into clean structured Markdown text and tables.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filePath: { type: "string", description: "Local file path or filename to read and parse" },
+      },
+      required: ["filePath"],
+    },
+  },
+  {
+    serverName: "web-search",
+    name: "create_excel_spreadsheet",
+    description: "Generate a formatted Excel workbook (.xlsx) with one or more sheets from structured 2D row/column data arrays.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fileName: { type: "string", description: "Name of the Excel file to generate (e.g. sales_summary.xlsx)" },
+        sheets: {
+          type: "array",
+          description: "List of sheets to create with 2D array of row cells",
+          items: {
+            type: "object",
+            properties: {
+              sheetName: { type: "string", description: "Title of the sheet" },
+              rows: {
+                type: "array",
+                description: "2D array of cells (rows of columns)",
+                items: { type: "array", items: {} },
+              },
+            },
+            required: ["sheetName", "rows"],
+          },
+        },
+      },
+      required: ["fileName", "sheets"],
+    },
+  },
+  // 🤖 Self-Equipping Meta-Tools
+  {
+    serverName: "web-search",
+    name: "search_available_tools",
+    description: "Search the catalog and registry of available MCP tools & servers (e.g. sqlite, memory, github, filesystem, postgres, puppeteer) that can be installed on demand.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query or keyword (e.g. database, github, browser, memory, sqlite)" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    serverName: "web-search",
+    name: "install_mcp_package",
+    description: "Autonomously download, configure, and mount a new MCP tool package into MiniBot at runtime. Newly installed tools become immediately usable in your next reasoning iteration!",
+    inputSchema: {
+      type: "object",
+      properties: {
+        serverName: { type: "string", description: "Alphanumeric identifier for the server (e.g. sqlite, github, memory)" },
+        packageOrCommand: { type: "string", description: "Command or npm package name (e.g. 'npx' or '@modelcontextprotocol/server-sqlite')" },
+        args: {
+          type: "array",
+          items: { type: "string" },
+          description: "Command line arguments (e.g. ['-y', '@modelcontextprotocol/server-sqlite', '--db-path', 'data.db'])",
+        },
+        env: {
+          type: "object",
+          description: "Optional environment variables for the tool (e.g. { GITHUB_PERSONAL_ACCESS_TOKEN: '...' })",
+        },
+      },
+      required: ["serverName"],
+    },
+  },
+  {
+    serverName: "web-search",
+    name: "list_active_tools",
+    description: "List all currently mounted MCP tools, servers, and capabilities currently available in MiniBot.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
 ];
 
-export async function executeInProcessTool(name: string, args: Record<string, any>): Promise<string | null> {
+export async function executeInProcessTool(name: string, args: Record<string, any>, mcpManager?: any): Promise<string | null> {
   switch (name) {
     case "web_search":
       return await performSearch(String(args?.query || ""), Number(args?.maxResults) || 5);
     case "fetch_page":
       return await fetchPage(String(args?.url || ""));
+    case "download_remote_file":
+      return await downloadRemoteFile(String(args?.url || ""), args?.customFileName);
+    case "read_office_document":
+      return await readOfficeDocument(String(args?.filePath || ""));
+    case "create_excel_spreadsheet":
+      return await createExcelSpreadsheet(String(args?.fileName || ""), args?.sheets || []);
+    case "search_available_tools": {
+      const { searchToolsRegistry } = await import("./meta-tools.js");
+      return searchToolsRegistry(String(args?.query || ""));
+    }
+    case "list_active_tools": {
+      if (!mcpManager) return "MCP manager instance not provided.";
+      const { listActiveTools } = await import("./meta-tools.js");
+      return listActiveTools(mcpManager);
+    }
+    case "install_mcp_package": {
+      if (!mcpManager) return "MCP manager instance not provided.";
+      const { installMcpPackage } = await import("./meta-tools.js");
+      return await installMcpPackage(
+        mcpManager,
+        String(args?.serverName || ""),
+        String(args?.packageOrCommand || "npx"),
+        Array.isArray(args?.args) ? args.args : [],
+        args?.env
+      );
+    }
     case "minimax_search":
       return await minimaxSearch(String(args?.query || ""));
     case "minimax_generate_image":
@@ -289,3 +522,4 @@ export async function executeInProcessTool(name: string, args: Record<string, an
       return null;
   }
 }
+

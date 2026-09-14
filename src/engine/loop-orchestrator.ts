@@ -77,14 +77,15 @@ export class LoopOrchestrator {
     // 3. Append current user query
     messages.push({ role: "user", content: userPrompt });
 
-    const tools = this.mcpManager.getOpenAITools() as OpenAI.Chat.Completions.ChatCompletionTool[];
-
     let iteration = 0;
     const maxIterations = this.config.maxLoopIterations;
 
     while (iteration < maxIterations) {
       iteration++;
       callbacks?.onStepStart?.(iteration);
+
+      // Dynamically fetch tools each iteration so newly installed tools are immediately visible to LLM
+      const tools = this.mcpManager.getOpenAITools() as OpenAI.Chat.Completions.ChatCompletionTool[];
 
       try {
         const completion = await this.llmClient.createChatCompletion(messages, tools);

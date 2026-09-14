@@ -22,5 +22,6 @@
   - Token and character count estimation metrics in chat bubble footers
 
 ## Next Phase
-- **Phase 3: React.js Web UI & Configuration Dashboard Polish**
-  - Enhanced tool visualization, live token budgeting, and custom prompt injection.
+- **Phase 5: Dynamic Agentic Tool & Skill Hub (Self-Equipping Agent)** [IN PLANNING]
+  - Hot-reloadable MCP client manager, autonomous tool discovery & installation meta-tools, dynamic markdown skill ingestion, and frontend Tool & Skill Hub.
+

@@ -62,6 +62,8 @@ import { UserManagementModal } from "./components/UserManagementModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { ExportHtmlModal } from "./components/ExportHtmlModal";
 import { GitSyncModal } from "./components/GitSyncModal";
+import { ToolHubModal, type ToolItem } from "./components/ToolHubModal";
+import { Wrench } from "lucide-react";
 
 interface ToolCallLog {
   id: string;
@@ -154,7 +156,7 @@ export function App() {
       id: "welcome",
       role: "assistant",
       content:
-        "Hello! I am your Mini Chat Bot. I can run multi-step reasoning loops and fetch real-time data from the web using MCP tools. What would you like to research or build today?",
+        "Hello! I am your Minibot. I can run multi-step reasoning loops and fetch real-time data from the web using MCP tools. What would you like to research or build today?",
     },
   ]);
   const [inputPrompt, setInputPrompt] = useState("");
@@ -193,6 +195,8 @@ export function App() {
   const [showDocModal, setShowDocModal] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showGitSyncModal, setShowGitSyncModal] = useState<boolean>(false);
+  const [showToolHubModal, setShowToolHubModal] = useState<boolean>(false);
+  const [activeToolsList, setActiveToolsList] = useState<ToolItem[]>([]);
   const [activeDocHashes, setActiveDocHashes] = useState<string[]>([]);
   const [alertPrompt, setAlertPrompt] = useState<Omit<ModalAlertProps, "onClose"> | null>(null);
   const [editingSessionFile, setEditingSessionFile] = useState<string | null>(null);
@@ -666,7 +670,7 @@ export function App() {
         id: "welcome",
         role: "assistant",
         content:
-          "Hello! I am your Mini Chat Bot. I can run multi-step reasoning loops and fetch real-time data from the web using MCP tools. What would you like to research or build today?",
+          "Hello! I am your Minibot. I can run multi-step reasoning loops and fetch real-time data from the web using MCP tools. What would you like to research or build today?",
       },
     ]);
     setActiveSessionFile(null);
@@ -766,8 +770,65 @@ export function App() {
       if (!isConfigured) {
         setShowConfig(true);
       }
+      await fetchTools();
     } catch (err) {
       console.error("Failed to load config:", err);
+    }
+  };
+
+  const fetchTools = async () => {
+    try {
+      const res = await fetch("/api/tools", { credentials: "include" });
+      const data = await res.json();
+      if (data.discoveredTools) {
+        setActiveToolsList(data.discoveredTools);
+      }
+    } catch (err) {
+      console.error("Failed to fetch tools:", err);
+    }
+  };
+
+  const handleInstallMcpServer = async (serverData: {
+    name: string;
+    command?: string;
+    args?: string[];
+    url?: string;
+    description?: string;
+  }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch("/api/tools/install", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(serverData),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await fetchTools();
+        await fetchConfig();
+        return { success: true };
+      }
+      return { success: false, error: data.error || "Failed to install server" };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Network error" };
+    }
+  };
+
+  const handleDeleteMcpServer = async (serverName: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`/api/tools/${encodeURIComponent(serverName)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await fetchTools();
+        await fetchConfig();
+        return { success: true };
+      }
+      return { success: false, error: data.error || "Failed to remove server" };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Network error" };
     }
   };
 
@@ -1645,7 +1706,24 @@ export function App() {
             <Cpu size={20} color="#fff" />
           </div>
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)" }}>Mini Chat Bot</h2>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)", margin: 0 }}>Minibot</h2>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: "1px 5px",
+                  borderRadius: 9999,
+                  background: "rgba(59, 130, 246, 0.12)",
+                  color: "var(--accent, #2563eb)",
+                  border: "1px solid rgba(59, 130, 246, 0.28)",
+                  lineHeight: "13px",
+                  letterSpacing: "0.2px",
+                }}
+              >
+                v1.1
+              </span>
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
               <span
                 style={{
@@ -3018,6 +3096,52 @@ export function App() {
               }}
             >
               <Download size={15} />
+            </button>
+
+            {/* 🛠️ Agentic Tools & Skills Hub Button (Shows active tools count badge) */}
+            <button
+              onClick={() => {
+                fetchTools();
+                setShowToolHubModal(true);
+              }}
+              title="Agentic Tools & Skills Hub (Dynamic MCP servers, document download/parse tools, hot-reload)"
+              style={{
+                height: 32,
+                padding: "0 9px",
+                borderRadius: 8,
+                background: showToolHubModal ? "rgba(59, 130, 246, 0.15)" : "var(--bg-card)",
+                border: showToolHubModal ? "1px solid #3b82f6" : "1px solid var(--border-color)",
+                color: showToolHubModal ? "#60a5fa" : "var(--text-muted)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#3b82f6";
+                e.currentTarget.style.color = "#60a5fa";
+              }}
+              onMouseLeave={(e) => {
+                if (!showToolHubModal) {
+                  e.currentTarget.style.borderColor = "var(--border-color)";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }
+              }}
+            >
+              <Wrench size={14} />
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  background: "rgba(59, 130, 246, 0.25)",
+                  color: "#60a5fa",
+                  padding: "1px 5px",
+                  borderRadius: 10,
+                }}
+              >
+                {activeToolsList.length || 24}
+              </span>
             </button>
 
             {/* ⚙️ Parameters & AI Configuration Icon Button */}
@@ -6324,6 +6448,16 @@ export function App() {
         onClose={() => setShowGitSyncModal(false)}
         onGitSync={handleGitSync}
         isSyncing={isGitSyncing}
+      />
+
+      {/* Agentic Tools & Skills Hub Modal */}
+      <ToolHubModal
+        isOpen={showToolHubModal}
+        onClose={() => setShowToolHubModal(false)}
+        tools={activeToolsList}
+        onRefreshTools={fetchTools}
+        onInstallServer={handleInstallMcpServer}
+        onDeleteServer={handleDeleteMcpServer}
       />
     </div>
   );

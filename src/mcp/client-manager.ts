@@ -177,7 +177,7 @@ export class MCPClientManager {
     }
 
     // 1. Check if tool is handled by in-process builtins first
-    const inProcessResult = await executeInProcessTool(name, args);
+    const inProcessResult = await executeInProcessTool(name, args, this);
     if (inProcessResult !== null) {
       return inProcessResult;
     }
@@ -222,6 +222,157 @@ export class MCPClientManager {
   }
 
   /**
+   * Register or replace a single MCP server dynamically at runtime without restarting
+   */
+  async registerServerDynamically(serverName: string, def: MCPServerDef): Promise<{ success: boolean; toolsAdded: string[]; error?: string }> {
+    try {
+      // 1. If server already exists, unregister it first
+      await this.unregisterServer(serverName);
+
+      if (!def.enabled) {
+        return { success: true, toolsAdded: [] };
+      }
+
+      const isHttp = def.type === "http" || def.type === "streamable-http" || def.transport === "streamable-http" || (def.url && !def.command);
+      const toolsAdded: string[] = [];
+
+      if (isHttp && def.url) {
+        const resolvedHeaders: Record<string, string> = {};
+        if (def.headers) {
+          for (const [hk, hv] of Object.entries(def.headers)) {
+            let val = hv;
+            for (const [envK, envV] of Object.entries(process.env)) {
+              if (envV !== undefined) {
+                val = val.replace(`\${${envK}}`, envV);
+              }
+            }
+            resolvedHeaders[hk] = val;
+          }
+        }
+
+        let token = process.env.BIGFIX_BEARER_TOKEN || "9qdVuQuIkXazX7eRa9s98LRB10VlXsze5uuYTQAAAAI";
+        if (resolvedHeaders["Authorization"]) {
+          token = resolvedHeaders["Authorization"].replace(/^Bearer\s+/i, "");
+        }
+
+        const httpClient = new BigFixStreamableHttpClient({
+          url: def.url,
+          token,
+          readOnly: resolvedHeaders["X-Bes-Mcp-Read-Only"] !== "false",
+          disableHitl: resolvedHeaders["X-Bes-Mcp-Disable-Hitl"] === "true",
+        });
+
+        await httpClient.connect();
+        this.httpClients.set(serverName, httpClient);
+
+        const toolsList = await httpClient.listTools();
+        for (const tool of toolsList) {
+          this.tools.set(tool.name, {
+            serverName,
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema,
+          });
+          toolsAdded.push(tool.name);
+        }
+        console.log(`[MCP Dynamic] Registered remote HTTP server "${serverName}" (${toolsAdded.length} tools)`);
+        return { success: true, toolsAdded };
+      } else if (def.command) {
+        const envRecord: Record<string, string> = {};
+        for (const [k, v] of Object.entries(process.env)) {
+          if (v !== undefined) envRecord[k] = v;
+        }
+        if (def.env) {
+          for (const [k, v] of Object.entries(def.env)) {
+            if (v !== undefined) envRecord[k] = String(v);
+          }
+        }
+
+        const transport = new StdioClientTransport({
+          command: def.command,
+          args: def.args,
+          env: envRecord,
+        });
+
+        const client = new Client(
+          {
+            name: `loop-client-${serverName}`,
+            version: "1.0.0",
+          },
+          {
+            capabilities: {},
+          }
+        );
+
+        await client.connect(transport);
+        this.stdioClients.set(serverName, { client, transport });
+
+        const toolsResult = await client.listTools();
+        for (const tool of toolsResult.tools) {
+          this.tools.set(tool.name, {
+            serverName,
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema,
+          });
+          toolsAdded.push(tool.name);
+        }
+        console.log(`[MCP Dynamic] Registered stdio server "${serverName}" (${toolsAdded.length} tools)`);
+        return { success: true, toolsAdded };
+      } else {
+        // In-process fallback or virtual server
+        const builtins = BUILTIN_INPROCESS_TOOLS.filter((t) => t.serverName === serverName);
+        for (const tool of builtins) {
+          this.tools.set(tool.name, tool);
+          toolsAdded.push(tool.name);
+        }
+        return { success: true, toolsAdded };
+      }
+    } catch (err: any) {
+      console.error(`[MCP Dynamic Error] Failed to register server "${serverName}":`, err.message);
+      return { success: false, toolsAdded: [], error: err.message };
+    }
+  }
+
+  /**
+   * Dynamically unregisters and closes a single MCP server
+   */
+  async unregisterServer(serverName: string): Promise<boolean> {
+    // 1. Close stdio if exists
+    const stdioEntry = this.stdioClients.get(serverName);
+    if (stdioEntry) {
+      try {
+        await stdioEntry.client.close();
+        await stdioEntry.transport.close();
+      } catch {}
+      this.stdioClients.delete(serverName);
+    }
+
+    // 2. Disconnect HTTP if exists
+    const httpEntry = this.httpClients.get(serverName);
+    if (httpEntry) {
+      this.httpClients.delete(serverName);
+    }
+
+    // 3. Remove all tools associated with this server
+    for (const [toolName, tool] of this.tools.entries()) {
+      if (tool.serverName === serverName) {
+        this.tools.delete(toolName);
+      }
+    }
+
+    console.log(`[MCP Dynamic] Unregistered server "${serverName}"`);
+    return true;
+  }
+
+  /**
+   * Dynamically register an in-process tool directly
+   */
+  registerInProcessTool(tool: DiscoveredTool): void {
+    this.tools.set(tool.name, tool);
+  }
+
+  /**
    * Dynamically reloads and switches MCP servers at runtime
    */
   async reloadServers(serversConfig: Record<string, MCPServerDef>): Promise<void> {
@@ -246,3 +397,4 @@ export class MCPClientManager {
     this.tools.clear();
   }
 }
+
