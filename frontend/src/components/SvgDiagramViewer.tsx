@@ -31,10 +31,13 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-clean raw SVG: fix unescaped ampersands inside SVG text elements that break XML parsers
+  // Auto-clean raw SVG: ensure strict <svg> bounds and fix unescaped ampersands
   const cleanSvg = useMemo(() => {
     if (!svgContent) return "";
-    return svgContent.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, "&amp;");
+    const startIdx = svgContent.indexOf("<svg");
+    const endIdx = svgContent.lastIndexOf("</svg>");
+    let isolated = startIdx !== -1 && endIdx !== -1 ? svgContent.slice(startIdx, endIdx + 6) : svgContent;
+    return isolated.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, "&amp;");
   }, [svgContent]);
 
   const zoomIn = (e?: React.MouseEvent) => {
