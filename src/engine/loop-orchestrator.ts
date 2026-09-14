@@ -61,6 +61,15 @@ export class LoopOrchestrator {
       );
     }
 
+    // Strict Language Alignment Protocol: Prevent mixed-language artifacts (e.g. Chinese words like "卡点" in English diagrams)
+    systemPromptParts.push(
+      "\n--- Mandatory Language Alignment Protocol ---\n",
+      "STRICT LANGUAGE MATCHING RULE: Always generate all output (including markdown explanations, headers, diagram titles, badge chips, and SVG node labels) in the EXACT SAME LANGUAGE as the user's prompt.\n" +
+      "- If the user asks in English (e.g. 'use serenity skill to do stock market analysis of AI neocloud and data centre'): ALL headings, diagram labels, pill badges, and texts MUST be 100% in English. NEVER insert Chinese characters such as '卡点' (use 'Bottleneck' or 'Chokepoint'), '判据' (use 'Criteria'), or '框架' (use 'Framework') into English responses or diagrams.\n" +
+      "- If the user asks in Chinese: Respond naturally in Chinese.\n" +
+      "Never mix stray Chinese characters into an English diagram or response."
+    );
+
     // Dynamically resolve and inject global & workspace-scoped skills
     const { promptSection: resolvedSkills, activeSkillNames } = globalSkillManager.resolveSkillPromptSection(
       userPrompt,
