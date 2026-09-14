@@ -21,6 +21,7 @@ interface ConversationSession {
   startTime: Date;
   endTime: Date;
   attachedDocHashes?: string[];
+  activeSkills?: string[];
 }
 
 /**
@@ -263,6 +264,7 @@ export function saveConversationLog(session: ConversationSession, baseDir: strin
       "## Turn 1: User Prompt",
       session.userPrompt,
       "",
+      ...(session.activeSkills && session.activeSkills.length > 0 ? [`- **Active Skills**: \`${JSON.stringify(session.activeSkills)}\``, ""] : []),
       "---",
       "",
       "## Autonomous Loop Tool Calls & Observations",
@@ -321,6 +323,7 @@ export function saveConversationLog(session: ConversationSession, baseDir: strin
       `## Turn ${turnNumber}: User Prompt`,
       session.userPrompt,
       "",
+      ...(session.activeSkills && session.activeSkills.length > 0 ? [`- **Active Skills**: \`${JSON.stringify(session.activeSkills)}\``, ""] : []),
       "---",
       "",
       `## Autonomous Loop Tool Calls & Observations (Turn ${turnNumber})`,
@@ -617,6 +620,15 @@ export function parseConversationLog(filename: string, workspace: string = "defa
       });
     }
 
+    // Extract active skills if present
+    const skillsMatch = turnBlock.match(/- \*\*Active Skills\*\*: `([^`]+)`/);
+    let activeSkills: string[] | undefined = undefined;
+    if (skillsMatch) {
+      try {
+        activeSkills = JSON.parse(skillsMatch[1]);
+      } catch {}
+    }
+
     if (userPrompt) {
       messages.push({
         id: `user-turn-${turnNum}`,
@@ -634,6 +646,7 @@ export function parseConversationLog(filename: string, workspace: string = "defa
         toolCalls,
         turnIndex: turnNum,
         isStreaming: false,
+        activeSkills,
       });
     }
   }

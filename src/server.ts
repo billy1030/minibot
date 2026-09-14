@@ -1041,11 +1041,18 @@ app.post("/api/chat", requireAuth, async (req, res) => {
     const docContextResult = docManager.getPreprocessedContext(attachedDocHashes || []);
     const attachedContext = docContextResult.context;
 
+    let activatedSkillNames: string[] = [];
+
     await orchestrator.run(
       message,
       {
         onStepStart: (iteration) => {
           sendEvent("step_start", { iteration });
+        },
+        onSkillActivated: (skillNames) => {
+          console.log(`[Loop Server] ✨ Skills dynamically activated:`, skillNames);
+          activatedSkillNames = skillNames;
+          sendEvent("skills_activated", { skills: skillNames, timestamp: Date.now() });
         },
         onToolCall: (toolName, toolArgs, serverName) => {
           console.log(`[Loop Server] 🛠️ Tool invoked: "${toolName}" via MCP Server: [${serverName}]`);
@@ -1092,7 +1099,8 @@ app.post("/api/chat", requireAuth, async (req, res) => {
             });
           }
         },
-        onComplete: (answer, iterations) => {
+        onComplete: (answer, iterations, activeSkills) => {
+          const finalSkills = activeSkills && activeSkills.length > 0 ? activeSkills : activatedSkillNames;
           let savedFile = sessionFile;
           try {
             savedFile = saveConversationLog(
@@ -1108,6 +1116,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
                 startTime,
                 endTime: new Date(),
                 attachedDocHashes: attachedDocHashes || [],
+                activeSkills: finalSkills,
               },
               "logs",
               userNumber
@@ -1116,7 +1125,13 @@ app.post("/api/chat", requireAuth, async (req, res) => {
             console.error(`[Conversation Logger] Failed to save log: ${logErr.message}`);
           }
 
-          sendEvent("complete", { answer, iterations, sessionFile: savedFile, workspace: workspace || "default" });
+          sendEvent("complete", {
+            answer,
+            iterations,
+            sessionFile: savedFile,
+            workspace: workspace || "default",
+            activeSkills: finalSkills,
+          });
           if (!res.writableEnded) {
             res.write("event: end\ndata: {}\n\n");
             res.end();

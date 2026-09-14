@@ -236,13 +236,14 @@ export class SkillManager {
     userPrompt: string,
     workspace: string = "default",
     userNumber: string = "00000"
-  ): string {
+  ): { promptSection: string; activeSkillNames: string[] } {
     const allSkills = this.listAvailableSkills(workspace, userNumber);
-    if (allSkills.length === 0) return "";
+    if (allSkills.length === 0) return { promptSection: "", activeSkillNames: [] };
 
     const lowerPrompt = userPrompt.toLowerCase();
     const activeInjections: string[] = [];
     const passiveSummaries: string[] = [];
+    const activeSkillNames: string[] = [];
 
     for (const skill of allSkills) {
       // Check if prompt matches skill name, triggers, or key terms
@@ -258,6 +259,7 @@ export class SkillManager {
           activeInjections.push(
             `### Active Skill: ${skill.name} [Scope: ${skill.scope.toUpperCase()}]\n${body}`
           );
+          activeSkillNames.push(skill.name);
         } catch {}
       } else {
         passiveSummaries.push(
@@ -279,7 +281,10 @@ export class SkillManager {
       );
     }
 
-    return sections.join("\n\n");
+    return {
+      promptSection: sections.join("\n\n"),
+      activeSkillNames,
+    };
   }
 }
 

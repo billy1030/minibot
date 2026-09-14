@@ -56,6 +56,7 @@ import { AlertModal, type ModalAlertProps } from "./components/AlertModal";
 import { UploadDocModal } from "./components/UploadDocModal";
 import { SubConversationModal } from "./components/SubConversationModal";
 import { ThoughtBlock } from "./components/ThoughtBlock";
+import { ActiveSkillsBar } from "./components/ActiveSkillsBar";
 import { useAuth } from "./contexts/AuthContext";
 import { LoginPage } from "./pages/LoginPage";
 import { TwoFactorSetupModal } from "./components/TwoFactorSetupModal";
@@ -80,6 +81,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   toolCalls?: ToolCallLog[];
+  activeSkills?: string[];
   isStreaming?: boolean;
   iterations?: number;
   duration?: number;
@@ -1573,6 +1575,7 @@ export function App() {
       let buffer = "";
 
       let activeTools: ToolCallLog[] = [];
+      let activeSkills: string[] = [];
 
       while (true) {
         const { value, done } = await reader.read();
@@ -1599,6 +1602,17 @@ export function App() {
 
           if (event === "step_start") {
             setCurrentStep(data.iteration);
+          } else if (event === "skills_activated") {
+            if (Array.isArray(data.skills)) {
+              activeSkills = data.skills;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, activeSkills: [...data.skills] }
+                    : m
+                )
+              );
+            }
           } else if (event === "tool_call") {
             const toolId = `tool-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
             const newTool: ToolCallLog = {
@@ -1647,6 +1661,8 @@ export function App() {
               setActiveSessionFile(data.sessionFile);
             }
 
+            const finalSkills = data.activeSkills || activeSkills;
+
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMessageId
@@ -1657,6 +1673,7 @@ export function App() {
                       duration: parseFloat(totalDurationSec.toFixed(1)),
                       tokensPerSec,
                       isStreaming: false,
+                      activeSkills: finalSkills && finalSkills.length > 0 ? finalSkills : undefined,
                     }
                   : m
               )
@@ -4637,6 +4654,18 @@ export function App() {
 
                       return (
                         <>
+                          {/* 📚 Active Skills Badge Bar (if skills were activated for this turn) */}
+                          {m.activeSkills && m.activeSkills.length > 0 && (
+                            <ActiveSkillsBar
+                              skills={m.activeSkills}
+                              workspace={currentWorkspace}
+                              onOpenSkillHub={() => {
+                                fetchSkills(currentWorkspace);
+                                setShowToolHubModal(true);
+                              }}
+                            />
+                          )}
+
                           {/* Dedicated Thinking Block */}
                           {thoughtText && (
                             <ThoughtBlock

@@ -6,10 +6,11 @@ import { globalSkillManager } from "../skills/skill-manager.js";
 
 export interface LoopEventCallbacks {
   onStepStart?: (iteration: number) => void;
+  onSkillActivated?: (skillNames: string[]) => void;
   onLLMResponse?: (response: OpenAI.Chat.Completions.ChatCompletion) => void;
   onToolCall?: (toolName: string, args: any, serverName?: string) => void;
   onToolResult?: (toolName: string, result: string, serverName?: string) => void;
-  onComplete?: (finalAnswer: string, iterations: number) => void;
+  onComplete?: (finalAnswer: string, iterations: number, activeSkills?: string[]) => void;
   onError?: (error: Error) => void;
 }
 
@@ -35,7 +36,7 @@ export class LoopOrchestrator {
     enableThinking: boolean = true,
     workspace: string = "default",
     userNumber: string = "00000"
-  ): Promise<{ answer: string; iterations: number; history: OpenAI.Chat.Completions.ChatCompletionMessageParam[] }> {
+  ): Promise<{ answer: string; iterations: number; history: OpenAI.Chat.Completions.ChatCompletionMessageParam[]; activeSkills?: string[] }> {
     // 1. Build initial system message combining system prompt, attached docs, and AI skills
     const systemPromptParts = [this.config.prompts.systemPrompt];
 
@@ -53,13 +54,17 @@ export class LoopOrchestrator {
     );
 
     // Dynamically resolve and inject global & workspace-scoped skills
-    const resolvedSkills = globalSkillManager.resolveSkillPromptSection(
+    const { promptSection: resolvedSkills, activeSkillNames } = globalSkillManager.resolveSkillPromptSection(
       userPrompt,
       workspace || "default",
       userNumber || "00000"
     );
     if (resolvedSkills && resolvedSkills.trim().length > 0) {
       systemPromptParts.push("\n" + resolvedSkills);
+    }
+
+    if (activeSkillNames.length > 0) {
+      callbacks?.onSkillActivated?.(activeSkillNames);
     }
 
     if (!enableThinking) {
@@ -153,8 +158,8 @@ export class LoopOrchestrator {
 
         // If no tool call, this is the final answer
         const finalAnswer = message.content || "(No response content)";
-        callbacks?.onComplete?.(finalAnswer, iteration);
-        return { answer: finalAnswer, iterations: iteration, history: messages };
+        callbacks?.onComplete?.(finalAnswer, iteration, activeSkillNames);
+        return { answer: finalAnswer, iterations: iteration, history: messages, activeSkills: activeSkillNames };
       } catch (err: any) {
         callbacks?.onError?.(err);
         throw err;
@@ -162,7 +167,7 @@ export class LoopOrchestrator {
     }
 
     const fallbackMsg = `[Guardrail]: Loop reached maximum iterations limit (${maxIterations}).`;
-    callbacks?.onComplete?.(fallbackMsg, iteration);
-    return { answer: fallbackMsg, iterations: iteration, history: messages };
+    callbacks?.onComplete?.(fallbackMsg, iteration, activeSkillNames);
+    return { answer: fallbackMsg, iterations: iteration, history: messages, activeSkills: activeSkillNames };
   }
 }
