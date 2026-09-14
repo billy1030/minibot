@@ -166,6 +166,25 @@ export function App() {
   const [inputPrompt, setInputPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState<number | null>(null);
+  const [activeRunStartTime, setActiveRunStartTime] = useState<number | null>(null);
+  const [liveElapsedSec, setLiveElapsedSec] = useState<number>(0);
+
+  // Live timer tick during inference & tool execution
+  useEffect(() => {
+    let interval: any = null;
+    if (loading && activeRunStartTime) {
+      setLiveElapsedSec(Math.max(0, Math.floor((Date.now() - activeRunStartTime) / 1000)));
+      interval = setInterval(() => {
+        setLiveElapsedSec(Math.max(0, Math.floor((Date.now() - activeRunStartTime) / 1000)));
+      }, 500);
+    } else {
+      setLiveElapsedSec(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [loading, activeRunStartTime]);
+
   const [showConfig, setShowConfig] = useState(false);
   const [configActiveTab, setConfigActiveTab] = useState<"model" | "system_prompt" | "svg_palette" | "ai_skills">("model");
   const [showApiKey, setShowApiKey] = useState(false);
@@ -1554,6 +1573,7 @@ export function App() {
       }));
 
     const requestStartTime = Date.now();
+    setActiveRunStartTime(requestStartTime);
 
     try {
       const response = await fetch("/api/chat", {
@@ -1700,6 +1720,7 @@ export function App() {
     } finally {
       setLoading(false);
       setCurrentStep(null);
+      setActiveRunStartTime(null);
     }
   };
 
@@ -4681,8 +4702,27 @@ export function App() {
                           {mainText ? (
                             <MarkdownRenderer content={mainText} />
                           ) : thoughtText && m.isStreaming ? (
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--text-muted)", fontSize: 13, fontStyle: "italic", padding: "4px 0" }}>
-                              <Loader2 size={13} className="spin" color="#a855f7" /> Thinking in progress...
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--text-muted)", fontSize: 13, fontStyle: "italic", padding: "4px 0" }}>
+                              <Loader2 size={13} className="spin" color="#a855f7" />
+                              <span>Thinking in progress...</span>
+                              <span
+                                style={{
+                                  fontStyle: "normal",
+                                  fontFamily: "ui-monospace, monospace",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  padding: "1px 7px",
+                                  borderRadius: 10,
+                                  background: "rgba(168, 85, 247, 0.12)",
+                                  color: "#a855f7",
+                                  border: "1px solid rgba(168, 85, 247, 0.25)",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 3,
+                                }}
+                              >
+                                ⏱️ {liveElapsedSec}s
+                              </span>
                             </div>
                           ) : null}
 
@@ -4914,9 +4954,27 @@ export function App() {
                       </>
                     );
                   })() : m.isStreaming ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--text-muted)", fontStyle: "italic", fontSize: 13 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--text-muted)", fontStyle: "italic", fontSize: 13 }}>
                         <Loader2 size={16} className="spin" color="var(--accent)" />
                         <span>Reasoning through tool outputs...</span>
+                        <span
+                          style={{
+                            fontStyle: "normal",
+                            fontFamily: "ui-monospace, monospace",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            padding: "2px 8px",
+                            borderRadius: 12,
+                            background: "rgba(2, 132, 199, 0.12)",
+                            color: "var(--accent, #0284c7)",
+                            border: "1px solid rgba(2, 132, 199, 0.25)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          ⏱️ {liveElapsedSec}s
+                        </span>
                       </div>
                     ) : null}
                   </div>
