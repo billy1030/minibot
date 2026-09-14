@@ -55,7 +55,8 @@ export class LoopOrchestrator {
 
     if (this.config.prompts.svgPrompt && this.config.prompts.svgPrompt.trim().length > 0) {
       systemPromptParts.push(
-        "\n--- SVG Diagram & Color Guidelines ---\n",
+        "\n--- Mandatory SVG Palette & Color Theme Directive (Strictly Enforce Configured Palette) ---\n",
+        "STRICT COLOR PALETTE REQUIREMENT: When generating SVG diagrams, you MUST strictly use the background, card fills, text, and stroke colors defined in the guideline below. Do NOT use unprompted dark canvases or dark slate backgrounds unless the directive below explicitly specifies dark canvas.\n\n" +
         this.config.prompts.svgPrompt.trim()
       );
     }

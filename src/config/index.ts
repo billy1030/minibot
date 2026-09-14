@@ -52,6 +52,7 @@ export function loadConfig(configPath?: string): LoopConfig {
     prompts: {
       systemPrompt: process.env.SYSTEM_PROMPT || fileContent.prompts?.systemPrompt,
       skillsPrompt: process.env.SKILLS_PROMPT || fileContent.prompts?.skillsPrompt,
+      svgPrompt: process.env.SVG_PROMPT || fileContent.prompts?.svgPrompt,
     },
     mcpServers: fileContent.mcpServers || {},
     maxLoopIterations: fileContent.maxLoopIterations ?? 10,
@@ -94,6 +95,7 @@ export function saveConfigToDisk(updatedConfig: Partial<LoopConfig>, configPath?
     prompts: {
       systemPrompt: updatedConfig.prompts?.systemPrompt ?? existing.prompts?.systemPrompt,
       skillsPrompt: updatedConfig.prompts?.skillsPrompt ?? existing.prompts?.skillsPrompt,
+      svgPrompt: updatedConfig.prompts?.svgPrompt ?? existing.prompts?.svgPrompt,
     },
     mcpServers: updatedConfig.mcpServers ?? existing.mcpServers ?? {},
     maxLoopIterations: updatedConfig.maxLoopIterations ?? existing.maxLoopIterations ?? 10,
