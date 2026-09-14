@@ -650,10 +650,12 @@ export function App() {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const lastGeneratedTurnRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // 🧭 Multi-Turn Sequential Scroll Navigation (Jump up / Jump down between turns)
   const navigateTurn = (direction: "up" | "down" = "up") => {
-    // Collect all assistant turns (or all message elements) with DOM IDs
+    const container = chatContainerRef.current;
+    // Collect all turn elements with DOM IDs
     const turnElements = messages
       .map((m) => document.getElementById(`msg-turn-${m.id}`))
       .filter((el): el is HTMLElement => el !== null);
@@ -665,45 +667,48 @@ export function App() {
       return;
     }
 
-    // Determine current scroll position relative to turn elements
-    const THRESHOLD = 60; // Margin in px to decide if element is above current viewport top
+    const containerTop = container ? container.getBoundingClientRect().top : 0;
+
     if (direction === "up") {
-      // Find the turn element right above the viewport top
+      // Find elements whose top is noticeably above the container's top viewport threshold
       const above = turnElements.filter((el) => {
-        const rect = el.getBoundingClientRect();
-        return rect.top < -THRESHOLD;
+        const r = el.getBoundingClientRect();
+        return r.top < containerTop - 30;
       });
 
       if (above.length > 0) {
-        // Jump to the closest turn above
+        // Jump to the nearest element above
         const target = above[above.length - 1];
         target.scrollIntoView({ behavior: "smooth", block: "start" });
       } else {
-        // If already near or past the earliest turn, check if the first turn is partially visible
+        // If at or near top, check if first element can be aligned
         const firstTurn = turnElements[0];
-        const rect = firstTurn.getBoundingClientRect();
-        if (rect.top < 0) {
+        const r = firstTurn.getBoundingClientRect();
+        if (r.top < containerTop - 5) {
           firstTurn.scrollIntoView({ behavior: "smooth", block: "start" });
         } else {
-          // Wrap around or go to the very last generated turn
-          const lastAssistant = turnElements[turnElements.length - 1];
-          lastAssistant.scrollIntoView({ behavior: "smooth", block: "start" });
+          // If already at the very top, wrap to the last element
+          const lastEl = turnElements[turnElements.length - 1];
+          lastEl.scrollIntoView({ behavior: "smooth", block: "start" });
         }
       }
     } else {
-      // Direction "down": find the next turn below current view
+      // Direction "down": find elements whose top is below the container's top plus a margin
       const below = turnElements.filter((el) => {
-        const rect = el.getBoundingClientRect();
-        return rect.top > THRESHOLD;
+        const r = el.getBoundingClientRect();
+        return r.top > containerTop + 50;
       });
 
       if (below.length > 0) {
+        // Jump to the next element down
         const target = below[0];
         target.scrollIntoView({ behavior: "smooth", block: "start" });
       } else {
-        // Scroll to the bottom of the conversation
-        if (chatEndRef.current) {
-          chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+        // No more turns below -> smoothly scroll container to the very bottom
+        if (container) {
+          container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+        } else if (chatEndRef.current) {
+          chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
         }
       }
     }
@@ -4416,6 +4421,7 @@ export function App() {
 
         {/* Message Thread */}
         <div
+          ref={chatContainerRef}
           style={{
             flex: 1,
             overflowY: "auto",
