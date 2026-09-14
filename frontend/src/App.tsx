@@ -167,6 +167,7 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState<number | null>(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [configActiveTab, setConfigActiveTab] = useState<"model" | "system_prompt" | "svg_palette" | "ai_skills">("model");
   const [showApiKey, setShowApiKey] = useState(false);
   const [showVoiceApiKey, setShowVoiceApiKey] = useState(false);
   const [config, setConfig] = useState<ConfigState | null>(null);
@@ -5887,11 +5888,11 @@ export function App() {
             }}
           >
             {/* Modal Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", padding: "20px 28px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", padding: "18px 28px 14px" }}>
               <div>
-                <h3 style={{ fontSize: 19, fontWeight: 700, color: "var(--text-main)" }}>Configuration & AI Skills</h3>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-main)" }}>Configuration & AI Skills</h3>
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                  Adjust Model parameters, prompt instructions, and hot-reload MCP tools in real-time.
+                  Fine-tune Model parameters, system behavior, SVG palettes, and agent skill protocols.
                 </div>
               </div>
               <button
@@ -5908,29 +5909,70 @@ export function App() {
               </button>
             </div>
 
-            {/* Scrollable Content Body */}
+            {/* Navigation Tabs Bar */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "0 28px",
+                background: "var(--bg-card)",
+                borderBottom: "1px solid var(--border-color)",
+                userSelect: "none",
+                overflowX: "auto",
+              }}
+            >
+              {[
+                { id: "model", label: "Model & Parameters", icon: Cpu },
+                { id: "system_prompt", label: "System Prompt", icon: Brain },
+                { id: "svg_palette", label: "SVG & Color Palette", icon: Palette },
+                { id: "ai_skills", label: "AI Skills & Protocols", icon: Sparkles },
+              ].map((t) => {
+                const IconComp = t.icon;
+                const isActive = configActiveTab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setConfigActiveTab(t.id as any)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 7,
+                      padding: "12px 16px",
+                      fontSize: 13,
+                      fontWeight: isActive ? 700 : 500,
+                      color: isActive ? "var(--accent, #0284c7)" : "var(--text-muted)",
+                      background: "transparent",
+                      border: "none",
+                      borderBottom: isActive ? "2px solid var(--accent, #0284c7)" : "2px solid transparent",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <IconComp size={15} color={isActive ? "var(--accent, #0284c7)" : "currentColor"} />
+                    <span>{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Scrollable Tab Content Body */}
             <div
               style={{
                 flex: 1,
                 overflowY: "auto",
-                padding: "20px 28px",
+                padding: "24px 28px",
                 display: "flex",
                 flexDirection: "column",
-                gap: 20,
+                gap: 16,
               }}
             >
-              {/* 2-Column Split: Left = System Prompts & LLM Settings | Right = AI Skills & Protocols + Tool Hub */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 24,
-                  alignItems: "stretch",
-                }}
-              >
-                {/* Left Column: LLM Settings & System Prompt */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {/* TAB 1: Model & Parameters */}
+              {configActiveTab === "model" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 880 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
                         LLM Base URL
@@ -5945,7 +5987,7 @@ export function App() {
                           width: "100%",
                           background: "var(--bg-card)",
                           border: "1px solid var(--border-color)",
-                          padding: "8px 12px",
+                          padding: "9px 12px",
                           borderRadius: 6,
                           color: "var(--text-main)",
                           fontSize: 13,
@@ -5967,7 +6009,7 @@ export function App() {
                           width: "100%",
                           background: "var(--bg-card)",
                           border: "1px solid var(--border-color)",
-                          padding: "8px 12px",
+                          padding: "9px 12px",
                           borderRadius: 6,
                           color: "var(--text-main)",
                           fontSize: 13,
@@ -5993,7 +6035,7 @@ export function App() {
                           width: "100%",
                           background: "var(--bg-card)",
                           border: "1px solid var(--border-color)",
-                          padding: "8px 40px 8px 12px",
+                          padding: "9px 40px 9px 12px",
                           borderRadius: 6,
                           color: "var(--text-main)",
                           fontSize: 13,
@@ -6024,13 +6066,13 @@ export function App() {
                   </div>
 
                   {/* 🎙️ MiniMax Voice API Key Configuration */}
-                  <div style={{ background: "rgba(16, 185, 129, 0.05)", padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(16, 185, 129, 0.25)" }}>
+                  <div style={{ background: "rgba(16, 185, 129, 0.05)", padding: "12px 14px", borderRadius: 8, border: "1px solid rgba(16, 185, 129, 0.25)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                       <label style={{ fontSize: 12, fontWeight: 700, color: "#10b981", display: "flex", alignItems: "center", gap: 5 }}>
-                        <Volume2 size={13} color="#10b981" /> MiniMax Voice API Key (TTS Dedicated Key)
+                        <Volume2 size={14} color="#10b981" /> MiniMax Voice API Key (TTS Dedicated Key)
                       </label>
-                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                        Leave blank to use main LLM API Key
+                      <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                        Leave blank to inherit LLM main API Key
                       </span>
                     </div>
                     <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
@@ -6055,7 +6097,7 @@ export function App() {
                           width: "100%",
                           background: "var(--bg-card)",
                           border: "1px solid var(--border-color)",
-                          padding: "8px 40px 8px 12px",
+                          padding: "9px 40px 9px 12px",
                           borderRadius: 6,
                           color: "var(--text-main)",
                           fontSize: 13,
@@ -6085,11 +6127,11 @@ export function App() {
                     </div>
                   </div>
 
-                  {/* Loop Execution & Model Parameters (Guardrail & Limits) */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, background: "var(--bg-primary)", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                  {/* Loop Execution & Model Parameters */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, background: "var(--bg-primary)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--border-color)" }}>
                     <div>
                       <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-                        <Activity size={12} /> Max Loop Steps
+                        <Activity size={13} /> Max Loop Steps
                       </label>
                       <input
                         type="number"
@@ -6106,21 +6148,21 @@ export function App() {
                           width: "100%",
                           background: "var(--bg-card)",
                           border: "1px solid var(--border-color)",
-                          padding: "6px 8px",
+                          padding: "7px 10px",
                           borderRadius: 6,
                           color: "var(--text-main)",
                           fontSize: 13,
                           fontWeight: 600,
                         }}
                       />
-                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
-                        Guardrail limit (default: 10). Increase to 20-30 for multi-step MCP tasks.
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 4 }}>
+                        Guardrail limit (default: 10).
                       </div>
                     </div>
 
                     <div>
                       <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-                        <Sparkles size={12} color="#a855f7" /> Temperature
+                        <Sparkles size={13} color="#a855f7" /> Temperature
                       </label>
                       <input
                         type="number"
@@ -6138,21 +6180,21 @@ export function App() {
                           width: "100%",
                           background: "var(--bg-card)",
                           border: "1px solid var(--border-color)",
-                          padding: "6px 8px",
+                          padding: "7px 10px",
                           borderRadius: 6,
                           color: "var(--text-main)",
                           fontSize: 13,
                           fontWeight: 600,
                         }}
                       />
-                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
-                        Randomness (0 = precise, 1 = creative).
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 4 }}>
+                        Creativity (0 = deterministic, 1 = creative).
                       </div>
                     </div>
 
                     <div>
                       <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-                        <Cpu size={12} color="#10b981" /> Max Tokens
+                        <Cpu size={13} color="#10b981" /> Max Tokens
                       </label>
                       <input
                         type="number"
@@ -6170,67 +6212,84 @@ export function App() {
                           width: "100%",
                           background: "var(--bg-card)",
                           border: "1px solid var(--border-color)",
-                          padding: "6px 8px",
+                          padding: "7px 10px",
                           borderRadius: 6,
                           color: "var(--text-main)",
                           fontSize: 13,
                           fontWeight: 600,
                         }}
                       />
-                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
-                        Max completion tokens per call.
+                      <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 4 }}>
+                        Completion token limit per call.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: System Prompt */}
+              {configActiveTab === "system_prompt" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 960 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 6 }}>
+                      <Brain size={16} color="var(--accent, #0284c7)" /> Base System Prompt
+                    </label>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      High-level identity, autonomous reasoning boundaries & core assistant persona
+                    </span>
+                  </div>
+                  <textarea
+                    rows={12}
+                    value={config.prompts.systemPrompt}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        prompts: { ...config.prompts, systemPrompt: e.target.value },
+                      })
+                    }
+                    placeholder="Enter base system persona and behavior instructions..."
+                    style={{
+                      width: "100%",
+                      background: "var(--bg-card)",
+                      border: "1px solid var(--border-color)",
+                      padding: 14,
+                      borderRadius: 8,
+                      color: "var(--text-main)",
+                      fontSize: 13,
+                      lineHeight: 1.6,
+                      resize: "vertical",
+                      minHeight: 240,
+                    }}
+                  />
+                  <div style={{ fontSize: 11.5, color: "var(--text-muted)", background: "rgba(2, 132, 199, 0.04)", padding: "10px 14px", borderRadius: 6, border: "1px solid rgba(2, 132, 199, 0.15)" }}>
+                    💡 <strong>Tip:</strong> The System Prompt defines the AI's foundational role and tool inspection protocol. Workflow guidelines and diagram styling are modularly defined in the subsequent tabs.
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: SVG & Color Palette */}
+              {configActiveTab === "svg_palette" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 960 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <label style={{ fontSize: 13, fontWeight: 700, color: "#0284c7", display: "flex", alignItems: "center", gap: 6 }}>
+                        <Palette size={16} color="#0284c7" /> SVG Generation & Color System Prompt
+                      </label>
+                      <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
+                        Controls diagram themes, color palettes, XML entities escaping, and viewBox geometry standards.
                       </div>
                     </div>
                   </div>
 
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
-                      System Prompt
-                    </label>
-                    <textarea
-                      rows={5}
-                      value={config.prompts.systemPrompt}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          prompts: { ...config.prompts, systemPrompt: e.target.value },
-                        })
-                      }
-                      placeholder="Enter the system behavior instructions..."
-                      style={{
-                        width: "100%",
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border-color)",
-                        padding: 10,
-                        borderRadius: 6,
-                        color: "var(--text-main)",
-                        fontSize: 13,
-                        lineHeight: 1.5,
-                        resize: "vertical",
-                      }}
-                    />
-                  </div>
-
-                  {/* 🎨 SVG Generation & Color System Prompt */}
-                  <div style={{ background: "rgba(2, 132, 199, 0.05)", padding: "12px 14px", borderRadius: 8, border: "1px solid rgba(2, 132, 199, 0.25)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <label style={{ fontSize: 12, fontWeight: 700, color: "#0284c7", display: "flex", alignItems: "center", gap: 5 }}>
-                        <Palette size={14} color="#0284c7" /> SVG Generation & Color System Prompt
-                      </label>
-                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                        Controls diagram themes, color palettes, and formatting
-                      </span>
-                    </div>
-
-                    {/* Quick Color Preset Injection Chips */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-muted)" }}>Palette Presets:</span>
-                      
-                      {/* 1. Clean Light (Default) */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const modernCleanPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
+                  {/* 5 Quick Palette Preset Chips */}
+                  <div style={{ background: "var(--bg-primary)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border-color)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-main)" }}>Select Palette Preset:</span>
+                    
+                    {/* 1. Clean Light (Default) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const modernCleanPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
 1. Palette & Theming (Clean Light Minimalist - DEFAULT):
    - Canvas Background: Pure White #ffffff or Soft Off-White #f8fafc with subtle border stroke="#e2e8f0"
    - Primary Accents: Royal Ocean Blue #2563eb, Forest Emerald #059669, Vivid Violet #7c3aed, Amber Bronze #d97706, Ruby Crimson #e11d48
@@ -6240,31 +6299,31 @@ export function App() {
    - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
    - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
    - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
-                          setConfig({
-                            ...config,
-                            prompts: { ...config.prompts, svgPrompt: modernCleanPreset },
-                          });
-                        }}
-                        style={{
-                          fontSize: 10,
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                          background: "#ffffff",
-                          color: "#2563eb",
-                          border: "1px solid #93c5fd",
-                          cursor: "pointer",
-                          fontWeight: 700,
-                          boxShadow: "0 1px 2px rgba(37,99,235,0.1)",
-                        }}
-                      >
-                        ☀️ Clean Light (Default)
-                      </button>
+                        setConfig({
+                          ...config,
+                          prompts: { ...config.prompts, svgPrompt: modernCleanPreset },
+                        });
+                      }}
+                      style={{
+                        fontSize: 11,
+                        padding: "4px 10px",
+                        borderRadius: 5,
+                        background: "#ffffff",
+                        color: "#2563eb",
+                        border: "1px solid #93c5fd",
+                        cursor: "pointer",
+                        fontWeight: 700,
+                        boxShadow: "0 1px 2px rgba(37,99,235,0.1)",
+                      }}
+                    >
+                      ☀️ Clean Light (Default)
+                    </button>
 
-                      {/* 2. Warm Editorial Paper */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const warmPaperPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
+                    {/* 2. Warm Editorial Paper */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const warmPaperPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
 1. Palette & Theming (Warm Editorial Paper & Cream):
    - Canvas Background: Warm Cream Ivory #fcfbf7 with earthy border stroke="#e7dec8"
    - Primary Accents: Terracotta Red #c2410c, Olive Botanical #4d7c0f, Warm Amber Gold #b45309, Indigo Slate #4338ca, Deep Teal #0f766e
@@ -6274,30 +6333,30 @@ export function App() {
    - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
    - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
    - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
-                          setConfig({
-                            ...config,
-                            prompts: { ...config.prompts, svgPrompt: warmPaperPreset },
-                          });
-                        }}
-                        style={{
-                          fontSize: 10,
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                          background: "#fcfbf7",
-                          color: "#b45309",
-                          border: "1px solid #e7dec8",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                      >
-                        📜 Warm Editorial
-                      </button>
+                        setConfig({
+                          ...config,
+                          prompts: { ...config.prompts, svgPrompt: warmPaperPreset },
+                        });
+                      }}
+                      style={{
+                        fontSize: 11,
+                        padding: "4px 10px",
+                        borderRadius: 5,
+                        background: "#fcfbf7",
+                        color: "#b45309",
+                        border: "1px solid #e7dec8",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      📜 Warm Editorial
+                    </button>
 
-                      {/* 3. Corporate Navy Professional */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const corporateNavyPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
+                    {/* 3. Corporate Navy Professional */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const corporateNavyPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
 1. Palette & Theming (Corporate Navy & Soft Ice Blue):
    - Canvas Background: Crisp White #ffffff with subtle tech grid border stroke="#cbd5e1"
    - Primary Accents: Executive Deep Navy #1e3a8a, Cyan Highlight #0284c7, Soft Sage #10b981, Cobalt Accent #3b82f6, Burgundy #9f1239
@@ -6307,30 +6366,30 @@ export function App() {
    - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
    - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
    - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
-                          setConfig({
-                            ...config,
-                            prompts: { ...config.prompts, svgPrompt: corporateNavyPreset },
-                          });
-                        }}
-                        style={{
-                          fontSize: 10,
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                          background: "#f0f9ff",
-                          color: "#0284c7",
-                          border: "1px solid #bae6fd",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                      >
-                        🏛️ Corporate Navy
-                      </button>
+                        setConfig({
+                          ...config,
+                          prompts: { ...config.prompts, svgPrompt: corporateNavyPreset },
+                        });
+                      }}
+                      style={{
+                        fontSize: 11,
+                        padding: "4px 10px",
+                        borderRadius: 5,
+                        background: "#f0f9ff",
+                        color: "#0284c7",
+                        border: "1px solid #bae6fd",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      🏛️ Corporate Navy
+                    </button>
 
-                      {/* 4. Sleek Dark Slate */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const darkSlatePreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
+                    {/* 4. Sleek Dark Slate */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const darkSlatePreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
 1. Palette & Theming (Sleek Dark Slate Executive):
    - Canvas Background: Deep Tech #0b0f19 or #0f172a with subtle border stroke="#1e293b"
    - Primary Accents: Electric Blue #38bdf8, Emerald Green #34d399, Vivid Purple #a855f7, Warm Amber #fbbf24, Rose Crimson #f43f5e
@@ -6340,30 +6399,30 @@ export function App() {
    - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
    - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
    - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
-                          setConfig({
-                            ...config,
-                            prompts: { ...config.prompts, svgPrompt: darkSlatePreset },
-                          });
-                        }}
-                        style={{
-                          fontSize: 10,
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                          background: "#0f172a",
-                          color: "#38bdf8",
-                          border: "1px solid #1e293b",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                      >
-                        🌙 Dark Slate
-                      </button>
+                        setConfig({
+                          ...config,
+                          prompts: { ...config.prompts, svgPrompt: darkSlatePreset },
+                        });
+                      }}
+                      style={{
+                        fontSize: 11,
+                        padding: "4px 10px",
+                        borderRadius: 5,
+                        background: "#0f172a",
+                        color: "#38bdf8",
+                        border: "1px solid #1e293b",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      🌙 Dark Slate
+                    </button>
 
-                      {/* 5. Cyber Neon */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const cyberNeonPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
+                    {/* 5. Cyber Neon */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cyberNeonPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
 1. Palette & Theming (Cyberpunk Neon High-Contrast):
    - Canvas Background: Midnight Black #05070f with luminous border stroke="#3b82f6"
    - Primary Accents: Neon Cyan #00f0ff, Matrix Green #00ff88, Cyber Magenta #ff007f, Neon Yellow #ffe600, Solar Orange #ff6600
@@ -6373,115 +6432,116 @@ export function App() {
    - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
    - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
    - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
-                          setConfig({
-                            ...config,
-                            prompts: { ...config.prompts, svgPrompt: cyberNeonPreset },
-                          });
-                        }}
-                        style={{
-                          fontSize: 10,
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                          background: "#05070f",
-                          color: "#00f0ff",
-                          border: "1px solid #00f0ff",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                        }}
-                      >
-                        ⚡ Cyber Neon
-                      </button>
-                    </div>
-
-                    <textarea
-                      rows={6}
-                      value={config.prompts.svgPrompt || ""}
-                      onChange={(e) =>
                         setConfig({
                           ...config,
-                          prompts: { ...config.prompts, svgPrompt: e.target.value },
-                        })
-                      }
-                      placeholder="Specify SVG palette rules (e.g. background hex, accent colors, node borders, XML escaping)..."
-                      style={{
-                        width: "100%",
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border-color)",
-                        padding: 10,
-                        borderRadius: 6,
-                        color: "var(--text-main)",
-                        fontFamily: "ui-monospace, monospace",
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        resize: "vertical",
+                          prompts: { ...config.prompts, svgPrompt: cyberNeonPreset },
+                        });
                       }}
-                    />
+                      style={{
+                        fontSize: 11,
+                        padding: "4px 10px",
+                        borderRadius: 5,
+                        background: "#05070f",
+                        color: "#00f0ff",
+                        border: "1px solid #00f0ff",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      ⚡ Cyber Neon
+                    </button>
                   </div>
+
+                  <textarea
+                    rows={12}
+                    value={config.prompts.svgPrompt || ""}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        prompts: { ...config.prompts, svgPrompt: e.target.value },
+                      })
+                    }
+                    placeholder="Specify SVG palette rules (e.g. background hex, accent colors, node borders, XML escaping)..."
+                    style={{
+                      width: "100%",
+                      background: "var(--bg-card)",
+                      border: "1px solid var(--border-color)",
+                      padding: 14,
+                      borderRadius: 8,
+                      color: "var(--text-main)",
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 12.5,
+                      lineHeight: 1.6,
+                      resize: "vertical",
+                      minHeight: 260,
+                    }}
+                  />
                 </div>
+              )}
 
-                {/* Right Column: AI Skills & Protocols Prompt + MCP Hub Shortcut */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {/* AI Skills & Protocols Prompt placed on the right */}
-                  <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <label style={{ fontSize: 12, fontWeight: 700, color: "var(--accent, #0284c7)", display: "flex", alignItems: "center", gap: 6 }}>
-                        <Sparkles size={14} /> AI Skills & Protocols Prompt
+              {/* TAB 4: AI Skills & Protocols */}
+              {configActiveTab === "ai_skills" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 960 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <label style={{ fontSize: 13, fontWeight: 700, color: "var(--accent, #0284c7)", display: "flex", alignItems: "center", gap: 6 }}>
+                        <Sparkles size={16} /> AI Skills & Protocols Prompt
                       </label>
-                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                        Agent dynamic skill discovery & execution rules
-                      </span>
+                      <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
+                        Autonomous tool discovery, document processing rules, and architectural standards
+                      </div>
                     </div>
-                    <textarea
-                      rows={10}
-                      value={config.prompts.skillsPrompt}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          prompts: { ...config.prompts, skillsPrompt: e.target.value },
-                        })
-                      }
-                      placeholder="Enter skills and reasoning protocols..."
-                      style={{
-                        width: "100%",
-                        flex: 1,
-                        minHeight: 180,
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border-color)",
-                        padding: 10,
-                        borderRadius: 6,
-                        color: "var(--text-main)",
-                        fontFamily: "ui-monospace, monospace",
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        resize: "vertical",
-                      }}
-                    />
                   </div>
 
-                  {/* MCP & Skill Hub Hub Shortcut */}
-                  <div style={{ border: "1px solid var(--border-color)", background: "var(--bg-primary)", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 8, background: "rgba(2, 132, 199, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent, #0284c7)" }}>
-                        <Wrench size={16} />
+                  <textarea
+                    rows={12}
+                    value={config.prompts.skillsPrompt}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        prompts: { ...config.prompts, skillsPrompt: e.target.value },
+                      })
+                    }
+                    placeholder="Enter skills and reasoning protocols..."
+                    style={{
+                      width: "100%",
+                      background: "var(--bg-card)",
+                      border: "1px solid var(--border-color)",
+                      padding: 14,
+                      borderRadius: 8,
+                      color: "var(--text-main)",
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 12.5,
+                      lineHeight: 1.6,
+                      resize: "vertical",
+                      minHeight: 240,
+                    }}
+                  />
+
+                  {/* MCP & Skill Hub Shortcut Box */}
+                  <div style={{ border: "1px solid var(--border-color)", background: "var(--bg-primary)", borderRadius: 10, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(2, 132, 199, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent, #0284c7)" }}>
+                        <Wrench size={18} />
                       </div>
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)" }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-main)" }}>
                           Agentic Tools & Skills Hub
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
                           Unified Manager for MCP Servers & AI Workflows
                         </div>
                       </div>
                     </div>
 
                     <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, margin: 0 }}>
-                      MCP Server registration and Skills management are now centrally consolidated in the <strong>Agentic Tools & Skills Hub</strong>.
+                      MCP Server registration and Skills management are centrally consolidated in the <strong>Agentic Tools & Skills Hub</strong>.
                     </p>
 
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-card)", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--bg-card)", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border-color)" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <CheckCircle2 size={15} color="#10b981" />
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-main)" }}>
+                        <CheckCircle2 size={16} color="#10b981" />
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)" }}>
                           {activeToolsList.length} Active Tools Mounted
                         </span>
                       </div>
@@ -6492,7 +6552,7 @@ export function App() {
                           setShowToolHubModal(true);
                         }}
                         style={{
-                          padding: "6px 14px",
+                          padding: "7px 16px",
                           borderRadius: 6,
                           border: "none",
                           background: "linear-gradient(135deg, var(--accent, #0284c7), #0369a1)",
@@ -6507,13 +6567,8 @@ export function App() {
                       </button>
                     </div>
                   </div>
-
-                  {/* Additional tips */}
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", padding: "8px 12px", background: "rgba(0,0,0,0.02)", borderRadius: 8, border: "1px solid var(--border-color)" }}>
-                    💡 <strong>Tip:</strong> MiniBot can also autonomously search, install, and mount MCP servers during reasoning loops on the fly.
-                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Sticky Bottom Action Bar with Always Visible Save Button */}
