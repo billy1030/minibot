@@ -5408,7 +5408,7 @@ export function App() {
               title={`Voice-to-Text Language: ${sttLang === "zh-HK" ? "Cantonese (粵語)" : sttLang === "zh-CN" ? "Mandarin (國語)" : "English (英語)"}`}
               style={{
                 height: 34,
-                width: 36,
+                width: 46,
                 padding: "0 2px",
                 textAlign: "center",
                 borderRadius: 7,
