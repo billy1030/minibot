@@ -156,7 +156,7 @@ export function App() {
       id: "welcome",
       role: "assistant",
       content:
-        "Hello! I am your Minibot. I can run multi-step reasoning loops and fetch real-time data from the web using MCP tools. What would you like to research or build today?",
+        "Hello! I am your Minibot. What would you like to research or build today?",
     },
   ]);
   const [inputPrompt, setInputPrompt] = useState("");
@@ -670,7 +670,7 @@ export function App() {
         id: "welcome",
         role: "assistant",
         content:
-          "Hello! I am your Minibot. I can run multi-step reasoning loops and fetch real-time data from the web using MCP tools. What would you like to research or build today?",
+          "Hello! I am your Minibot. What would you like to research or build today?",
       },
     ]);
     setActiveSessionFile(null);
