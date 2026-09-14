@@ -5876,21 +5876,23 @@ export function App() {
         >
           <div
             style={{
-              width: "min(1380px, 96vw)",
+              width: "min(920px, 92vw)",
+              height: "min(720px, 86vh)",
+              maxHeight: "min(720px, 86vh)",
+              minHeight: "min(600px, 80vh)",
               background: "var(--bg-secondary)",
               border: "1px solid var(--border-color)",
               borderRadius: 14,
-              maxHeight: "92vh",
               display: "flex",
               flexDirection: "column",
-              boxShadow: "0 20px 45px rgba(0,0,0,0.2)",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.28)",
               overflow: "hidden",
             }}
           >
             {/* Modal Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", padding: "18px 28px 14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", padding: "16px 24px 14px" }}>
               <div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-main)" }}>Configuration & AI Skills</h3>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: "var(--text-main)", margin: 0 }}>Configuration & AI Skills</h3>
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
                   Fine-tune Model parameters, system behavior, SVG palettes, and agent skill protocols.
                 </div>
