@@ -263,15 +263,14 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     setIsSubmitting(false);
     if (errors.length === 0) {
       setMessage({ text: `Successfully registered ${successCount} server(s) via JSON!`, isError: false });
-      setRawJsonText("");
-      await onRefreshTools();
+      await Promise.all([onRefreshTools(), fetchCurrentMcpConfig()]);
       setActiveTab("installed");
     } else {
       setMessage({
         text: `Registered ${successCount} server(s). Failed (${errors.length}): ${errors.join("; ")}`,
         isError: successCount === 0,
       });
-      await onRefreshTools();
+      await Promise.all([onRefreshTools(), fetchCurrentMcpConfig()]);
     }
   };
 
