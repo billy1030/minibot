@@ -1,6 +1,7 @@
 import React, { useMemo, useEffect, useRef } from "react";
 import { marked } from "marked";
 import { MermaidDiagram } from "./MermaidDiagram";
+import { SvgDiagramViewer } from "./SvgDiagramViewer";
 
 // Configure marked options for clean GitHub-flavored markdown
 marked.setOptions({
@@ -14,7 +15,7 @@ interface MarkdownRendererProps {
 }
 
 interface ContentSegment {
-  type: 'markdown' | 'mermaid';
+  type: 'markdown' | 'mermaid' | 'svg';
   content: string;
   html?: string;
 }
@@ -32,8 +33,6 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     }
 
     // Isolate SVG blocks (both inside ```svg/xml/html fences and standalone <svg>...</svg>)
-    // Marked interprets lines indented by 4+ spaces inside raw SVG as markdown code blocks (<pre><code>).
-    // By extracting SVGs to safe alphanumeric tokens and reinjecting after marked.parse, we preserve 100% SVG validity.
     const svgBlocks: string[] = [];
 
     clean = clean.replace(/`{3,}(?:xml|html|svg)?\s*([\s\S]*?<\/svg>[\s\S]*?)\s*`{3,}/gi, (_, svgContent) => {
@@ -48,16 +47,50 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
       return `\n\n${token}\n\n`;
     });
 
-    const restoreSvgs = (rawHtml: string): string => {
-      let res = rawHtml;
-      svgBlocks.forEach((svg, i) => {
-        const token = `MINIBOTSVGBLOCKTOKEN${i}ENDTOKEN`;
-        res = res.replace(
-          new RegExp(`<p>\\s*${token}\\s*<\\/p>|${token}`, 'g'),
-          `<div class="svg-diagram-wrapper" style="width:100%;overflow-x:auto;margin:1.25rem 0;display:flex;justify-content:center;background:#ffffff;padding:14px;border:1px solid var(--border-color);border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.06);">${svg}</div>`
-        );
-      });
-      return res;
+    // Helper: split a text into markdown and svg segments based on SVG tokens
+    const splitMarkdownAndSvg = (text: string): ContentSegment[] => {
+      const subSegments: ContentSegment[] = [];
+      const SVG_TOKEN_REGEX = /MINIBOTSVGBLOCKTOKEN(\d+)ENDTOKEN/g;
+      let lastIdx = 0;
+      let m: RegExpExecArray | null;
+
+      while ((m = SVG_TOKEN_REGEX.exec(text)) !== null) {
+        if (m.index > lastIdx) {
+          const mdPiece = text.slice(lastIdx, m.index);
+          if (mdPiece.trim()) {
+            try {
+              const rawParsed = marked.parse(mdPiece, { async: false }) as string;
+              subSegments.push({ type: 'markdown', content: mdPiece, html: rawParsed });
+            } catch {
+              subSegments.push({ type: 'markdown', content: mdPiece, html: mdPiece });
+            }
+          }
+        }
+
+        const blockIdx = parseInt(m[1], 10);
+        if (svgBlocks[blockIdx] !== undefined) {
+          subSegments.push({
+            type: 'svg',
+            content: svgBlocks[blockIdx],
+          });
+        }
+
+        lastIdx = m.index + m[0].length;
+      }
+
+      if (lastIdx < text.length) {
+        const remainingPiece = text.slice(lastIdx);
+        if (remainingPiece.trim()) {
+          try {
+            const rawParsed = marked.parse(remainingPiece, { async: false }) as string;
+            subSegments.push({ type: 'markdown', content: remainingPiece, html: rawParsed });
+          } catch {
+            subSegments.push({ type: 'markdown', content: remainingPiece, html: remainingPiece });
+          }
+        }
+      }
+
+      return subSegments;
     };
 
     const MERMAID_REGEX = /```mermaid\s*([\s\S]*?)```/g;
@@ -66,21 +99,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     let match: RegExpExecArray | null;
 
     while ((match = MERMAID_REGEX.exec(clean)) !== null) {
-      // Push preceding markdown segment
+      // Process preceding text
       if (match.index > lastIndex) {
-        const md = clean.slice(lastIndex, match.index);
-        if (md.trim()) {
-          try {
-            const rawParsed = marked.parse(md, { async: false }) as string;
-            result.push({
-              type: 'markdown',
-              content: md,
-              html: restoreSvgs(rawParsed),
-            });
-          } catch {
-            result.push({ type: 'markdown', content: md, html: restoreSvgs(md) });
-          }
-        }
+        const textBefore = clean.slice(lastIndex, match.index);
+        result.push(...splitMarkdownAndSvg(textBefore));
       }
 
       // Push mermaid segment
@@ -92,35 +114,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
       lastIndex = match.index + match[0].length;
     }
 
-    // Push trailing markdown segment
+    // Process trailing text
     if (lastIndex < clean.length) {
-      const remaining = clean.slice(lastIndex);
-      if (remaining.trim()) {
-        try {
-          const rawParsed = marked.parse(remaining, { async: false }) as string;
-          result.push({
-            type: 'markdown',
-            content: remaining,
-            html: restoreSvgs(rawParsed),
-          });
-        } catch {
-          result.push({ type: 'markdown', content: remaining, html: restoreSvgs(remaining) });
-        }
-      }
+      const textAfter = clean.slice(lastIndex);
+      result.push(...splitMarkdownAndSvg(textAfter));
     }
 
-    // Fallback: If no segments were extracted (e.g. whitespace or no mermaid)
+    // Fallback if no segments produced but clean text exists
     if (result.length === 0 && clean) {
-      try {
-        const rawParsed = marked.parse(clean, { async: false }) as string;
-        result.push({
-          type: 'markdown',
-          content: clean,
-          html: restoreSvgs(rawParsed),
-        });
-      } catch {
-        result.push({ type: 'markdown', content: clean, html: restoreSvgs(clean) });
-      }
+      result.push(...splitMarkdownAndSvg(clean));
     }
 
     return result;
@@ -166,10 +168,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     });
   }, [segments]);
 
-  // If no mermaid blocks found, render single standard container
-  const hasMermaid = segments.some(s => s.type === 'mermaid');
+  // If no interactive blocks (mermaid or svg) found, render single standard container
+  const hasInteractiveBlocks = segments.some(s => s.type === 'mermaid' || s.type === 'svg');
 
-  if (!hasMermaid) {
+  if (!hasInteractiveBlocks) {
     const singleHtml = segments.map(s => s.html || s.content).join('');
     return (
       <div
@@ -188,6 +190,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
             <MermaidDiagram
               key={`mermaid-${idx}`}
               code={seg.content}
+              index={idx}
+            />
+          );
+        }
+        if (seg.type === 'svg') {
+          return (
+            <SvgDiagramViewer
+              key={`svg-${idx}`}
+              svgContent={seg.content}
               index={idx}
             />
           );
