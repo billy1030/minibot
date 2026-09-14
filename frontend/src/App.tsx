@@ -109,6 +109,7 @@ interface ConfigState {
   prompts: {
     systemPrompt: string;
     skillsPrompt: string;
+    svgPrompt?: string;
   };
   mcpServers: Record<string, any>;
   maxLoopIterations: number;
@@ -6187,7 +6188,7 @@ export function App() {
                       System Prompt
                     </label>
                     <textarea
-                      rows={6}
+                      rows={5}
                       value={config.prompts.systemPrompt}
                       onChange={(e) =>
                         setConfig({
@@ -6204,6 +6205,140 @@ export function App() {
                         borderRadius: 6,
                         color: "var(--text-main)",
                         fontSize: 13,
+                        lineHeight: 1.5,
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+
+                  {/* 🎨 SVG Generation & Color System Prompt */}
+                  <div style={{ background: "rgba(2, 132, 199, 0.05)", padding: "12px 14px", borderRadius: 8, border: "1px solid rgba(2, 132, 199, 0.25)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: "#0284c7", display: "flex", alignItems: "center", gap: 5 }}>
+                        <Palette size={14} color="#0284c7" /> SVG Generation & Color System Prompt
+                      </label>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                        Controls diagram themes, color palettes, and formatting
+                      </span>
+                    </div>
+
+                    {/* Quick Color Preset Injection Chips */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-muted)" }}>Palette Presets:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const darkSlatePreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
+1. Palette & Theming (Sleek Dark Slate Executive):
+   - Canvas Background: Deep Tech #0b0f19 or #0f172a with subtle border stroke="#1e293b"
+   - Primary Accents: Electric Blue #38bdf8, Emerald Green #34d399, Vivid Purple #a855f7, Warm Amber #fbbf24, Rose Crimson #f43f5e
+   - Neutral Card Containers: #1e293b (cards), #0c1f2e (active highlights), #111827 (sidebars)
+   - Typography: Title #ffffff, Body #cbd5e1, Subtitle/Labels #94a3b8, Muted Badges #64748b
+2. Quality Protocols:
+   - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
+   - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
+   - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
+                          setConfig({
+                            ...config,
+                            prompts: { ...config.prompts, svgPrompt: darkSlatePreset },
+                          });
+                        }}
+                        style={{
+                          fontSize: 10,
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          background: "#0f172a",
+                          color: "#38bdf8",
+                          border: "1px solid #1e293b",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        🌙 Dark Slate (Default)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const modernCleanPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
+1. Palette & Theming (Clean Light Minimalist):
+   - Canvas Background: Pure White #ffffff with soft border stroke="#e2e8f0"
+   - Primary Accents: Ocean Blue #2563eb, Forest Teal #059669, Royal Violet #7c3aed, Amber Bronze #d97706, Ruby Red #e11d48
+   - Neutral Card Containers: #f8fafc (cards), #f1f5f9 (active highlights), #e2e8f0 (sub-borders)
+   - Typography: Title #0f172a, Body #334155, Subtitle/Labels #64748b, Muted Badges #94a3b8
+2. Quality Protocols:
+   - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
+   - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
+   - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
+                          setConfig({
+                            ...config,
+                            prompts: { ...config.prompts, svgPrompt: modernCleanPreset },
+                          });
+                        }}
+                        style={{
+                          fontSize: 10,
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          background: "#ffffff",
+                          color: "#2563eb",
+                          border: "1px solid #cbd5e1",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        ☀️ Clean Light
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cyberNeonPreset = `### Standalone Editorial SVG Generation & Color System Guidelines:
+1. Palette & Theming (Cyberpunk Neon High-Contrast):
+   - Canvas Background: Midnight Black #05070f with luminous border stroke="#3b82f6"
+   - Primary Accents: Neon Cyan #00f0ff, Matrix Green #00ff88, Cyber Magenta #ff007f, Neon Yellow #ffe600, Solar Orange #ff6600
+   - Neutral Card Containers: #0d1326 (cards), #141f3d (active highlights), #1c2b52 (glow containers)
+   - Typography: Title #00f0ff, Body #e2e8f0, Subtitle/Labels #94a3b8, Glowing Highlights #ff007f
+2. Quality Protocols:
+   - Always escape XML entities in text nodes: use &amp; instead of & (e.g., lasers &amp; fiber).
+   - Explicit viewBox with ample height padding (+60px to 80px) to prevent bottom cutoff.
+   - Output format: Wrap raw SVG in \`\`\`xml or \`\`\`svg code blocks without markdown wrapping.`;
+                          setConfig({
+                            ...config,
+                            prompts: { ...config.prompts, svgPrompt: cyberNeonPreset },
+                          });
+                        }}
+                        style={{
+                          fontSize: 10,
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          background: "#05070f",
+                          color: "#00f0ff",
+                          border: "1px solid #00f0ff",
+                          cursor: "pointer",
+                          fontWeight: 600,
+                        }}
+                      >
+                        ⚡ Cyber Neon
+                      </button>
+                    </div>
+
+                    <textarea
+                      rows={6}
+                      value={config.prompts.svgPrompt || ""}
+                      onChange={(e) =>
+                        setConfig({
+                          ...config,
+                          prompts: { ...config.prompts, svgPrompt: e.target.value },
+                        })
+                      }
+                      placeholder="Specify SVG palette rules (e.g. background hex, accent colors, node borders, XML escaping)..."
+                      style={{
+                        width: "100%",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border-color)",
+                        padding: 10,
+                        borderRadius: 6,
+                        color: "var(--text-main)",
+                        fontFamily: "ui-monospace, monospace",
+                        fontSize: 12,
                         lineHeight: 1.5,
                         resize: "vertical",
                       }}

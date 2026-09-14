@@ -53,6 +53,13 @@ export class LoopOrchestrator {
       this.config.prompts.skillsPrompt
     );
 
+    if (this.config.prompts.svgPrompt && this.config.prompts.svgPrompt.trim().length > 0) {
+      systemPromptParts.push(
+        "\n--- SVG Diagram & Color Guidelines ---\n",
+        this.config.prompts.svgPrompt.trim()
+      );
+    }
+
     // Dynamically resolve and inject global & workspace-scoped skills
     const { promptSection: resolvedSkills, activeSkillNames } = globalSkillManager.resolveSkillPromptSection(
       userPrompt,

@@ -35,6 +35,18 @@ export const PromptsConfigSchema = z.object({
     "- Verification: Cross-check information from multiple snippets.\n" +
     "- Tool Transparency: Always clearly state what action you are taking."
   ),
+  svgPrompt: z.string().optional().default(
+    "### Standalone Editorial SVG Generation & Color System Guidelines:\n" +
+    "1. Palette & Theming (Default: Sleek Dark Slate Executive):\n" +
+    "   - Canvas Background: Deep Tech `#0b0f19` or `#0f172a` with subtle border `stroke=\"#1e293b\"`\n" +
+    "   - Primary Accents: Electric Blue `#38bdf8`, Emerald Green `#34d399`, Vivid Purple `#a855f7`, Warm Amber `#fbbf24`, Rose Crimson `#f43f5e`\n" +
+    "   - Neutral Card Containers: `#1e293b` (cards), `#0c1f2e` (active highlights), `#111827` (sidebars)\n" +
+    "   - Typography: Title `#ffffff`, Body `#cbd5e1`, Subtitle/Labels `#94a3b8`, Muted Badges `#64748b`\n" +
+    "2. Quality Protocols:\n" +
+    "   - Always escape XML entities in text nodes: use `&amp;` instead of `&` (e.g., `lasers &amp; fiber`).\n" +
+    "   - Explicit `viewBox` with ample height padding (+60px to 80px) to prevent bottom cutoff.\n" +
+    "   - Output format: Wrap raw SVG in ```xml or ```svg code blocks without markdown wrapping."
+  ),
 });
 
 export const MCPServerDefSchema = z.object({
