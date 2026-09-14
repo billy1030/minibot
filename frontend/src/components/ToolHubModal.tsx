@@ -27,6 +27,8 @@ interface ToolHubModalProps {
   onDeleteServer: (serverName: string) => Promise<{ success: boolean; error?: string }>;
   currentWorkspace?: string;
   onDeleteSkill?: (skillName: string) => Promise<{ success: boolean; error?: string }>;
+  initialTab?: "installed" | "skills" | "install";
+  onSkillsLoaded?: (skills: SkillItem[]) => void;
 }
 
 export const ToolHubModal: React.FC<ToolHubModalProps> = ({
@@ -38,8 +40,10 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
   onDeleteServer,
   currentWorkspace = "default",
   onDeleteSkill,
+  initialTab = "installed",
+  onSkillsLoaded,
 }) => {
-  const [activeTab, setActiveTab] = useState<"installed" | "skills" | "install">("installed");
+  const [activeTab, setActiveTab] = useState<"installed" | "skills" | "install">(initialTab);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
@@ -75,6 +79,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
       const data = await res.json();
       if (data.skills) {
         setSkills(data.skills);
+        onSkillsLoaded?.(data.skills);
       }
     } catch (e) {
       console.error("Failed to load skills:", e);
@@ -153,10 +158,13 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setMessage(null);
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
       fetchSkills();
       fetchCurrentMcpConfig();
     }
-  }, [isOpen, currentWorkspace]);
+  }, [isOpen, currentWorkspace, initialTab]);
 
   if (!isOpen) return null;
 
@@ -336,9 +344,12 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     >
       <div
         style={{
-          width: "82vw",
-          maxWidth: "82vw",
-          maxHeight: "90vh",
+          width: "min(1240px, 94vw)",
+          maxWidth: "min(1240px, 94vw)",
+          minWidth: "min(1240px, 94vw)",
+          height: "min(860px, 88vh)",
+          maxHeight: "min(860px, 88vh)",
+          minHeight: "min(860px, 88vh)",
           backgroundColor: "var(--bg-secondary, #ffffff)",
           color: "var(--text-main, #0f172a)",
           borderRadius: 14,

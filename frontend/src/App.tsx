@@ -63,8 +63,8 @@ import { UserManagementModal } from "./components/UserManagementModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { ExportHtmlModal } from "./components/ExportHtmlModal";
 import { GitSyncModal } from "./components/GitSyncModal";
-import { ToolHubModal, type ToolItem } from "./components/ToolHubModal";
-import { Wrench } from "lucide-react";
+import { ToolHubModal, type ToolItem, type SkillItem } from "./components/ToolHubModal";
+import { Wrench, BookOpen } from "lucide-react";
 
 interface ToolCallLog {
   id: string;
@@ -195,7 +195,9 @@ export function App() {
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showGitSyncModal, setShowGitSyncModal] = useState<boolean>(false);
   const [showToolHubModal, setShowToolHubModal] = useState<boolean>(false);
+  const [toolHubInitialTab, setToolHubInitialTab] = useState<"installed" | "skills" | "install">("installed");
   const [activeToolsList, setActiveToolsList] = useState<ToolItem[]>([]);
+  const [activeSkillsList, setActiveSkillsList] = useState<SkillItem[]>([]);
   const [activeDocHashes, setActiveDocHashes] = useState<string[]>([]);
   const [alertPrompt, setAlertPrompt] = useState<Omit<ModalAlertProps, "onClose"> | null>(null);
   const [editingSessionFile, setEditingSessionFile] = useState<string | null>(null);
@@ -499,6 +501,7 @@ export function App() {
     localStorage.setItem("active_workspace", wsName);
     startNewChat();
     fetchLogs(wsName);
+    fetchSkills(wsName);
   };
 
   const handleDeleteWorkspace = async (e: React.MouseEvent, wsName: string) => {
@@ -645,6 +648,7 @@ export function App() {
     fetchConfig();
     fetchWorkspaces();
     fetchLogs(currentWorkspace);
+    fetchSkills(currentWorkspace);
   }, []);
 
   const fetchLogs = async (wsName?: string) => {
@@ -781,6 +785,19 @@ export function App() {
       }
     } catch (err) {
       console.error("Failed to fetch tools:", err);
+    }
+  };
+
+  const fetchSkills = async (wsName?: string) => {
+    try {
+      const ws = wsName || currentWorkspace;
+      const res = await fetch(`/api/skills?workspace=${encodeURIComponent(ws)}`, { credentials: "include" });
+      const data = await res.json();
+      if (data.skills) {
+        setActiveSkillsList(data.skills);
+      }
+    } catch (err) {
+      console.error("Failed to fetch skills:", err);
     }
   };
 
@@ -1621,6 +1638,7 @@ export function App() {
           } else if (event === "skill_installed") {
             console.log("[SSE] 📚 Skill dynamically installed by agent:", data);
             fetchTools();
+            fetchSkills(currentWorkspace);
           } else if (event === "complete") {
             const totalDurationSec = Math.max(0.1, (Date.now() - requestStartTime) / 1000);
             const estTokens = Math.round((data.answer?.length || 0) / 3.5);
@@ -3104,20 +3122,21 @@ export function App() {
               <Download size={15} />
             </button>
 
-            {/* 🛠️ Agentic Tools & Skills Hub Button (Shows active tools count badge) */}
+            {/* 🛠️ Agentic Tools Button (Shows active tools count badge) */}
             <button
               onClick={() => {
                 fetchTools();
+                setToolHubInitialTab("installed");
                 setShowToolHubModal(true);
               }}
-              title="Agentic Tools & Skills Hub (Dynamic MCP servers, document download/parse tools, hot-reload)"
+              title="Active MCP Tools (Dynamic MCP servers, hot-reload)"
               style={{
                 height: 32,
                 padding: "0 9px",
                 borderRadius: 8,
-                background: showToolHubModal ? "rgba(59, 130, 246, 0.15)" : "var(--bg-card)",
-                border: showToolHubModal ? "1px solid #3b82f6" : "1px solid var(--border-color)",
-                color: showToolHubModal ? "#60a5fa" : "var(--text-muted)",
+                background: showToolHubModal && toolHubInitialTab === "installed" ? "rgba(59, 130, 246, 0.15)" : "var(--bg-card)",
+                border: showToolHubModal && toolHubInitialTab === "installed" ? "1px solid #3b82f6" : "1px solid var(--border-color)",
+                color: showToolHubModal && toolHubInitialTab === "installed" ? "#60a5fa" : "var(--text-muted)",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 5,
@@ -3129,7 +3148,7 @@ export function App() {
                 e.currentTarget.style.color = "#60a5fa";
               }}
               onMouseLeave={(e) => {
-                if (!showToolHubModal) {
+                if (!showToolHubModal || toolHubInitialTab !== "installed") {
                   e.currentTarget.style.borderColor = "var(--border-color)";
                   e.currentTarget.style.color = "var(--text-muted)";
                 }
@@ -3146,7 +3165,54 @@ export function App() {
                   borderRadius: 10,
                 }}
               >
-                {activeToolsList.length || 24}
+                {activeToolsList.length || 29}
+              </span>
+            </button>
+
+            {/* 📚 Agent Skills Button (Shows global & workspace active skills count badge) */}
+            <button
+              onClick={() => {
+                fetchSkills(currentWorkspace);
+                setToolHubInitialTab("skills");
+                setShowToolHubModal(true);
+              }}
+              title={`Agent Skills Library (${activeSkillsList.length} active in Global & ${currentWorkspace})`}
+              style={{
+                height: 32,
+                padding: "0 9px",
+                borderRadius: 8,
+                background: showToolHubModal && toolHubInitialTab === "skills" ? "rgba(168, 85, 247, 0.15)" : "var(--bg-card)",
+                border: showToolHubModal && toolHubInitialTab === "skills" ? "1px solid #a855f7" : "1px solid var(--border-color)",
+                color: showToolHubModal && toolHubInitialTab === "skills" ? "#c084fc" : "var(--text-muted)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#a855f7";
+                e.currentTarget.style.color = "#c084fc";
+              }}
+              onMouseLeave={(e) => {
+                if (!showToolHubModal || toolHubInitialTab !== "skills") {
+                  e.currentTarget.style.borderColor = "var(--border-color)";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }
+              }}
+            >
+              <BookOpen size={14} />
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  background: "rgba(168, 85, 247, 0.25)",
+                  color: "#c084fc",
+                  padding: "1px 5px",
+                  borderRadius: 10,
+                }}
+              >
+                {activeSkillsList.length}
               </span>
             </button>
 
@@ -6512,6 +6578,8 @@ export function App() {
         onDeleteServer={handleDeleteMcpServer}
         onDeleteSkill={handleDeleteSkill}
         currentWorkspace={currentWorkspace}
+        initialTab={toolHubInitialTab}
+        onSkillsLoaded={(skills) => setActiveSkillsList(skills)}
       />
     </div>
   );
