@@ -26,9 +26,9 @@ export interface SvgThemeOption {
 }
 
 export const SVG_THEME_OPTIONS: SvgThemeOption[] = [
-  { id: "clean-light", name: "☀️ Clean Light (Default)", dotColor: "#2563eb", description: "Pure white canvas & high-contrast navy" },
+  { id: "dark-slate", name: "🌙 Dark Slate (Default)", dotColor: "#38bdf8", description: "Executive dark slate canvas & neon accents" },
+  { id: "clean-light", name: "☀️ Clean Light", dotColor: "#2563eb", description: "Pure white canvas & high-contrast navy" },
   { id: "warm-paper", name: "📜 Warm Paper", dotColor: "#b45309", description: "Ivory cream canvas & warm editorial tones" },
-  { id: "dark-slate", name: "🌙 Dark Slate", dotColor: "#38bdf8", description: "Executive dark slate canvas & neon accents" },
   { id: "original", name: "Original Source", dotColor: "#94a3b8", description: "Preserve raw generated SVG colors" },
 ];
 
@@ -224,7 +224,7 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [activeTheme, setActiveTheme] = useState<SvgThemeMode>("clean-light");
+  const [activeTheme, setActiveTheme] = useState<SvgThemeMode>("dark-slate");
   const [showThemeMenu, setShowThemeMenu] = useState<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -672,7 +672,7 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          background: "#ffffff",
+          background: activeTheme === "dark-slate" ? "#0b0f19" : activeTheme === "warm-paper" ? "#fcfbf7" : "#ffffff",
           cursor: isDragging ? "grabbing" : scale > 1.0 ? "grab" : "default",
           minHeight: isFullscreen ? "calc(100vh - 45px)" : 280,
           userSelect: "none",
