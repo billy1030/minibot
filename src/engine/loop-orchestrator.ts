@@ -133,7 +133,7 @@ export class LoopOrchestrator {
             // Execute via MCP
             let toolOutput = "";
             try {
-              toolOutput = await this.mcpManager.executeTool(toolName, parsedArgs);
+              toolOutput = await this.mcpManager.executeTool(toolName, parsedArgs, { workspace, userNumber });
             } catch (execErr: any) {
               toolOutput = `[Tool Execution Error]: ${execErr.message}`;
             }

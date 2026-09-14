@@ -501,7 +501,15 @@ export const BUILTIN_INPROCESS_TOOLS: DiscoveredTool[] = [
   },
 ];
 
-export async function executeInProcessTool(name: string, args: Record<string, any>, mcpManager?: any): Promise<string | null> {
+export async function executeInProcessTool(
+  name: string,
+  args: Record<string, any>,
+  mcpManager?: any,
+  context?: { workspace?: string; userNumber?: string }
+): Promise<string | null> {
+  const activeWorkspace = args?.workspace || context?.workspace || "default";
+  const activeUserNumber = context?.userNumber || "00000";
+
   switch (name) {
     case "web_search":
       return await performSearch(String(args?.query || ""), Number(args?.maxResults) || 5);
@@ -539,12 +547,13 @@ export async function executeInProcessTool(name: string, args: Record<string, an
         String(args?.skillName || ""),
         String(args?.content || ""),
         (args?.scope as any) || "global",
-        args?.workspace || "default"
+        activeWorkspace,
+        activeUserNumber
       );
     }
     case "list_skills": {
       const { listSkillsTool } = await import("./meta-tools.js");
-      return await listSkillsTool(args?.workspace || "default");
+      return await listSkillsTool(activeWorkspace, activeUserNumber);
     }
     case "minimax_search":
       return await minimaxSearch(String(args?.query || ""));

@@ -239,10 +239,11 @@ export async function installSkillTool(
   skillName: string,
   content: string,
   scope: "global" | "workspace" = "global",
-  workspace: string = "default"
+  workspace: string = "default",
+  userNumber: string = "00000"
 ): Promise<string> {
   const { globalSkillManager } = await import("../skills/skill-manager.js");
-  const res = globalSkillManager.saveSkill(skillName, content, scope, workspace);
+  const res = globalSkillManager.saveSkill(skillName, content, scope, workspace, userNumber);
   if (!res.success) {
     return `❌ Failed to save skill: ${res.error}`;
   }
@@ -252,9 +253,9 @@ export async function installSkillTool(
 /**
  * List all skills available in the environment
  */
-export async function listSkillsTool(workspace: string = "default"): Promise<string> {
+export async function listSkillsTool(workspace: string = "default", userNumber: string = "00000"): Promise<string> {
   const { globalSkillManager } = await import("../skills/skill-manager.js");
-  const skills = globalSkillManager.listAvailableSkills(workspace);
+  const skills = globalSkillManager.listAvailableSkills(workspace, userNumber);
   if (skills.length === 0) return "No skills are currently registered.";
 
   const lines = skills.map(
