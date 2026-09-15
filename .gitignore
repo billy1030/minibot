@@ -9,4 +9,12 @@ config/sessions.json
 src-tauri/target/
 src-tauri/bin/
 .DS_Store
+workspace/
+*.py
+*.csv
+*.txt
+*.png
+*.jpg
+patch_sls_subgraph.mjs
+
 

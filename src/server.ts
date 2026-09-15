@@ -1486,6 +1486,54 @@ app.post("/api/git/sync", requireAuth, async (req, res) => {
   }
 });
 
+// ==========================================
+// WORKSPACE SANDBOX FILES ENDPOINTS
+// ==========================================
+
+const WORKSPACE_DIR = path.resolve(process.cwd(), "workspace");
+
+// 14. GET /api/workspace/files - List files in local sandbox workspace
+app.get("/api/workspace/files", (req, res) => {
+  try {
+    if (!fs.existsSync(WORKSPACE_DIR)) {
+      fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
+    }
+    const items = fs.readdirSync(WORKSPACE_DIR);
+    const files = items.map((name) => {
+      const fullPath = path.join(WORKSPACE_DIR, name);
+      const stat = fs.statSync(fullPath);
+      return {
+        name,
+        size: stat.size,
+        modifiedAt: stat.mtime.toISOString(),
+        isDirectory: stat.isDirectory(),
+      };
+    }).sort((a, b) => (b.modifiedAt > a.modifiedAt ? 1 : -1));
+
+    res.json({ success: true, files });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 15. GET /api/workspace/files/:filename - Download or preview workspace artifact
+app.get("/api/workspace/files/:filename", (req, res) => {
+  try {
+    const rawFilename = req.params.filename;
+    // Prevent path traversal
+    const safeFilename = path.basename(rawFilename);
+    const targetPath = path.join(WORKSPACE_DIR, safeFilename);
+
+    if (!fs.existsSync(targetPath)) {
+      return res.status(404).json({ success: false, error: "File not found in workspace." });
+    }
+
+    res.sendFile(targetPath);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Fallback to frontend SPA index.html or welcome banner
 app.use((req, res) => {
   const indexPath = path.resolve(process.cwd(), "frontend/dist/index.html");

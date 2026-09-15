@@ -299,7 +299,132 @@ async function createExcelSpreadsheet(fileName: string, sheets: Array<{ sheetNam
 }
 
 // ==========================================
-// 4. Exported In-Process Tool Definitions & Dispatcher
+// 4. Local Python Sandbox & UV Execution Runner
+// ==========================================
+
+const WORKSPACE_DIR = path.resolve(process.cwd(), "workspace");
+if (!fs.existsSync(WORKSPACE_DIR)) {
+  try {
+    fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
+  } catch {}
+}
+
+interface PythonExecutionParams {
+  code: string;
+  dependencies?: string[];
+  fileName?: string;
+  timeoutSeconds?: number;
+}
+
+async function executePythonSandbox(params: PythonExecutionParams): Promise<string> {
+  try {
+    const { code, dependencies = [], fileName, timeoutSeconds = 60 } = params;
+
+    if (!code || typeof code !== "string" || !code.trim()) {
+      return "Error: No Python code provided for execution.";
+    }
+
+    // Ensure workspace exists
+    if (!fs.existsSync(WORKSPACE_DIR)) {
+      fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
+    }
+
+    // Sanitize or generate script name
+    let scriptFileName = fileName ? path.basename(fileName) : `script_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.py`;
+    if (!scriptFileName.endsWith(".py")) {
+      scriptFileName += ".py";
+    }
+
+    const scriptPath = path.join(WORKSPACE_DIR, scriptFileName);
+
+    // Snapshot existing files in workspace to detect newly generated artifacts
+    const filesBefore = new Set(fs.readdirSync(WORKSPACE_DIR));
+
+    // Write Python code to workspace
+    fs.writeFileSync(scriptPath, code, "utf8");
+
+    // Build uv run command arguments
+    // e.g. uv run --isolated --with pandas --with matplotlib python script_123.py
+    const uvArgs = ["run", "--isolated"];
+
+    if (Array.isArray(dependencies)) {
+      for (const dep of dependencies) {
+        const cleanDep = String(dep).trim();
+        if (cleanDep) {
+          uvArgs.push("--with", cleanDep);
+        }
+      }
+    }
+
+    uvArgs.push("python", scriptFileName);
+
+    const startTime = Date.now();
+    let stdout = "";
+    let stderr = "";
+    let exitCode = 0;
+
+    try {
+      const res = await execFileAsync("uv", uvArgs, {
+        cwd: WORKSPACE_DIR,
+        timeout: Math.min(Math.max(timeoutSeconds, 5), 180) * 1000,
+        env: {
+          ...process.env,
+          PYTHONNOUSERSITE: "1",
+          PYTHONUNBUFFERED: "1",
+        },
+        maxBuffer: 10 * 1024 * 1024, // 10MB max output
+      });
+      stdout = res.stdout || "";
+      stderr = res.stderr || "";
+    } catch (err: any) {
+      exitCode = err.code || 1;
+      stdout = err.stdout || "";
+      stderr = err.stderr || err.message || "";
+    }
+
+    const durationMs = Date.now() - startTime;
+
+    // Detect newly created files in workspace
+    const filesAfter = fs.readdirSync(WORKSPACE_DIR);
+    const newFiles = filesAfter.filter((f) => !filesBefore.has(f) && f !== scriptFileName);
+
+    let output = `### 🐍 Python Execution Summary\n`;
+    output += `- **Script:** \`workspace/${scriptFileName}\`\n`;
+    output += `- **Exit Code:** \`${exitCode}\` (${exitCode === 0 ? "Success" : "Failed"})\n`;
+    output += `- **Duration:** \`${(durationMs / 1000).toFixed(2)}s\`\n`;
+
+    if (dependencies.length > 0) {
+      output += `- **Dependencies (uv):** ${dependencies.map((d) => `\`${d}\``).join(", ")}\n`;
+    }
+
+    if (newFiles.length > 0) {
+      output += `- **Generated Artifacts in Workspace:**\n`;
+      for (const f of newFiles) {
+        const stat = fs.statSync(path.join(WORKSPACE_DIR, f));
+        output += `  - 📄 \`workspace/${f}\` (${(stat.size / 1024).toFixed(1)} KB)\n`;
+      }
+    }
+
+    if (stdout.trim()) {
+      output += `\n**Standard Output:**\n\`\`\`text\n${stdout.trim().slice(0, 15000)}\n\`\`\`\n`;
+    }
+
+    if (stderr.trim()) {
+      output += `\n**Standard Error / Logs:**\n\`\`\`text\n${stderr.trim().slice(0, 15000)}\n\`\`\`\n`;
+    }
+
+    if (!stdout.trim() && !stderr.trim()) {
+      output += `\n*(Script executed with no console output)*\n`;
+    }
+
+    return output;
+  } catch (outerErr: any) {
+    return `Critical error executing Python sandbox: ${outerErr.message}`;
+  }
+}
+
+// ==========================================
+// 5. Exported In-Process Tool Definitions & Dispatcher
 // ==========================================
 
 export const BUILTIN_INPROCESS_TOOLS: DiscoveredTool[] = [
@@ -499,6 +624,34 @@ export const BUILTIN_INPROCESS_TOOLS: DiscoveredTool[] = [
       properties: {},
     },
   },
+  {
+    serverName: "python-sandbox",
+    name: "run_python_code",
+    description: "Execute Python code or scripts locally in an isolated sandbox using uv. Automatically installs required PyPI dependencies in an ephemeral environment, saves artifacts (charts, CSV, Excel, PDF) into the local workspace, and returns stdout/stderr.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        code: {
+          type: "string",
+          description: "The complete Python script code to execute.",
+        },
+        dependencies: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional list of PyPI packages to install via uv (e.g. ['pandas', 'matplotlib', 'numpy', 'openpyxl', 'requests']).",
+        },
+        fileName: {
+          type: "string",
+          description: "Optional filename for the script (e.g. 'analyze_sales.py'). Will be placed inside workspace/.",
+        },
+        timeoutSeconds: {
+          type: "number",
+          description: "Maximum execution time in seconds (default 60, max 180).",
+        },
+      },
+      required: ["code"],
+    },
+  },
 ];
 
 export async function executeInProcessTool(
@@ -511,6 +664,13 @@ export async function executeInProcessTool(
   const activeUserNumber = context?.userNumber || "00000";
 
   switch (name) {
+    case "run_python_code":
+      return await executePythonSandbox({
+        code: String(args?.code || ""),
+        dependencies: Array.isArray(args?.dependencies) ? args.dependencies : [],
+        fileName: args?.fileName ? String(args.fileName) : undefined,
+        timeoutSeconds: typeof args?.timeoutSeconds === "number" ? args.timeoutSeconds : 60,
+      });
     case "web_search":
       return await performSearch(String(args?.query || ""), Number(args?.maxResults) || 5);
     case "fetch_page":
