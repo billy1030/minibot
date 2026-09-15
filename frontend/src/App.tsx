@@ -284,6 +284,15 @@ export function App() {
     currentFinal: "",
     currentInterim: "",
   });
+  const speechInsertBaseRef = useRef<{
+    prefix: string;
+    suffix: string;
+    insertIndex: number;
+  }>({
+    prefix: "",
+    suffix: "",
+    insertIndex: 0,
+  });
 
   // 🔊 Text-to-Speech (TTS) 狀態與音訊參照（廣東話 / Cantonese）
   // 1: local TTS (瀏覽器原生 Web Speech Synthesis - zh-HK)
@@ -1108,14 +1117,32 @@ export function App() {
       currentInterim: "",
     };
 
+    const { prefix, suffix } = speechInsertBaseRef.current;
+
     if (candidateText) {
-      setInputPrompt(candidateText);
-      setSttStatusText(`語音已轉為文字：${candidateText.slice(0, 20)}${candidateText.length > 20 ? "..." : ""}`);
+      // 於游標位置插入錄音文字，不清除原有的內容
+      let combined = prefix ? (prefix.endsWith(" ") ? prefix : prefix + " ") : "";
+      combined += candidateText;
+      if (suffix) {
+        combined += (suffix.startsWith(" ") ? "" : " ") + suffix;
+      }
+      const newCursorPos = (prefix ? (prefix.endsWith(" ") ? prefix : prefix + " ") : "").length + candidateText.length;
+
+      setInputPrompt(combined);
+      setSttStatusText(`語音已插入：${candidateText.slice(0, 20)}${candidateText.length > 20 ? "..." : ""}`);
       setTimeout(() => setSttStatusText(""), 3500);
-      setTimeout(() => chatInputRef.current?.focus(), 100);
+      setTimeout(() => {
+        if (chatInputRef.current) {
+          chatInputRef.current.focus();
+          try {
+            chatInputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+          } catch {}
+        }
+      }, 50);
     } else {
       setSttStatusText("未偵測到清晰語音");
       setTimeout(() => setSttStatusText(""), 2500);
+      setTimeout(() => chatInputRef.current?.focus(), 50);
     }
     isStoppingVoiceRef.current = false;
   };
@@ -1154,6 +1181,24 @@ export function App() {
       };
       isStoppingVoiceRef.current = false;
 
+      // 記下當前 inputPrompt 及游標位置，支援在 cursor 位置插入語音文字
+      const currentInput = inputPrompt || "";
+      let startPos = currentInput.length;
+      let endPos = currentInput.length;
+      if (chatInputRef.current) {
+        if (typeof chatInputRef.current.selectionStart === "number") {
+          startPos = chatInputRef.current.selectionStart;
+          endPos = chatInputRef.current.selectionEnd ?? startPos;
+        }
+      }
+      const prefix = currentInput.slice(0, startPos);
+      const suffix = currentInput.slice(endPos);
+      speechInsertBaseRef.current = {
+        prefix,
+        suffix,
+        insertIndex: startPos,
+      };
+
       const recognition = new SpeechRecognition();
       recognition.lang = sttLang;
       recognition.continuous = true;
@@ -1178,7 +1223,7 @@ export function App() {
         speechBuffersRef.current.currentFinal = final;
         speechBuffersRef.current.currentInterim = interim;
 
-        const fullSpoken = (
+        const spokenCandidate = (
           speechBuffersRef.current.previousFinal +
           " " +
           speechBuffersRef.current.currentFinal +
@@ -1186,21 +1231,27 @@ export function App() {
           speechBuffersRef.current.currentInterim
         ).trim();
 
-        if (fullSpoken) {
-          // 即時同步顯示在輸入框內，所見即所得
-          setInputPrompt(fullSpoken);
+        if (spokenCandidate) {
+          const { prefix: curPrefix, suffix: curSuffix } = speechInsertBaseRef.current;
+          let previewText = curPrefix ? (curPrefix.endsWith(" ") ? curPrefix : curPrefix + " ") : "";
+          previewText += spokenCandidate;
+          if (curSuffix) {
+            previewText += (curSuffix.startsWith(" ") ? "" : " ") + curSuffix;
+          }
+          // 即時同步顯示在輸入框內（在游標位置插入）
+          setInputPrompt(previewText);
 
-          const incomplete = isIncompleteSentence(fullSpoken);
+          const incomplete = isIncompleteSentence(spokenCandidate);
           const baseDelay = 2000; // 基礎安靜停頓 2 秒
           const effectiveDelay = incomplete ? baseDelay + 1200 : baseDelay; // 連接詞智能延長 +1.2s
-          const suffix = incomplete ? " (語氣未完，聆聽中...)" : ` (${(effectiveDelay / 1000).toFixed(1)}s 後自動停止)`;
+          const suffixMsg = incomplete ? " (語氣未完，聆聽中...)" : ` (${(effectiveDelay / 1000).toFixed(1)}s 後自動停止)`;
 
-          const preview = fullSpoken.length > 25 ? "..." + fullSpoken.slice(-25) : fullSpoken;
-          setSttStatusText(`🎙️ "${preview}"${suffix}`);
+          const preview = spokenCandidate.length > 25 ? "..." + spokenCandidate.slice(-25) : spokenCandidate;
+          setSttStatusText(`🎙️ "${preview}"${suffixMsg}`);
 
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
           silenceTimerRef.current = setTimeout(() => {
-            stopVoiceRecognition(fullSpoken);
+            stopVoiceRecognition(spokenCandidate);
           }, effectiveDelay);
         }
       };
