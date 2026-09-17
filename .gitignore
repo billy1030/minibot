@@ -16,5 +16,5 @@ workspace/
 *.png
 *.jpg
 patch_sls_subgraph.mjs
-
-
+.claude/
+agent/
