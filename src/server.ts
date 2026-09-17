@@ -1008,7 +1008,7 @@ function getDocManager(req: express.Request): DocumentManager {
 // 4. Chat with Streaming Events (SSE) and Multi-Turn History, Document Attachment & Workspace Support
 app.post("/api/chat", requireAuth, async (req, res) => {
   const { userNumber } = getAuthContext(req);
-  const { message, history, attachedDocHashes, sessionFile, workspace, enableThinking = true } = req.body;
+  const { message, history, attachedDocHashes, sessionFile, workspace, enableThinking = true, maxIterations } = req.body;
   if (!message) {
     return res.status(400).json({ error: "Message is required." });
   }
@@ -1099,7 +1099,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
             });
           }
         },
-        onComplete: (answer, iterations, activeSkills) => {
+        onComplete: (answer, iterations, activeSkills, limitReached) => {
           const finalSkills = activeSkills && activeSkills.length > 0 ? activeSkills : activatedSkillNames;
           let savedFile = sessionFile;
           try {
@@ -1131,6 +1131,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
             sessionFile: savedFile,
             workspace: workspace || "default",
             activeSkills: finalSkills,
+            limitReached: Boolean(limitReached),
           });
           if (!res.writableEnded) {
             res.write("event: end\ndata: {}\n\n");
@@ -1148,7 +1149,8 @@ app.post("/api/chat", requireAuth, async (req, res) => {
       attachedContext,
       enableThinking,
       workspace || "default",
-      userNumber
+      userNumber,
+      typeof maxIterations === "number" && maxIterations > 0 ? maxIterations : undefined
     );
   } catch (err: any) {
     sendEvent("error", { message: err.message });

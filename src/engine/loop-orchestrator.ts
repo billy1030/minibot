@@ -10,7 +10,7 @@ export interface LoopEventCallbacks {
   onLLMResponse?: (response: OpenAI.Chat.Completions.ChatCompletion) => void;
   onToolCall?: (toolName: string, args: any, serverName?: string) => void;
   onToolResult?: (toolName: string, result: string, serverName?: string) => void;
-  onComplete?: (finalAnswer: string, iterations: number, activeSkills?: string[]) => void;
+  onComplete?: (finalAnswer: string, iterations: number, activeSkills?: string[], limitReached?: boolean) => void;
   onError?: (error: Error) => void;
 }
 
@@ -35,8 +35,9 @@ export class LoopOrchestrator {
     attachedContext?: string,
     enableThinking: boolean = true,
     workspace: string = "default",
-    userNumber: string = "00000"
-  ): Promise<{ answer: string; iterations: number; history: OpenAI.Chat.Completions.ChatCompletionMessageParam[]; activeSkills?: string[] }> {
+    userNumber: string = "00000",
+    maxIterationsOverride?: number
+  ): Promise<{ answer: string; iterations: number; history: OpenAI.Chat.Completions.ChatCompletionMessageParam[]; activeSkills?: string[]; limitReached?: boolean }> {
     // 1. Build initial system message combining system prompt, attached docs, and AI skills
     const systemPromptParts = [this.config.prompts.systemPrompt];
 
@@ -113,7 +114,9 @@ export class LoopOrchestrator {
     messages.push({ role: "user", content: userPrompt });
 
     let iteration = 0;
-    const maxIterations = this.config.maxLoopIterations;
+    const maxIterations = (typeof maxIterationsOverride === "number" && maxIterationsOverride > 0)
+      ? maxIterationsOverride
+      : this.config.maxLoopIterations;
 
     while (iteration < maxIterations) {
       iteration++;
@@ -175,8 +178,8 @@ export class LoopOrchestrator {
 
         // If no tool call, this is the final answer
         const finalAnswer = message.content || "(No response content)";
-        callbacks?.onComplete?.(finalAnswer, iteration, activeSkillNames);
-        return { answer: finalAnswer, iterations: iteration, history: messages, activeSkills: activeSkillNames };
+        callbacks?.onComplete?.(finalAnswer, iteration, activeSkillNames, false);
+        return { answer: finalAnswer, iterations: iteration, history: messages, activeSkills: activeSkillNames, limitReached: false };
       } catch (err: any) {
         callbacks?.onError?.(err);
         throw err;
@@ -184,7 +187,7 @@ export class LoopOrchestrator {
     }
 
     const fallbackMsg = `[Guardrail]: Loop reached maximum iterations limit (${maxIterations}).`;
-    callbacks?.onComplete?.(fallbackMsg, iteration, activeSkillNames);
-    return { answer: fallbackMsg, iterations: iteration, history: messages, activeSkills: activeSkillNames };
+    callbacks?.onComplete?.(fallbackMsg, iteration, activeSkillNames, true);
+    return { answer: fallbackMsg, iterations: iteration, history: messages, activeSkills: activeSkillNames, limitReached: true };
   }
 }

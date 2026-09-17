@@ -89,6 +89,7 @@ interface Message {
   tokensPerSec?: number;
   timestamp?: number;
   turnIndex?: number;
+  limitReached?: boolean;
 }
 
 interface ConfigState {
@@ -1659,7 +1660,7 @@ export function App() {
     }
   };
 
-  const handleSend = async (textOverride?: string) => {
+  const handleSend = async (textOverride?: string, extraIterationsOverride?: number) => {
     const rawQuery = textOverride !== undefined ? textOverride : inputPrompt;
     if (!rawQuery.trim() || loading) return;
 
@@ -1735,6 +1736,7 @@ export function App() {
           sessionFile: activeSessionFile,
           workspace: currentWorkspace,
           enableThinking,
+          maxIterations: extraIterationsOverride,
         }),
       });
 
@@ -1832,6 +1834,7 @@ export function App() {
             }
 
             const finalSkills = data.activeSkills || activeSkills;
+            const isLimitHit = Boolean(data.limitReached) || (typeof data.answer === "string" && data.answer.includes("[Guardrail]: Loop reached maximum iterations limit"));
 
             setMessages((prev) =>
               prev.map((m) =>
@@ -1844,6 +1847,7 @@ export function App() {
                       tokensPerSec,
                       isStreaming: false,
                       activeSkills: finalSkills && finalSkills.length > 0 ? finalSkills : undefined,
+                      limitReached: isLimitHit,
                     }
                   : m
               )
@@ -4902,6 +4906,73 @@ export function App() {
                               </span>
                             </div>
                           ) : null}
+
+                          {/* ⚠️ Interactive Loop Limit Reached Banner with Extra Loop Allowance */}
+                          {m.limitReached && !m.isStreaming && (
+                            <div
+                              style={{
+                                marginTop: 14,
+                                padding: "12px 14px",
+                                borderRadius: 8,
+                                background: "rgba(234, 179, 8, 0.08)",
+                                border: "1px solid rgba(234, 179, 8, 0.3)",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 10,
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#eab308", fontWeight: 700, fontSize: 13 }}>
+                                <span>⚠️</span>
+                                <span>已達到設定的推理迴圈上限 (Loop Limit reached: {m.iterations || config?.maxLoopIterations || 10} 次)</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.5 }}>
+                                MiniBot 尚未完成當前任務的所有工具推理。是否允許額外迴圈次數繼續執行？
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 2 }}>
+                                <button
+                                  type="button"
+                                  disabled={loading}
+                                  onClick={() => handleSend("請繼續完成剛才未完成的步驟與推理，並給出完整結果。", 5)}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    padding: "6px 14px",
+                                    borderRadius: 6,
+                                    background: "linear-gradient(135deg, #eab308 0%, #ca8a04 100%)",
+                                    color: "#ffffff",
+                                    border: "none",
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: loading ? "not-allowed" : "pointer",
+                                    boxShadow: "0 2px 6px rgba(202, 138, 4, 0.3)",
+                                  }}
+                                >
+                                  ⚡ 允許額外 +5 迴圈並繼續
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={loading}
+                                  onClick={() => handleSend("請繼續完成剛才未完成的步驟與推理，並給出完整結果。", 10)}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    padding: "6px 14px",
+                                    borderRadius: 6,
+                                    background: "var(--bg-card)",
+                                    color: "var(--text-main)",
+                                    border: "1px solid rgba(234, 179, 8, 0.4)",
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    cursor: loading ? "not-allowed" : "pointer",
+                                  }}
+                                >
+                                  🚀 允許額外 +10 迴圈
+                                </button>
+                              </div>
+                            </div>
+                          )}
 
                           <div
                             style={{
