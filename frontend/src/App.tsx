@@ -355,6 +355,7 @@ export function App() {
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsAudioBlobUrlRef = useRef<string | null>(null);
   const ttsAbortControllerRef = useRef<AbortController | null>(null);
+  const chatAbortControllerRef = useRef<AbortController | null>(null);
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const ttsSpeakingTimeoutRef = useRef<any>(null);
   // 快取最後一次合成/播放的音訊資訊，支援免重新生成立即重播 (Repeat without regeneration)
@@ -1718,11 +1719,15 @@ export function App() {
     const requestStartTime = Date.now();
     setActiveRunStartTime(requestStartTime);
 
+    const abortController = new AbortController();
+    chatAbortControllerRef.current = abortController;
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        signal: abortController.signal,
         body: JSON.stringify({
           message: finalQuery,
           history,
@@ -1849,22 +1854,49 @@ export function App() {
         }
       }
     } catch (err: any) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMessageId
-            ? {
-                ...m,
-                content: `[Loop Error]: ${err.message}`,
-                isStreaming: false,
-              }
-            : m
-        )
-      );
+      if (err.name === "AbortError" || abortController.signal.aborted) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  content: m.content ? `${m.content}\n\n*(Stopped by user)*` : "*(Generation stopped by user)*",
+                  isStreaming: false,
+                }
+              : m
+          )
+        );
+      } else {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  content: `[Loop Error]: ${err.message}`,
+                  isStreaming: false,
+                }
+              : m
+          )
+        );
+      }
     } finally {
+      if (chatAbortControllerRef.current === abortController) {
+        chatAbortControllerRef.current = null;
+      }
       setLoading(false);
       setCurrentStep(null);
       setActiveRunStartTime(null);
     }
+  };
+
+  const handleStopSend = () => {
+    if (chatAbortControllerRef.current) {
+      chatAbortControllerRef.current.abort();
+      chatAbortControllerRef.current = null;
+    }
+    setLoading(false);
+    setCurrentStep(null);
+    setActiveRunStartTime(null);
   };
 
   if (isAuthLoading) {
@@ -6196,29 +6228,60 @@ export function App() {
             {isListening ? <MicOff size={15} /> : <Mic size={15} />}
           </button>
 
-          {/* 🚀 Send Button (Compact Icon) */}
-          <button
-            onClick={() => handleSend()}
-            disabled={loading || !inputPrompt.trim()}
-            title="Send message (Enter)"
-            style={{
-              width: 36,
-              height: 34,
-              borderRadius: 7,
-              background: loading ? "#94a3b8" : "#1f6feb",
-              color: "#ffffff",
-              border: "none",
-              cursor: loading ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: loading ? "none" : "0 2px 4px rgba(31, 111, 235, 0.25)",
-              transition: "background 0.2s, box-shadow 0.2s",
-              flexShrink: 0,
-            }}
-          >
-            <Send size={15} />
-          </button>
+          {/* 🚀 / ⏹️ Dynamic Send or Stop Button (Same Icon Position) */}
+          {loading ? (
+            <button
+              type="button"
+              onClick={handleStopSend}
+              title="Stop sending / Cancel LLM response"
+              style={{
+                width: 36,
+                height: 34,
+                borderRadius: 7,
+                background: "#ef4444",
+                color: "#ffffff",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 2px 6px rgba(239, 68, 68, 0.35)",
+                transition: "all 0.2s ease",
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#dc2626";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#ef4444";
+              }}
+            >
+              <Square size={13} fill="#ffffff" />
+            </button>
+          ) : (
+            <button
+              onClick={() => handleSend()}
+              disabled={!inputPrompt.trim()}
+              title="Send message (Enter)"
+              style={{
+                width: 36,
+                height: 34,
+                borderRadius: 7,
+                background: !inputPrompt.trim() ? "#94a3b8" : "#1f6feb",
+                color: "#ffffff",
+                border: "none",
+                cursor: !inputPrompt.trim() ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: !inputPrompt.trim() ? "none" : "0 2px 4px rgba(31, 111, 235, 0.25)",
+                transition: "background 0.2s, box-shadow 0.2s",
+                flexShrink: 0,
+              }}
+            >
+              <Send size={15} />
+            </button>
+          )}
 
           {/* ⬆️ Upper Arrow Button: Step / Jump up to previous conversation turn */}
           <button
