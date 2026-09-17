@@ -131,9 +131,9 @@ export class MCPClientManager {
       }
     }
 
-    // Also guarantee core built-in tools (web-search, minimax) are registered if servers are enabled
+    // Always register all core built-in in-process tools (e.g. run_python_code, install_skill, download_remote_file, etc.)
     for (const tool of BUILTIN_INPROCESS_TOOLS) {
-      if (serversConfig[tool.serverName]?.enabled && !this.tools.has(tool.name)) {
+      if (!this.tools.has(tool.name)) {
         this.tools.set(tool.name, tool);
       }
     }

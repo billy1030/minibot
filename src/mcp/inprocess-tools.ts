@@ -625,7 +625,7 @@ export const BUILTIN_INPROCESS_TOOLS: DiscoveredTool[] = [
     },
   },
   {
-    serverName: "python-sandbox",
+    serverName: "web-search",
     name: "run_python_code",
     description: "Execute Python code or scripts locally in an isolated sandbox using uv. Automatically installs required PyPI dependencies in an ephemeral environment, saves artifacts (charts, CSV, Excel, PDF) into the local workspace, and returns stdout/stderr.",
     inputSchema: {
