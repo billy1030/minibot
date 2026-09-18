@@ -204,7 +204,13 @@ export function App() {
   const [isRenamingWs, setIsRenamingWs] = useState<boolean>(false);
   const [renameWsInput, setRenameWsInput] = useState<string>("");
   const [savedSessions, setSavedSessions] = useState<any[]>([]);
-  const [activeSessionFile, setActiveSessionFile] = useState<string | null>(null);
+  const [activeSessionFile, setActiveSessionFile] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("minibot_active_session") || null;
+    } catch {
+      return null;
+    }
+  });
   const [showModelPanel, setShowModelPanel] = useState<boolean>(false);
   const [showPastSessions, setShowPastSessions] = useState<boolean>(true);
   const [mcpViewMode, setMcpViewMode] = useState<"full" | "minimize" | "hide">("full");
@@ -954,7 +960,14 @@ export function App() {
         }
 
         // 4. Determine target session file and turnIndex to persist rollback to backend log
-        const targetSessionFile = activeSessionFile || (savedSessions.length > 0 ? savedSessions[0]?.filename : null);
+        const storedSession = (() => {
+          try {
+            return localStorage.getItem("minibot_active_session");
+          } catch {
+            return null;
+          }
+        })();
+        const targetSessionFile = activeSessionFile || storedSession || (savedSessions.length > 0 ? savedSessions[0]?.filename : null);
         const targetTurn = turnIndex !== undefined ? turnIndex : Math.max(1, Math.ceil(assistantIndex / 2));
 
         if (targetSessionFile && targetTurn !== undefined) {
@@ -969,27 +982,35 @@ export function App() {
               }),
             });
             const data = await res.json();
-            if (data.fileDeleted) {
-              setActiveSessionFile(null);
-              localStorage.removeItem("minibot_active_session");
-            } else {
-              if (!activeSessionFile) {
+            if (res.ok && data.success) {
+              if (data.fileDeleted) {
+                setActiveSessionFile(null);
+                try {
+                  localStorage.removeItem("minibot_active_session");
+                } catch {}
+              } else {
                 setActiveSessionFile(targetSessionFile);
-                localStorage.setItem("minibot_active_session", targetSessionFile);
+                try {
+                  localStorage.setItem("minibot_active_session", targetSessionFile);
+                } catch {}
               }
+              await fetchLogs(currentWorkspace);
+              showAlert("Rolled back successfully. Your prompt has been restored to the input box.", "success", "Rollback Complete");
+            } else {
+              showAlert(`Rollback error: ${data.error || "Failed to update log file on disk"}`, "error", "Rollback Failed");
             }
-            await fetchLogs(currentWorkspace);
           } catch (err: any) {
             console.error("Failed to sync rollback to server log:", err);
+            showAlert(`Network error during rollback: ${err.message || err}`, "error", "Rollback Failed");
           }
+        } else {
+          showAlert("Rolled back locally. Your prompt has been restored to the input box.", "info", "Rollback Complete");
         }
 
         // 5. Focus input for immediate tweaking
         setTimeout(() => {
           chatInputRef.current?.focus();
         }, 100);
-
-        showAlert("Rolled back successfully. Your prompt has been restored to the input box.", "success", "Rollback Complete");
       },
       "Confirm Rollback",
       "Confirm Rollback"
