@@ -6594,7 +6594,7 @@ export function App() {
             <button
               type="button"
               onClick={handleStopSend}
-              title="Stop sending / Cancel LLM response (暫停 / 中止執行)"
+              title="Stop sending / Cancel LLM response"
               style={{
                 height: 34,
                 padding: "0 12px",
@@ -6624,7 +6624,7 @@ export function App() {
               }}
             >
               <Square size={12} fill="#ffffff" />
-              <span>停止 (Stop)</span>
+              <span>Stop</span>
             </button>
           ) : (
             <button
