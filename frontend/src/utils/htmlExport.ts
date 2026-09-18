@@ -58,35 +58,14 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
       background: var(--bg);
       color: var(--text);
       line-height: 1.75;
-      padding-bottom: 5rem;
+      padding: 2rem 1rem 3rem;
       transition: background-color 0.2s, color 0.2s;
-    }
-    .header-banner {
-      background: var(--card);
-      border-bottom: 1px solid var(--border);
-      padding: 1rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 50;
-      backdrop-filter: blur(12px);
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 800;
-      font-size: 1.1rem;
-      color: var(--accent);
     }
     .main {
       max-width: 980px;
       margin: 0 auto;
-      padding: 2.5rem 2rem;
+      padding: 2.5rem 2.5rem;
       background: var(--card);
-      margin-top: 2rem;
       border-radius: 16px;
       border: 1px solid var(--border);
       box-shadow: 0 4px 20px rgba(0,0,0,0.04);
@@ -440,7 +419,7 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
     @page { size: A4; margin: 15mm 15mm; }
     @media print {
       body { background: #fff !important; color: #000 !important; font-size: 12pt; line-height: 1.5; }
-      .toolbar, .header-banner, .diagram-code-panel { display: none !important; }
+      .toolbar, .diagram-code-panel { display: none !important; }
       .diagram-topbar { display: flex !important; background: #f8fafc !important; border-bottom: 1px solid #cbd5e1 !important; padding: 4px 10px !important; }
       .diagram-topbar-title { display: flex !important; color: #0284c7 !important; font-weight: 700 !important; font-size: 0.82rem !important; }
       .diagram-tools-group, .diag-btn { display: none !important; }
@@ -460,16 +439,6 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
   </style>
 </head>
 <body>
-
-<header class="header-banner">
-  <div class="brand">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-    <span>MiniBot · Export Report</span>
-  </div>
-  <div style="font-size: 0.82rem; color: var(--muted);">
-    Generated: ${new Date().toLocaleString()}
-  </div>
-</header>
 
 <div class="toolbar">
   <button class="btn" onclick="toggleTheme()" title="Toggle Light / Dark Mode">🌓 Theme</button>
