@@ -5090,7 +5090,7 @@ export function App() {
                             >
                               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: "var(--accent, #0284c7)" }}>
                                 <FileText size={16} />
-                                <span>產生之成果檔案 (Generated Deliverables):</span>
+                                <span>Generated Deliverables:</span>
                               </div>
                               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                                 {deliverableFiles.map((f, idx) => {
@@ -5126,7 +5126,7 @@ export function App() {
                                       }}
                                     >
                                       <Download size={14} />
-                                      <span>下載 {f.fileName}</span>
+                                      <span>Download {f.fileName}</span>
                                     </a>
                                   );
                                 })}
