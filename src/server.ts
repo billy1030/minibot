@@ -1552,21 +1552,49 @@ app.get("/api/workspace/files/:filename", (req, res) => {
     const rawFilename = req.params.filename;
     // Prevent path traversal
     const safeFilename = path.basename(rawFilename);
-    const scopedDir = getSandboxDir(userNumber, workspace);
-    let targetPath = path.join(scopedDir, safeFilename);
 
-    // Fallback to legacy root workspace if not in scoped sandbox
-    if (!fs.existsSync(targetPath)) {
-      const legacyPath = path.join(process.cwd(), "workspace", safeFilename);
-      if (fs.existsSync(legacyPath)) {
-        targetPath = legacyPath;
-      } else {
-        return res.status(404).json({ success: false, error: "File not found in workspace." });
+    // Candidate search locations in order of specificity:
+    const candidatePaths = [
+      path.join(getSandboxDir(userNumber, workspace), safeFilename),
+      path.join(getSandboxDir("00000", workspace), safeFilename),
+      path.join(getSandboxDir(userNumber, "default"), safeFilename),
+      path.join(getSandboxDir("00000", "default"), safeFilename),
+      path.join(process.cwd(), "workspace", safeFilename),
+      path.join(process.cwd(), "workspace", "default", safeFilename),
+    ];
+
+    let targetPath = candidatePaths.find((p) => fs.existsSync(p));
+
+    // If still not found, search recursively inside the workspace folder as a fallback
+    if (!targetPath) {
+      const workspaceRoot = path.resolve(process.cwd(), "workspace");
+      if (fs.existsSync(workspaceRoot)) {
+        const findFileRecursive = (dir: string, name: string): string | null => {
+          try {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                const found = findFileRecursive(full, name);
+                if (found) return found;
+              } else if (entry.isFile() && entry.name.toLowerCase() === name.toLowerCase()) {
+                return full;
+              }
+            }
+          } catch {}
+          return null;
+        };
+        targetPath = findFileRecursive(workspaceRoot, safeFilename) || undefined;
       }
     }
 
-    // Send as download attachment
-    res.download(targetPath, safeFilename);
+    if (!targetPath || !fs.existsSync(targetPath)) {
+      return res.status(404).json({ success: false, error: `File "${safeFilename}" not found in workspace.` });
+    }
+
+    // Explicitly set headers for robust browser attachment download
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(safeFilename)}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`);
+    res.sendFile(targetPath);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
