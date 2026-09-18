@@ -781,11 +781,11 @@ export function App() {
   useEffect(() => {
     fetchConfig();
     fetchWorkspaces();
-    fetchLogs(currentWorkspace);
+    fetchLogs(currentWorkspace, true);
     fetchSkills(currentWorkspace);
   }, []);
 
-  const fetchLogs = async (wsName?: string) => {
+  const fetchLogs = async (wsName?: string, isInitialLoad?: boolean) => {
     const ws = wsName || currentWorkspace;
     try {
       const res = await fetch(`/api/logs?workspace=${encodeURIComponent(ws)}`, {
@@ -795,6 +795,15 @@ export function App() {
       const data = await res.json();
       if (data.logs) {
         setSavedSessions(data.logs);
+        // Auto-restore saved session on initial load or refresh if present in localStorage
+        if (isInitialLoad) {
+          try {
+            const savedFile = localStorage.getItem("minibot_active_session");
+            if (savedFile && data.logs.some((l: any) => l.filename === savedFile)) {
+              loadSession(savedFile, ws);
+            }
+          } catch {}
+        }
       }
     } catch (err) {
       console.error("Failed to load logs:", err);
@@ -811,6 +820,9 @@ export function App() {
       },
     ]);
     setActiveSessionFile(null);
+    try {
+      localStorage.removeItem("minibot_active_session");
+    } catch {}
     setInputPrompt("");
     setCurrentStep(null);
     // Reset attachments strictly for new session
@@ -828,6 +840,9 @@ export function App() {
       if (data.messages) {
         setMessages(data.messages);
         setActiveSessionFile(filename);
+        try {
+          localStorage.setItem("minibot_active_session", filename);
+        } catch {}
         // Strictly restore only the attachments associated with this specific loaded session
         setActiveDocHashes(data.attachedDocHashes || []);
       }
@@ -938,21 +953,30 @@ export function App() {
           setMessages(newMessages);
         }
 
-        // 4. If there's an active session file and turnIndex is known, persist rollback to backend log
-        if (activeSessionFile && turnIndex !== undefined) {
+        // 4. Determine target session file and turnIndex to persist rollback to backend log
+        const targetSessionFile = activeSessionFile || (savedSessions.length > 0 ? savedSessions[0]?.filename : null);
+        const targetTurn = turnIndex !== undefined ? turnIndex : Math.max(1, Math.ceil(assistantIndex / 2));
+
+        if (targetSessionFile && targetTurn !== undefined) {
           try {
-            const res = await fetch(`/api/logs/${encodeURIComponent(activeSessionFile)}/rollback-turn`, {
+            const res = await fetch(`/api/logs/${encodeURIComponent(targetSessionFile)}/rollback-turn`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               credentials: "include",
               body: JSON.stringify({
-                turnIndex,
+                turnIndex: targetTurn,
                 workspace: currentWorkspace,
               }),
             });
             const data = await res.json();
             if (data.fileDeleted) {
               setActiveSessionFile(null);
+              localStorage.removeItem("minibot_active_session");
+            } else {
+              if (!activeSessionFile) {
+                setActiveSessionFile(targetSessionFile);
+                localStorage.setItem("minibot_active_session", targetSessionFile);
+              }
             }
             await fetchLogs(currentWorkspace);
           } catch (err: any) {
@@ -1942,6 +1966,9 @@ export function App() {
 
             if (data.sessionFile) {
               setActiveSessionFile(data.sessionFile);
+              try {
+                localStorage.setItem("minibot_active_session", data.sessionFile);
+              } catch {}
             }
 
             const finalSkills = data.activeSkills || activeSkills;
