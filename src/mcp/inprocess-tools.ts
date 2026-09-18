@@ -197,7 +197,7 @@ async function minimaxGenerateMusic(prompt: string): Promise<string> {
 // 3. Document Download & Office File Parsers (Word, Excel, PDF)
 // ==========================================
 
-async function downloadRemoteFile(url: string, customFileName?: string): Promise<string> {
+async function downloadRemoteFile(url: string, customFileName?: string, userNumber: string = "00000", workspace: string = "default"): Promise<string> {
   try {
     const parsed = new URL(url);
     if (!["http:", "https:"].includes(parsed.protocol)) {
@@ -229,12 +229,8 @@ async function downloadRemoteFile(url: string, customFileName?: string): Promise
       fileName = path.basename(pathname) || `downloaded_${Date.now()}`;
     }
 
-    // Save to storage/downloads/
-    const downloadDir = path.resolve(process.cwd(), "storage/downloads");
-    if (!fs.existsSync(downloadDir)) {
-      fs.mkdirSync(downloadDir, { recursive: true });
-    }
-
+    // Save to isolated storage/downloads/{userNumber}/{workspace}/
+    const downloadDir = getScopedStorageDir("downloads", userNumber, workspace);
     const filePath = path.join(downloadDir, fileName);
     fs.writeFileSync(filePath, buffer);
 
@@ -245,22 +241,38 @@ async function downloadRemoteFile(url: string, customFileName?: string): Promise
       parsedSummary = `\n\n📄 **Document Preview & Summary:**\n${preprocessed.previewSnippet.slice(0, 2000)}`;
     } catch {}
 
-    return `✅ Successfully downloaded file "${fileName}" (${(buffer.length / 1024).toFixed(1)} KB) to \`${filePath}\`.${parsedSummary}`;
+    const relPath = `storage/downloads/${String(userNumber).padStart(5, "0")}/${workspace}/${fileName}`;
+    return `✅ Successfully downloaded file "${fileName}" (${(buffer.length / 1024).toFixed(1)} KB) to \`${relPath}\`.${parsedSummary}`;
   } catch (err: any) {
     return `Error downloading file from ${url}: ${err.message}`;
   }
 }
 
-async function readOfficeDocument(filePath: string): Promise<string> {
+async function readOfficeDocument(filePath: string, userNumber: string = "00000", workspace: string = "default"): Promise<string> {
   try {
-    const resolvedPath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+    let resolvedPath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+    
+    // Check if directly existing
     if (!fs.existsSync(resolvedPath)) {
-      // Check in storage/downloads as fallback
-      const inDownloads = path.resolve(process.cwd(), "storage/downloads", path.basename(filePath));
-      if (!fs.existsSync(inDownloads)) {
-        return `File not found at path: ${filePath}`;
+      // 1. Check in scoped sandbox workspace/{userNumber}/{workspace}/
+      const inSandbox = path.resolve(getSandboxDir(userNumber, workspace), path.basename(filePath));
+      if (fs.existsSync(inSandbox)) {
+        resolvedPath = inSandbox;
+      } else {
+        // 2. Check in scoped downloads storage/downloads/{userNumber}/{workspace}/
+        const inScopedDownloads = path.resolve(getScopedStorageDir("downloads", userNumber, workspace), path.basename(filePath));
+        if (fs.existsSync(inScopedDownloads)) {
+          resolvedPath = inScopedDownloads;
+        } else {
+          // 3. Fallback to legacy root storage/downloads
+          const inLegacy = path.resolve(process.cwd(), "storage/downloads", path.basename(filePath));
+          if (fs.existsSync(inLegacy)) {
+            resolvedPath = inLegacy;
+          } else {
+            return `File not found at path: ${filePath}`;
+          }
+        }
       }
-      return await readOfficeDocument(inDownloads);
     }
 
     const buffer = fs.readFileSync(resolvedPath);
@@ -273,16 +285,13 @@ async function readOfficeDocument(filePath: string): Promise<string> {
   }
 }
 
-async function createExcelSpreadsheet(fileName: string, sheets: Array<{ sheetName: string; rows: any[][] }>): Promise<string> {
+async function createExcelSpreadsheet(fileName: string, sheets: Array<{ sheetName: string; rows: any[][] }>, userNumber: string = "00000", workspace: string = "default"): Promise<string> {
   try {
     let safeName = fileName.trim();
     if (!safeName.endsWith(".xlsx")) safeName += ".xlsx";
 
-    const exportDir = path.resolve(process.cwd(), "storage/exports");
-    if (!fs.existsSync(exportDir)) {
-      fs.mkdirSync(exportDir, { recursive: true });
-    }
-
+    // Save to isolated storage/exports/{userNumber}/{workspace}/
+    const exportDir = getScopedStorageDir("exports", userNumber, workspace);
     const filePath = path.join(exportDir, safeName);
     const workbook = XLSX.utils.book_new();
 
@@ -292,7 +301,8 @@ async function createExcelSpreadsheet(fileName: string, sheets: Array<{ sheetNam
     }
 
     XLSX.writeFile(workbook, filePath);
-    return `✅ Excel spreadsheet successfully created at: \`${filePath}\` (Sheets: ${sheets.map((s) => s.sheetName).join(", ")})`;
+    const relPath = `storage/exports/${String(userNumber).padStart(5, "0")}/${workspace}/${safeName}`;
+    return `✅ Excel spreadsheet successfully created at: \`${relPath}\` (Sheets: ${sheets.map((s) => s.sheetName).join(", ")})`;
   } catch (err: any) {
     return `Failed to create Excel spreadsheet: ${err.message}`;
   }
@@ -302,11 +312,26 @@ async function createExcelSpreadsheet(fileName: string, sheets: Array<{ sheetNam
 // 4. Local Python Sandbox & UV Execution Runner
 // ==========================================
 
-const WORKSPACE_DIR = path.resolve(process.cwd(), "workspace");
-if (!fs.existsSync(WORKSPACE_DIR)) {
-  try {
-    fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
-  } catch {}
+export function getSandboxDir(userNumber: string = "00000", workspace: string = "default"): string {
+  const safeUser = String(userNumber).padStart(5, "0").replace(/[^\d]/g, "").slice(0, 5) || "00000";
+  const safeWorkspace = (workspace || "default").replace(/[^\w\d\-_ ]/g, "").trim() || "default";
+
+  const targetDir = path.resolve(process.cwd(), "workspace", safeUser, safeWorkspace);
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  return targetDir;
+}
+
+export function getScopedStorageDir(category: "downloads" | "exports", userNumber: string = "00000", workspace: string = "default"): string {
+  const safeUser = String(userNumber).padStart(5, "0").replace(/[^\d]/g, "").slice(0, 5) || "00000";
+  const safeWorkspace = (workspace || "default").replace(/[^\w\d\-_ ]/g, "").trim() || "default";
+
+  const targetDir = path.resolve(process.cwd(), "storage", category, safeUser, safeWorkspace);
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+  return targetDir;
 }
 
 interface PythonExecutionParams {
@@ -314,20 +339,20 @@ interface PythonExecutionParams {
   dependencies?: string[];
   fileName?: string;
   timeoutSeconds?: number;
+  userNumber?: string;
+  workspace?: string;
 }
 
 async function executePythonSandbox(params: PythonExecutionParams): Promise<string> {
   try {
-    const { code, dependencies = [], fileName, timeoutSeconds = 60 } = params;
+    const { code, dependencies = [], fileName, timeoutSeconds = 60, userNumber = "00000", workspace = "default" } = params;
 
     if (!code || typeof code !== "string" || !code.trim()) {
       return "Error: No Python code provided for execution.";
     }
 
-    // Ensure workspace exists
-    if (!fs.existsSync(WORKSPACE_DIR)) {
-      fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
-    }
+    const sandboxDir = getSandboxDir(userNumber, workspace);
+    const relWorkspacePrefix = `workspace/${String(userNumber).padStart(5, "0")}/${workspace}`;
 
     // Sanitize or generate script name
     let scriptFileName = fileName ? path.basename(fileName) : `script_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.py`;
@@ -335,10 +360,10 @@ async function executePythonSandbox(params: PythonExecutionParams): Promise<stri
       scriptFileName += ".py";
     }
 
-    const scriptPath = path.join(WORKSPACE_DIR, scriptFileName);
+    const scriptPath = path.join(sandboxDir, scriptFileName);
 
-    // Snapshot existing files in workspace to detect newly generated artifacts
-    const filesBefore = new Set(fs.readdirSync(WORKSPACE_DIR));
+    // Snapshot existing files in isolated workspace to detect newly generated artifacts
+    const filesBefore = new Set(fs.readdirSync(sandboxDir));
 
     // Write Python code to workspace
     fs.writeFileSync(scriptPath, code, "utf8");
@@ -365,7 +390,7 @@ async function executePythonSandbox(params: PythonExecutionParams): Promise<stri
 
     try {
       const res = await execFileAsync("uv", uvArgs, {
-        cwd: WORKSPACE_DIR,
+        cwd: sandboxDir,
         timeout: Math.min(Math.max(timeoutSeconds, 5), 180) * 1000,
         env: {
           ...process.env,
@@ -384,12 +409,13 @@ async function executePythonSandbox(params: PythonExecutionParams): Promise<stri
 
     const durationMs = Date.now() - startTime;
 
-    // Detect newly created files in workspace
-    const filesAfter = fs.readdirSync(WORKSPACE_DIR);
+    // Detect newly created files in isolated sandbox
+    const filesAfter = fs.readdirSync(sandboxDir);
     const newFiles = filesAfter.filter((f) => !filesBefore.has(f) && f !== scriptFileName);
 
     let output = `### 🐍 Python Execution Summary\n`;
-    output += `- **Script:** \`workspace/${scriptFileName}\`\n`;
+    output += `- **Workspace Scope:** \`${userNumber} / ${workspace}\`\n`;
+    output += `- **Script:** \`${relWorkspacePrefix}/${scriptFileName}\`\n`;
     output += `- **Exit Code:** \`${exitCode}\` (${exitCode === 0 ? "Success" : "Failed"})\n`;
     output += `- **Duration:** \`${(durationMs / 1000).toFixed(2)}s\`\n`;
 
@@ -400,8 +426,8 @@ async function executePythonSandbox(params: PythonExecutionParams): Promise<stri
     if (newFiles.length > 0) {
       output += `- **Generated Artifacts in Workspace:**\n`;
       for (const f of newFiles) {
-        const stat = fs.statSync(path.join(WORKSPACE_DIR, f));
-        output += `  - 📄 \`workspace/${f}\` (${(stat.size / 1024).toFixed(1)} KB)\n`;
+        const stat = fs.statSync(path.join(sandboxDir, f));
+        output += `  - 📄 \`${relWorkspacePrefix}/${f}\` (${(stat.size / 1024).toFixed(1)} KB)\n`;
       }
     }
 
@@ -670,17 +696,19 @@ export async function executeInProcessTool(
         dependencies: Array.isArray(args?.dependencies) ? args.dependencies : [],
         fileName: args?.fileName ? String(args.fileName) : undefined,
         timeoutSeconds: typeof args?.timeoutSeconds === "number" ? args.timeoutSeconds : 60,
+        userNumber: activeUserNumber,
+        workspace: activeWorkspace,
       });
     case "web_search":
       return await performSearch(String(args?.query || ""), Number(args?.maxResults) || 5);
     case "fetch_page":
       return await fetchPage(String(args?.url || ""));
     case "download_remote_file":
-      return await downloadRemoteFile(String(args?.url || ""), args?.customFileName);
+      return await downloadRemoteFile(String(args?.url || ""), args?.customFileName, activeUserNumber, activeWorkspace);
     case "read_office_document":
-      return await readOfficeDocument(String(args?.filePath || ""));
+      return await readOfficeDocument(String(args?.filePath || ""), activeUserNumber, activeWorkspace);
     case "create_excel_spreadsheet":
-      return await createExcelSpreadsheet(String(args?.fileName || ""), args?.sheets || []);
+      return await createExcelSpreadsheet(String(args?.fileName || ""), args?.sheets || [], activeUserNumber, activeWorkspace);
     case "search_available_tools": {
       const { searchToolsRegistry } = await import("./meta-tools.js");
       return searchToolsRegistry(String(args?.query || ""));

@@ -22,6 +22,7 @@ import { LoopConfig, MCPServerDef } from "./config/schema.js";
 import { MCPClientManager } from "./mcp/client-manager.js";
 import { LoopOrchestrator } from "./engine/loop-orchestrator.js";
 import { LLMClient } from "./llm/client.js";
+import { getSandboxDir } from "./mcp/inprocess-tools.js";
 import {
   saveConversationLog,
   listConversationLogs,
@@ -29,6 +30,7 @@ import {
   renameConversationLog,
   deleteConversationLog,
   cloneConversationTurn,
+  rollbackConversationTurn,
   saveConversationOrder,
   listWorkspaces,
   createWorkspace,
@@ -1362,6 +1364,28 @@ app.post("/api/logs/:filename/clone-turn", requireAuth, (req, res) => {
   }
 });
 
+// 10.1 Rollback a Specific Conversation Turn (Revert State)
+app.post("/api/logs/:filename/rollback-turn", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const filename = String(req.params.filename);
+    const { turnIndex, workspace } = req.body;
+    if (turnIndex === undefined || turnIndex === null) {
+      return res.status(400).json({ error: "turnIndex is required." });
+    }
+    const result = rollbackConversationTurn(
+      filename,
+      Number(turnIndex),
+      workspace || "default",
+      "logs",
+      userNumber
+    );
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // 11. Delete Conversation Log File
 app.delete("/api/logs/:filename", requireAuth, (req, res) => {
   try {
@@ -1492,17 +1516,19 @@ app.post("/api/git/sync", requireAuth, async (req, res) => {
 // WORKSPACE SANDBOX FILES ENDPOINTS
 // ==========================================
 
-const WORKSPACE_DIR = path.resolve(process.cwd(), "workspace");
-
-// 14. GET /api/workspace/files - List files in local sandbox workspace
+// 14. GET /api/workspace/files - List files in local sandbox workspace (scoped per user and workspace)
 app.get("/api/workspace/files", (req, res) => {
   try {
-    if (!fs.existsSync(WORKSPACE_DIR)) {
-      fs.mkdirSync(WORKSPACE_DIR, { recursive: true });
+    const { userNumber } = getAuthContext(req);
+    const workspace = String(req.query.workspace || "default");
+    const targetDir = getSandboxDir(userNumber, workspace);
+
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
     }
-    const items = fs.readdirSync(WORKSPACE_DIR);
+    const items = fs.readdirSync(targetDir);
     const files = items.map((name) => {
-      const fullPath = path.join(WORKSPACE_DIR, name);
+      const fullPath = path.join(targetDir, name);
       const stat = fs.statSync(fullPath);
       return {
         name,
@@ -1512,7 +1538,7 @@ app.get("/api/workspace/files", (req, res) => {
       };
     }).sort((a, b) => (b.modifiedAt > a.modifiedAt ? 1 : -1));
 
-    res.json({ success: true, files });
+    res.json({ success: true, files, workspace, userNumber });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1521,16 +1547,26 @@ app.get("/api/workspace/files", (req, res) => {
 // 15. GET /api/workspace/files/:filename - Download or preview workspace artifact
 app.get("/api/workspace/files/:filename", (req, res) => {
   try {
+    const { userNumber } = getAuthContext(req);
+    const workspace = String(req.query.workspace || "default");
     const rawFilename = req.params.filename;
     // Prevent path traversal
     const safeFilename = path.basename(rawFilename);
-    const targetPath = path.join(WORKSPACE_DIR, safeFilename);
+    const scopedDir = getSandboxDir(userNumber, workspace);
+    let targetPath = path.join(scopedDir, safeFilename);
 
+    // Fallback to legacy root workspace if not in scoped sandbox
     if (!fs.existsSync(targetPath)) {
-      return res.status(404).json({ success: false, error: "File not found in workspace." });
+      const legacyPath = path.join(process.cwd(), "workspace", safeFilename);
+      if (fs.existsSync(legacyPath)) {
+        targetPath = legacyPath;
+      } else {
+        return res.status(404).json({ success: false, error: "File not found in workspace." });
+      }
     }
 
-    res.sendFile(targetPath);
+    // Send as download attachment
+    res.download(targetPath, safeFilename);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

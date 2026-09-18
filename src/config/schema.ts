@@ -69,7 +69,7 @@ export const LoopConfigSchema = z.object({
   voice: VoiceConfigSchema.optional(),
   prompts: PromptsConfigSchema,
   mcpServers: z.record(z.string(), MCPServerDefSchema),
-  maxLoopIterations: z.number().min(1).max(50).default(10),
+  maxLoopIterations: z.number().min(1).max(100).default(50),
 });
 
 export type LLMConfig = z.infer<typeof LLMConfigSchema>;

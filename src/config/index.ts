@@ -55,7 +55,7 @@ export function loadConfig(configPath?: string): LoopConfig {
       svgPrompt: process.env.SVG_PROMPT || fileContent.prompts?.svgPrompt,
     },
     mcpServers: fileContent.mcpServers || {},
-    maxLoopIterations: fileContent.maxLoopIterations ?? 10,
+    maxLoopIterations: fileContent.maxLoopIterations ?? 50,
   };
 
   return LoopConfigSchema.parse(merged);
@@ -98,7 +98,7 @@ export function saveConfigToDisk(updatedConfig: Partial<LoopConfig>, configPath?
       svgPrompt: updatedConfig.prompts?.svgPrompt ?? existing.prompts?.svgPrompt,
     },
     mcpServers: updatedConfig.mcpServers ?? existing.mcpServers ?? {},
-    maxLoopIterations: updatedConfig.maxLoopIterations ?? existing.maxLoopIterations ?? 10,
+    maxLoopIterations: updatedConfig.maxLoopIterations ?? existing.maxLoopIterations ?? 50,
   };
 
   fs.writeFileSync(targetPath, JSON.stringify(toSave, null, 2), "utf-8");

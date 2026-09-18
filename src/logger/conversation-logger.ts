@@ -931,3 +931,108 @@ export function deleteConversationLog(filename: string, workspace: string = "def
   }
   return false;
 }
+
+/**
+ * Rolls back a conversation session to remove a specific turn (and any turns after it).
+ * If rolling back Turn 1 and it's the only turn, deletes or empties the log file.
+ */
+export function rollbackConversationTurn(
+  filename: string,
+  turnIndex: number,
+  workspace: string = "default",
+  baseDir: string = "logs",
+  userNumber: string = "00000"
+): { remainingTurns: number; fileDeleted: boolean } {
+  ensureWorkspaceMigration(baseDir, userNumber);
+  const safeFilename = path.basename(filename);
+  const parsed = parseConversationLog(safeFilename, workspace, baseDir, userNumber);
+  const fullPath = path.join(getWorkspaceDir(workspace, baseDir, userNumber), safeFilename);
+
+  // Remaining messages: keep only turns strictly less than turnIndex
+  const remainingMessages = parsed.messages.filter((m: any) => (m.turnIndex || 1) < turnIndex);
+
+  if (remainingMessages.length === 0) {
+    // If no turns left, delete the session log file cleanly
+    deleteConversationLog(safeFilename, workspace, baseDir, userNumber);
+    return { remainingTurns: 0, fileDeleted: true };
+  }
+
+  // Group into turns
+  const turns: Array<{ user?: any; assistant?: any; turnNum: number }> = [];
+  remainingMessages.forEach((m: any) => {
+    const tNum = m.turnIndex || 1;
+    let t = turns.find((item) => item.turnNum === tNum);
+    if (!t) {
+      t = { turnNum: tNum };
+      turns.push(t);
+    }
+    if (m.role === "user") t.user = m;
+    else if (m.role === "assistant") t.assistant = m;
+  });
+
+  const now = new Date();
+  const mdParts: string[] = [
+    `# Conversation Log: ${safeFilename.replace(".md", "")}`,
+    "",
+    "## Metadata",
+    `- **User**: \`${userNumber}\``,
+    `- **Workspace**: \`${workspace}\``,
+    `- **Title**: \`${parsed.title || safeFilename}\``,
+    `- **Date / Time**: ${now.toISOString()} (Local: ${now.toLocaleString()})`,
+    `- **Model**: \`MiniBot\``,
+    `- **Iterations**: ${turns.length}`,
+    `- **Duration**: 0.00s`,
+    `- **Total Tool Calls**: 0`,
+    `- **Attached Document Hashes**: \`${JSON.stringify(parsed.attachedDocHashes || [])}\``,
+  ];
+
+  if (parsed.clonedFrom) {
+    mdParts.push(`- **Cloned From**: \`${parsed.clonedFrom.parentFilename}\` (Workspace: ${parsed.clonedFrom.parentWorkspace || workspace}, Turn ${parsed.clonedFrom.turnIndex || 1}, Mode: ${parsed.clonedFrom.mode || "up_to"})`);
+  }
+  mdParts.push("");
+
+  turns.forEach((t, idx) => {
+    const seqNum = idx + 1;
+    mdParts.push("---");
+    mdParts.push("");
+    mdParts.push(`## Turn ${seqNum}: User Prompt`);
+    mdParts.push(t.user?.content || "");
+    mdParts.push("");
+    mdParts.push("---");
+    mdParts.push("");
+    mdParts.push(`## Autonomous Loop Tool Calls & Observations (Turn ${seqNum})`);
+
+    if (t.assistant?.toolCalls && t.assistant.toolCalls.length > 0) {
+      t.assistant.toolCalls.forEach((call: any, cIdx: number) => {
+        mdParts.push(`### [Step ${cIdx + 1}] Tool: \`${call.toolName}\``);
+        mdParts.push(`- **Owning MCP Server**: \`${call.serverName || "unknown"}\``);
+        mdParts.push(`- **Timestamp**: ${new Date(call.timestamp || Date.now()).toISOString()}`);
+        mdParts.push("");
+        mdParts.push("#### Parameters");
+        mdParts.push("```json");
+        mdParts.push(JSON.stringify(call.args || {}, null, 2));
+        mdParts.push("```");
+        mdParts.push("");
+        mdParts.push("#### Observation (Result)");
+        mdParts.push("```text");
+        mdParts.push(call.result ? call.result.trim() : "*Observation*");
+        mdParts.push("```");
+        mdParts.push("");
+      });
+    } else {
+      mdParts.push("*No external tools were invoked during this turn.*");
+    }
+
+    mdParts.push("---");
+    mdParts.push("");
+    mdParts.push(`## Turn ${seqNum}: Synthesized Answer`);
+    mdParts.push("");
+    mdParts.push(t.assistant?.content || "");
+    mdParts.push("");
+  });
+
+  fs.writeFileSync(fullPath, mdParts.join("\n"), "utf-8");
+  console.log(`[Conversation Logger] ⏪ Rolled back session "${safeFilename}" before Turn ${turnIndex}. Remaining turns: ${turns.length}`);
+
+  return { remainingTurns: turns.length, fileDeleted: false };
+}

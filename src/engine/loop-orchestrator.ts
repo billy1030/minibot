@@ -186,7 +186,19 @@ export class LoopOrchestrator {
       }
     }
 
-    const fallbackMsg = `[Guardrail]: Loop reached maximum iterations limit (${maxIterations}).`;
+    // Find the last assistant message or last tool result to preserve context
+    const lastAssistantMsg = [...messages].reverse().find((m) => m.role === "assistant" && m.content);
+    const lastToolMsg = [...messages].reverse().find((m) => m.role === "tool" && m.content);
+
+    let contextSnippet = "";
+    if (lastAssistantMsg?.content) {
+      contextSnippet = `\n\n${lastAssistantMsg.content}`;
+    } else if (lastToolMsg?.content) {
+      const preview = typeof lastToolMsg.content === "string" ? lastToolMsg.content.slice(0, 800) : "";
+      contextSnippet = `\n\n**最後執行的步驟輸出**：\n\`\`\`text\n${preview}\n\`\`\``;
+    }
+
+    const fallbackMsg = `[Guardrail]: Loop reached maximum iterations limit (${maxIterations}).${contextSnippet}`;
     callbacks?.onComplete?.(fallbackMsg, iteration, activeSkillNames, true);
     return { answer: fallbackMsg, iterations: iteration, history: messages, activeSkills: activeSkillNames, limitReached: true };
   }

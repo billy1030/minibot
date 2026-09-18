@@ -20,6 +20,7 @@ import {
   Loader2,
   Trash2,
   Download,
+  FileText,
   Paperclip,
   Edit2,
   Check,
@@ -243,6 +244,8 @@ export function App() {
   const chatInputRef = useRef<HTMLInputElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  // 🎯 Track actively focused/selected conversation turn during navigation
+  const [activeFocusedTurnId, setActiveFocusedTurnId] = useState<string | null>(null);
 
   // 🪄 Slash Commands ("/") for explicitly invoking Skills
   const [showSlashMenu, setShowSlashMenu] = useState<boolean>(false);
@@ -663,67 +666,79 @@ export function App() {
   const lastGeneratedTurnRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // 🧭 Multi-Turn Sequential Scroll Navigation (Jump up / Jump down between turns)
+  // 🧭 Multi-Turn Sequential Scroll Navigation (Jump up / Jump down strictly between MiniBot Responses)
   const navigateTurn = (direction: "up" | "down" = "up") => {
-    const container = chatContainerRef.current;
-    // Collect all turn elements with DOM IDs
-    const turnElements = messages
-      .map((m) => document.getElementById(`msg-turn-${m.id}`))
-      .filter((el): el is HTMLElement => el !== null);
-
-    if (turnElements.length === 0) {
+    // Only navigate MiniBot (assistant) responses; user prompts belong to the same sequence turn
+    const assistantMessages = messages.filter((m) => m.role === "assistant" && m.id !== "welcome");
+    if (assistantMessages.length === 0) {
       if (chatEndRef.current) {
         chatEndRef.current.scrollIntoView({ behavior: "smooth" });
       }
       return;
     }
 
-    const containerTop = container ? container.getBoundingClientRect().top : 0;
+    // Determine current index from activeFocusedTurnId
+    const currentIndex = activeFocusedTurnId
+      ? assistantMessages.findIndex((m) => m.id === activeFocusedTurnId)
+      : -1;
+
+    let targetIndex: number;
 
     if (direction === "up") {
-      // Find elements whose top is noticeably above the container's top viewport threshold
-      const above = turnElements.filter((el) => {
-        const r = el.getBoundingClientRect();
-        return r.top < containerTop - 30;
-      });
-
-      if (above.length > 0) {
-        // Jump to the nearest element above
-        const target = above[above.length - 1];
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (currentIndex === -1) {
+        // First time clicking Up: step to the last assistant response
+        targetIndex = assistantMessages.length - 1;
+      } else if (currentIndex > 0) {
+        // Step strictly 1 response turn up
+        targetIndex = currentIndex - 1;
       } else {
-        // If at or near top, check if first element can be aligned
-        const firstTurn = turnElements[0];
-        const r = firstTurn.getBoundingClientRect();
-        if (r.top < containerTop - 5) {
-          firstTurn.scrollIntoView({ behavior: "smooth", block: "start" });
-        } else {
-          // If already at the very top, wrap to the last element
-          const lastEl = turnElements[turnElements.length - 1];
-          lastEl.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
+        // Already at top: wrap to bottom response
+        targetIndex = assistantMessages.length - 1;
       }
     } else {
-      // Direction "down": find elements whose top is below the container's top plus a margin
-      const below = turnElements.filter((el) => {
-        const r = el.getBoundingClientRect();
-        return r.top > containerTop + 50;
-      });
-
-      if (below.length > 0) {
-        // Jump to the next element down
-        const target = below[0];
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Direction down
+      if (currentIndex === -1) {
+        // Jump to the latest response
+        targetIndex = assistantMessages.length - 1;
+      } else if (currentIndex < assistantMessages.length - 1) {
+        // Step strictly 1 response turn down
+        targetIndex = currentIndex + 1;
       } else {
-        // No more turns below -> smoothly scroll container to the very bottom
-        if (container) {
-          container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-        } else if (chatEndRef.current) {
-          chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
-        }
+        // Already at bottom: wrap to top response
+        targetIndex = 0;
+      }
+    }
+
+    const targetMsg = assistantMessages[targetIndex];
+    if (targetMsg) {
+      setActiveFocusedTurnId(targetMsg.id);
+      const targetEl = document.getElementById(`msg-turn-${targetMsg.id}`);
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }
   };
+
+  // 🧹 Dismiss card highlight immediately if user clicks anywhere or presses any key (except the up/down nav buttons)
+  useEffect(() => {
+    if (!activeFocusedTurnId) return;
+
+    const handleGlobalClickOrKey = (e: Event) => {
+      // If the event was triggered by clicking the up/down arrow buttons, do not dismiss
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest(".nav-turn-btn")) {
+        return;
+      }
+      setActiveFocusedTurnId(null);
+    };
+
+    window.addEventListener("mousedown", handleGlobalClickOrKey);
+    window.addEventListener("keydown", handleGlobalClickOrKey);
+    return () => {
+      window.removeEventListener("mousedown", handleGlobalClickOrKey);
+      window.removeEventListener("keydown", handleGlobalClickOrKey);
+    };
+  }, [activeFocusedTurnId]);
 
   // 🐙 Execute External Git CLI Synchronization (Full Sync, Push, or Pull with GitHub)
   const handleGitSync = async (
@@ -870,6 +885,90 @@ export function App() {
       },
       "Permanent Delete Confirmation",
       "Confirm Delete"
+    );
+  };
+
+  /**
+   * ⏪ Rollback / Reject previous output:
+   * Reverts conversation to before this assistant response, restores the user's prompt
+   * into the input textarea for editing/retrying, and updates the backend session file if active.
+   */
+  const handleRollbackTurn = (assistantMessageId: string) => {
+    const assistantIndex = messages.findIndex((m) => m.id === assistantMessageId);
+    if (assistantIndex === -1) return;
+
+    const assistantMsg = messages[assistantIndex];
+    // Find the corresponding user prompt directly preceding this assistant response
+    let userMsgIndex = -1;
+    for (let i = assistantIndex - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        userMsgIndex = i;
+        break;
+      }
+    }
+
+    const userPrompt = userMsgIndex !== -1 ? messages[userMsgIndex].content : "";
+    const turnIndex = assistantMsg.turnIndex;
+
+    showConfirm(
+      `Roll back this conversation turn?\n\nThis will remove this response and restore your original prompt back into the input box for re-editing.`,
+      async () => {
+        // 1. If currently playing TTS, stop it
+        if (playingMessageId === assistantMessageId) {
+          stopTtsPlayback();
+        }
+
+        // 2. Restore user prompt into input field for editing
+        if (userPrompt) {
+          setInputPrompt(userPrompt);
+        }
+
+        // 3. Rollback local state: keep only messages before the user message (or before assistant if no user message)
+        const cutoffIndex = userMsgIndex !== -1 ? userMsgIndex : assistantIndex;
+        const newMessages = messages.slice(0, cutoffIndex);
+        if (newMessages.length === 0) {
+          setMessages([
+            {
+              id: "welcome",
+              role: "assistant",
+              content: "Hello! I am your Minibot. What would you like to research or build today?",
+            },
+          ]);
+        } else {
+          setMessages(newMessages);
+        }
+
+        // 4. If there's an active session file and turnIndex is known, persist rollback to backend log
+        if (activeSessionFile && turnIndex !== undefined) {
+          try {
+            const res = await fetch(`/api/logs/${encodeURIComponent(activeSessionFile)}/rollback-turn`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                turnIndex,
+                workspace: currentWorkspace,
+              }),
+            });
+            const data = await res.json();
+            if (data.fileDeleted) {
+              setActiveSessionFile(null);
+            }
+            await fetchLogs(currentWorkspace);
+          } catch (err: any) {
+            console.error("Failed to sync rollback to server log:", err);
+          }
+        }
+
+        // 5. Focus input for immediate tweaking
+        setTimeout(() => {
+          chatInputRef.current?.focus();
+        }, 100);
+
+        showAlert("Rolled back successfully. Your prompt has been restored to the input box.", "success", "Rollback Complete");
+      },
+      "Confirm Rollback",
+      "Confirm Rollback"
     );
   };
 
@@ -1710,12 +1809,24 @@ export function App() {
     setCurrentStep(1);
 
     // Format previous messages as multi-turn history (excluding welcome prompt)
+    // 🛡️ Clean Guardrail interruption tags so LLM does not mistake them for session abort
     const history = messages
       .filter((m) => m.id !== "welcome" && m.content)
-      .map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      .map((m) => {
+        let cleanContent = m.content;
+        if (m.limitReached) {
+          cleanContent = cleanContent
+            .replace(/\[Guardrail\]:\s*Loop reached maximum iterations limit \(\d+\)\.?/gi, "")
+            .trim();
+          if (!cleanContent) {
+            cleanContent = "(Previous autonomous loop paused at iteration budget limit. Ready to resume next tool step.)";
+          }
+        }
+        return {
+          role: m.role,
+          content: cleanContent,
+        };
+      });
 
     const requestStartTime = Date.now();
     setActiveRunStartTime(requestStartTime);
@@ -4800,17 +4911,24 @@ export function App() {
                   {/* Main Assistant Content */}
                   <div
                     style={{
-                      background: "var(--bg-secondary)",
-                      border: "1px solid var(--border-color)",
+                      background: activeFocusedTurnId === m.id
+                        ? "linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%)"
+                        : "var(--bg-secondary)",
+                      border: activeFocusedTurnId === m.id
+                        ? "2px solid var(--accent, #0284c7)"
+                        : "1px solid var(--border-color)",
                       borderRadius: "16px 16px 16px 2px",
                       padding: "16px 20px",
                       color: "var(--text-main)",
-                      boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                      boxShadow: activeFocusedTurnId === m.id
+                        ? "0 4px 18px rgba(2, 132, 199, 0.25), 0 0 0 1px rgba(2, 132, 199, 0.15)"
+                        : "0 1px 3px rgba(0,0,0,0.05)",
                       minWidth: 0,
                       maxWidth: "100%",
                       wordBreak: "break-word",
                       overflowWrap: "anywhere",
                       overflow: "hidden",
+                      transition: "all 0.25s ease",
                     }}
                   >
                     {m.content ? (() => {
@@ -4856,6 +4974,35 @@ export function App() {
                         }
                       }
 
+                      // 📦 Auto-Detect Generated Deliverable Files in Message Content
+                      // Matches patterns like:
+                      // - File path: `.../workspace/.../filename.docx`
+                      // - Deliverable: `filename.docx`
+                      // - `workspace/00000/default/filename.docx` or `storage/...`
+                      const deliverableFiles: Array<{ fileName: string; fullPath?: string; ext: string }> = [];
+                      if (mainText && !m.isStreaming) {
+                        const fileRegex = /(?:[A-Za-z]:[\\/][^\s`"'\n]+[\\/]([^\s`"'\n]+\.(?:docx|xlsx|pptx|pdf|csv|png|jpg|jpeg|svg|json|txt|zip|tar\.gz))|`?([a-zA-Z0-9_\-.\s]+\.(?:docx|xlsx|pptx|pdf|csv|zip|tar\.gz))`?)/gi;
+                        let match: RegExpExecArray | null;
+                        const seenNames = new Set<string>();
+
+                        while ((match = fileRegex.exec(mainText)) !== null) {
+                          const fullMatched = match[0];
+                          const candidate = (match[1] || match[2] || "").replace(/[`'"]/g, "").trim();
+                          if (candidate && !seenNames.has(candidate.toLowerCase())) {
+                            // Filter out code filenames like .py, .ts, .js, .json schema
+                            const ext = candidate.split(".").pop()?.toLowerCase() || "";
+                            if (["docx", "xlsx", "pptx", "pdf", "csv", "zip", "tar.gz"].includes(ext)) {
+                              seenNames.add(candidate.toLowerCase());
+                              deliverableFiles.push({
+                                fileName: candidate,
+                                fullPath: fullMatched.includes("\\") || fullMatched.includes("/") ? fullMatched.replace(/[`'"]/g, "") : undefined,
+                                ext,
+                              });
+                            }
+                          }
+                        }
+                      }
+
                       return (
                         <>
                           {/* 📚 Active Skills Badge Bar (if skills were activated for this turn) */}
@@ -4877,6 +5024,66 @@ export function App() {
                               viewMode={thinkingViewMode}
                               defaultExpanded={thinkingViewMode === "full"}
                             />
+                          )}
+
+                          {/* 📥 Deliverable Download Actions Banner */}
+                          {deliverableFiles.length > 0 && (
+                            <div
+                              style={{
+                                margin: "10px 0 14px",
+                                padding: "12px 16px",
+                                borderRadius: 8,
+                                background: "linear-gradient(135deg, rgba(2, 132, 199, 0.08), rgba(16, 185, 129, 0.08))",
+                                border: "1px solid rgba(2, 132, 199, 0.25)",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 8,
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: "var(--accent, #0284c7)" }}>
+                                <FileText size={16} />
+                                <span>產生之成果檔案 (Generated Deliverables):</span>
+                              </div>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                                {deliverableFiles.map((f, idx) => {
+                                  const downloadUrl = `/api/workspace/files/${encodeURIComponent(f.fileName)}?workspace=${encodeURIComponent(currentWorkspace)}`;
+                                  return (
+                                    <a
+                                      key={idx}
+                                      href={downloadUrl}
+                                      download={f.fileName}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 8,
+                                        padding: "7px 14px",
+                                        borderRadius: 6,
+                                        background: "linear-gradient(135deg, var(--accent, #0284c7), #0369a1)",
+                                        color: "#ffffff",
+                                        fontSize: 12.5,
+                                        fontWeight: 600,
+                                        textDecoration: "none",
+                                        boxShadow: "0 2px 6px rgba(2, 132, 199, 0.3)",
+                                        transition: "all 0.2s ease",
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)";
+                                        (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 10px rgba(2, 132, 199, 0.4)";
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        (e.currentTarget as HTMLElement).style.transform = "none";
+                                        (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 6px rgba(2, 132, 199, 0.3)";
+                                      }}
+                                    >
+                                      <Download size={14} />
+                                      <span>下載 {f.fileName}</span>
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           )}
 
                           {/* Synthesized Response Content */}
@@ -4932,7 +5139,7 @@ export function App() {
                                 <button
                                   type="button"
                                   disabled={loading}
-                                  onClick={() => handleSend("請繼續完成剛才未完成的步驟與推理，並給出完整結果。", 5)}
+                                  onClick={() => handleSend("請檢視剛才執行的工具狀態與未完成的步驟，若有報錯請修正程式碼或參數，並繼續調用相應工具執行到底，給出完整結果。", 5)}
                                   style={{
                                     display: "inline-flex",
                                     alignItems: "center",
@@ -4953,7 +5160,7 @@ export function App() {
                                 <button
                                   type="button"
                                   disabled={loading}
-                                  onClick={() => handleSend("請繼續完成剛才未完成的步驟與推理，並給出完整結果。", 10)}
+                                  onClick={() => handleSend("請檢視剛才執行的工具狀態與未完成的步驟，若有報錯請修正程式碼或參數，並繼續調用相應工具執行到底，給出完整結果。", 10)}
                                   style={{
                                     display: "inline-flex",
                                     alignItems: "center",
@@ -5000,8 +5207,10 @@ export function App() {
                             </span>
                           )}
                           {m.iterations && (
-                            <span style={{ color: "var(--accent-emerald)", fontWeight: 600 }}>
-                              Resolved in {m.iterations} iteration(s)
+                            <span style={{ color: m.limitReached ? "#eab308" : "var(--accent-emerald)", fontWeight: 600 }}>
+                              {m.limitReached
+                                ? `⚠️ Reached limit (${m.iterations} iteration${m.iterations > 1 ? "s" : ""})`
+                                : `Resolved in ${m.iterations} iteration${m.iterations > 1 ? "s" : ""}`}
                             </span>
                           )}
 
@@ -5196,6 +5405,39 @@ export function App() {
                               }}
                             >
                               <Download size={11} /> Export HTML
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRollbackTurn(m.id)}
+                              title="Reject this response and roll back to previous state, restoring your prompt to edit"
+                              style={{
+                                background: "rgba(239, 68, 68, 0.06)",
+                                border: "1px solid rgba(239, 68, 68, 0.25)",
+                                borderRadius: 4,
+                                padding: "2px 8px",
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: "#ef4444",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = "#ef4444";
+                                e.currentTarget.style.background = "rgba(239, 68, 68, 0.15)";
+                                e.currentTarget.style.color = "#dc2626";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.25)";
+                                e.currentTarget.style.background = "rgba(239, 68, 68, 0.06)";
+                                e.currentTarget.style.color = "#ef4444";
+                              }}
+                            >
+                              <RotateCcw size={11} />
+                              <span>Rollback</span>
                             </button>
                           </div>
                         </div>
@@ -6304,30 +6546,37 @@ export function App() {
             <button
               type="button"
               onClick={handleStopSend}
-              title="Stop sending / Cancel LLM response"
+              title="Stop sending / Cancel LLM response (暫停 / 中止執行)"
               style={{
-                width: 36,
                 height: 34,
+                padding: "0 12px",
                 borderRadius: 7,
-                background: "#ef4444",
+                background: "linear-gradient(135deg, #ef4444, #dc2626)",
                 color: "#ffffff",
-                border: "none",
+                border: "1px solid #b91c1c",
                 cursor: "pointer",
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 2px 6px rgba(239, 68, 68, 0.35)",
-                transition: "all 0.2s ease",
+                gap: 6,
+                fontSize: 12.5,
+                fontWeight: 700,
+                boxShadow: "0 2px 8px rgba(239, 68, 68, 0.45)",
+                transition: "all 0.15s ease",
                 flexShrink: 0,
+                zIndex: 10,
+                animation: "pulse 1.8s infinite",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#dc2626";
+                e.currentTarget.style.background = "#b91c1c";
+                e.currentTarget.style.transform = "scale(1.02)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#ef4444";
+                e.currentTarget.style.background = "linear-gradient(135deg, #ef4444, #dc2626)";
+                e.currentTarget.style.transform = "none";
               }}
             >
-              <Square size={13} fill="#ffffff" />
+              <Square size={12} fill="#ffffff" />
+              <span>停止 (Stop)</span>
             </button>
           ) : (
             <button
@@ -6357,6 +6606,7 @@ export function App() {
           {/* ⬆️ Upper Arrow Button: Step / Jump up to previous conversation turn */}
           <button
             type="button"
+            className="nav-turn-btn"
             onClick={() => navigateTurn("up")}
             title="Jump to previous turn (click repeatedly to step up)"
             style={{
@@ -6390,6 +6640,7 @@ export function App() {
           {/* ⬇️ Down Arrow Button: Step / Jump down to next turn or bottom */}
           <button
             type="button"
+            className="nav-turn-btn"
             onClick={() => navigateTurn("down")}
             title="Jump to next turn / bottom (click repeatedly to step down)"
             style={{
@@ -6703,12 +6954,12 @@ export function App() {
                       <input
                         type="number"
                         min={1}
-                        max={50}
-                        value={config.maxLoopIterations ?? 10}
+                        max={100}
+                        value={config.maxLoopIterations ?? 50}
                         onChange={(e) =>
                           setConfig({
                             ...config,
-                            maxLoopIterations: Math.max(1, parseInt(e.target.value, 10) || 10),
+                            maxLoopIterations: Math.min(100, Math.max(1, parseInt(e.target.value, 10) || 50)),
                           })
                         }
                         style={{
@@ -6723,7 +6974,7 @@ export function App() {
                         }}
                       />
                       <div style={{ fontSize: 10.5, color: "var(--text-muted)", marginTop: 4 }}>
-                        Guardrail limit (default: 10).
+                        Guardrail limit (default: 50, max: 100).
                       </div>
                     </div>
 

@@ -40,6 +40,19 @@ export function parseSkillMarkdown(content: string, fallbackName: string): { nam
     if (triggersMatch) {
       const items = triggersMatch[1].split(",").map((s) => s.trim().replace(/^["']|["']$/g, ""));
       triggers.push(...items.filter(Boolean));
+    } else {
+      // Support multi-line YAML list format (e.g. triggers:\n  - item1\n  - item2)
+      const multiLineTriggersMatch = rawYaml.match(/^triggers:\s*\r?\n((?:\s*-[^\r\n]+\r?\n?)+)/m);
+      if (multiLineTriggersMatch) {
+        const lines = multiLineTriggersMatch[1].split(/\r?\n/);
+        for (const line of lines) {
+          const itemMatch = line.match(/^\s*-\s*(.+)$/);
+          if (itemMatch) {
+            const val = itemMatch[1].trim().replace(/^["']|["']$/g, "");
+            if (val) triggers.push(val);
+          }
+        }
+      }
     }
   } else {
     // If no frontmatter, extract first heading or first paragraph

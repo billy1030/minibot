@@ -44,10 +44,10 @@
       "type": "streamable-http",
       "args": [],
       "url": "https://172.22.29.51:9494/mcp",
-      "description": "Enterprise BigFix Platform Endpoint Management MCP Server (Computers, Fixlets, Actions, Relevance Query)",
+      "strictSSL": false,
       "enabled": true,
-      "strictSSL": false
+      "description": "Enterprise BigFix Platform Endpoint Management MCP Server (Computers, Fixlets, Actions, Relevance Query)"
     }
   },
-  "maxLoopIterations": 10
+  "maxLoopIterations": 50
 }
