@@ -148,50 +148,72 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
   return (
     <div
       ref={containerRef}
-      className={`relative my-4 rounded-xl border border-slate-700/60 bg-slate-900/90 shadow-lg overflow-hidden transition-all duration-200 ${
-        isFullscreen ? 'fixed inset-4 z-50 flex flex-col bg-slate-950 border-slate-600 shadow-2xl' : ''
-      }`}
+      style={{
+        margin: "1.25rem 0",
+        borderRadius: 12,
+        border: "1px solid var(--border-color, #e2e8f0)",
+        background: "var(--bg-secondary, #ffffff)",
+        boxShadow: "0 4px 20px rgba(0, 0, 0, 0.06)",
+        overflow: "hidden",
+        position: isFullscreen ? "fixed" : "relative",
+        top: isFullscreen ? 0 : undefined,
+        left: isFullscreen ? 0 : undefined,
+        width: isFullscreen ? "100vw" : "100%",
+        height: isFullscreen ? "100vh" : "auto",
+        zIndex: isFullscreen ? 99999 : 10,
+        display: "flex",
+        flexDirection: "column",
+        transition: "border-color 0.2s ease",
+      }}
     >
-      {/* Header / Toolbar */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900/70 select-none">
-        <div className="flex items-center gap-2">
-          <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-          <span className="text-xs font-semibold text-slate-300 tracking-wide uppercase">
-            Draw.io Diagram {index > 0 ? `#${index + 1}` : ''}
+      {/* 🌟 Unified SLS Design Topbar */}
+      <div className="mermaid-topbar">
+        <div className="mermaid-topbar-left">
+          <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+          <span style={{ fontWeight: 700 }}>
+            DRAW.IO DIAGRAM {index > 0 ? `#${index + 1}` : ''}
           </span>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-1">
+        {/* Action Controls matching SLS Pill & Button standards */}
+        <div className="mermaid-topbar-right">
           {/* Zoom controls */}
           {!showXml && (
-            <div className="flex items-center gap-0.5 bg-slate-800/80 rounded-lg p-0.5 border border-slate-700/50 mr-1">
+            <div className="mm-btn-group">
               <button
                 type="button"
                 onClick={handleZoomOut}
                 disabled={scale <= MIN_ZOOM}
-                title="Zoom Out"
-                className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                title="Zoom out"
+                className="mm-group-btn"
+                style={{ opacity: scale <= MIN_ZOOM ? 0.4 : 1 }}
               >
                 <ZoomOut className="w-3.5 h-3.5" />
               </button>
-              <span className="text-[11px] font-mono text-slate-400 min-w-[3rem] text-center">
+              <button
+                type="button"
+                onClick={handleReset}
+                title="Reset zoom to 100%"
+                className="mm-group-text"
+                style={{ minWidth: 44, color: scale !== 1.0 ? '#0284c7' : undefined }}
+              >
                 {Math.round(scale * 100)}%
-              </span>
+              </button>
               <button
                 type="button"
                 onClick={handleZoomIn}
                 disabled={scale >= MAX_ZOOM}
-                title="Zoom In"
-                className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                title="Zoom in"
+                className="mm-group-btn"
+                style={{ opacity: scale >= MAX_ZOOM ? 0.4 : 1 }}
               >
                 <ZoomIn className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={handleReset}
-                title="Reset View"
-                className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors"
+                title="Reset view"
+                className="mm-group-btn"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
@@ -203,19 +225,21 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
             type="button"
             onClick={() => setShowXml(!showXml)}
             title={showXml ? 'Show Visual Diagram' : 'View Raw XML Source'}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-700/40 transition-colors"
+            className="mm-btn-action"
           >
             {showXml ? <Eye className="w-3.5 h-3.5" /> : <Code className="w-3.5 h-3.5" />}
+            <span>{showXml ? 'Visual' : 'XML'}</span>
           </button>
 
           {/* Open in Diagrams.net */}
           <button
             type="button"
             onClick={handleOpenInDiagramsNet}
-            title="Edit in diagrams.net"
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 border border-emerald-500/30 transition-colors"
+            title="Edit in app.diagrams.net"
+            className="mm-btn-action"
+            style={{ color: '#059669', borderColor: 'rgba(16, 185, 129, 0.3)' }}
           >
-            <ExternalLink className="w-3 h-3" />
+            <ExternalLink className="w-3.5 h-3.5" />
             <span>Edit in Draw.io</span>
           </button>
 
@@ -224,9 +248,9 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
             type="button"
             onClick={handleCopy}
             title="Copy Draw.io XML"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-700/40 transition-colors"
+            className="mm-btn-icon"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
 
           {/* Fullscreen Toggle */}
@@ -234,7 +258,7 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
             type="button"
             onClick={() => setIsFullscreen(!isFullscreen)}
             title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-700/40 transition-colors"
+            className="mm-btn-icon"
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
@@ -243,11 +267,15 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
 
       {/* Main Content Area */}
       <div
-        className={`relative w-full overflow-hidden bg-slate-950/80 ${
-          isFullscreen ? 'flex-1 h-full' : 'h-[520px]'
-        }`}
+        style={{
+          position: 'relative',
+          width: '100%',
+          height: isFullscreen ? 'calc(100vh - 45px)' : '540px',
+          overflow: 'hidden',
+          background: 'var(--bg-primary, #f8fafc)',
+          cursor: isDragging ? 'grabbing' : 'grab',
+        }}
         onMouseDown={handleMouseDown}
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
       >
         {showXml ? (
           <div className="w-full h-full p-4 overflow-auto font-mono text-xs text-slate-300 bg-slate-950 select-text">
@@ -264,10 +292,12 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
             <iframe
               ref={iframeRef}
               title={`drawio-viewer-${index}`}
-              src="https://embed.diagrams.net/?embed=1&ui=min&spin=1&proto=json&noSaveBtn=1&noExitBtn=1"
-              className="w-full h-full border-0 rounded"
+              src="https://embed.diagrams.net/?embed=1&ui=min&spin=1&proto=json&noSaveBtn=1&noExitBtn=1&chrome=0"
               style={{
-                minHeight: isFullscreen ? '100%' : '500px',
+                width: '100%',
+                height: '100%',
+                minHeight: isFullscreen ? '100%' : '540px',
+                border: 'none',
                 opacity: iframeLoaded ? 1 : 0.7,
                 transition: 'opacity 0.2s ease',
               }}
