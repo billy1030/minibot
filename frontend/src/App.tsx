@@ -6172,7 +6172,7 @@ export function App() {
                   </div>
                 </button>
 
-                {/* 🌟 Editorial SVG Section */}
+                {/* 🌟 Draw.io Section (Top Default) */}
                 <div
                   style={{
                     padding: "4px 8px 6px",
@@ -6186,7 +6186,80 @@ export function App() {
                     justifyContent: "space-between",
                   }}
                 >
-                  <span>📐 Architecture & Visual Diagrams</span>
+                  <span>📐 Draw.io & Visual Architecture</span>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      background: "rgba(16, 185, 129, 0.15)",
+                      color: "#10b981",
+                      padding: "1px 6px",
+                      borderRadius: 4,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Default & Recommended
+                  </span>
+                </div>
+
+                {/* 1. Create Draw.io Diagram */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSelectDiagramMode({
+                      id: "drawio-create",
+                      label: "Draw.io",
+                      icon: "📐",
+                      color: "#10b981",
+                      prompt:
+                        "Please output a comprehensive, production-grade Draw.io architecture diagram directly as valid standard XML inside ```drawio or ```xml code blocks (`<mxfile host=\"Electron\" ...><diagram id=\"...\" name=\"...\"><mxGraphModel ...><root><mxCell id=\"0\"/><mxCell id=\"1\" parent=\"0\"/>...</root></mxGraphModel></diagram></mxfile>`). DO NOT call any image generation tools (DO NOT call `minimax_generate_image`). Strictly escape all XML attribute values (e.g., `value=\"&lt;b&gt;Text&lt;/b&gt;\"`, never raw unescaped `<` inside attributes). Use orthogonal edge connectors (`edgeStyle=orthogonalEdgeStyle;rounded=1`), distinct fill/stroke colors for layers/tiers, clear hierarchical layout, and informative node labels.",
+                    })
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 10px",
+                    background: selectedDiagramMode?.id === "drawio-create" ? "rgba(16, 185, 129, 0.18)" : "transparent",
+                    border: selectedDiagramMode?.id === "drawio-create" ? "1px solid rgba(16, 185, 129, 0.45)" : "1px solid transparent",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    color: "var(--text-main)",
+                    fontSize: 12.5,
+                    textAlign: "left",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(16, 185, 129, 0.12)")}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      selectedDiagramMode?.id === "drawio-create" ? "rgba(16, 185, 129, 0.18)" : "transparent")
+                  }
+                >
+                  <span style={{ fontSize: 16 }}>📐</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: "#10b981", display: "flex", justifyContent: "space-between" }}>
+                      <span>Draw.io Diagram</span>
+                      {selectedDiagramMode?.id === "drawio-create" && <span style={{ fontSize: 11 }}>✓ Active</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Interactive & fully editable vector diagrams (.drawio)</div>
+                  </div>
+                </button>
+
+                {/* 🌟 Editorial SVG Section */}
+                <div
+                  style={{
+                    padding: "4px 8px 6px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "var(--text-muted)",
+                    borderTop: "1px solid var(--border-color)",
+                    borderBottom: "1px solid var(--border-color)",
+                    marginTop: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span>🎨 Editorial SVG</span>
                   <span
                     style={{
                       fontSize: 10,
@@ -6197,11 +6270,11 @@ export function App() {
                       fontWeight: 700,
                     }}
                   >
-                    Editorial SVG Priority
+                    Vector Graphic
                   </span>
                 </div>
 
-                {/* 1. Create Editorial SVG Diagram */}
+                {/* 2. Create Editorial SVG Diagram */}
                 <button
                   type="button"
                   onClick={() =>
