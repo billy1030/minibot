@@ -229,6 +229,7 @@ export function SubConversationModal({
         justifyContent: "center",
         zIndex: 9999,
         padding: "20px",
+        overflowY: "auto",
       }}
       onClick={onClose}
     >
@@ -236,8 +237,8 @@ export function SubConversationModal({
         style={{
           width: "100%",
           maxWidth: "1050px",
-          height: "85vh",
-          maxHeight: "850px",
+          height: "88vh",
+          maxHeight: "880px",
           backgroundColor: "var(--bg-card)",
           borderRadius: "14px",
           border: "1px solid var(--border-color)",
@@ -474,6 +475,8 @@ export function SubConversationModal({
               flexDirection: "column",
               backgroundColor: "var(--bg-card)",
               overflow: "hidden",
+              minHeight: 0,
+              minWidth: 0,
             }}
           >
             {/* Action Bar */}
