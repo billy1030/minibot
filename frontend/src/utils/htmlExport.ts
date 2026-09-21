@@ -893,8 +893,8 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
     }
 
     // Convert <think>...</think> blocks into sleek collapsible blocks
-    clean = clean.replace(new RegExp('<think>([\\\\s\\\\S]*?)<\\\\/think>', 'gi'), function(_, thought) {
-      return '\\n\\n<details class="think-block"><summary>💭 Thought Process</summary><div class="think-content">' + thought.trim() + '</div></details>\\n\\n';
+    clean = clean.replace(new RegExp('<think>([\\s\\S]*?)<\/think>', 'gi'), function(_, thought) {
+      return '\n\n<details class="think-block"><summary>💭 Thought Process</summary><div class="think-content">' + thought.trim() + '</div></details>\n\n';
     });
 
     var extractedDiagrams = [];
@@ -911,7 +911,7 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
 
     // 1. Isolate code-fenced blocks (drawio, draw.io, mermaid, svg, xml, html)
     var fence = String.fromCharCode(96) + '{3,}';
-    var fencedPattern = new RegExp(fence + '(drawio|draw\\.io|mermaid|svg|xml|html)?\\\\s*\\\\n([\\\\s\\\\S]*?)\\\\n\\\\s*' + fence, 'gi');
+    var fencedPattern = new RegExp(fence + '(drawio|draw\.io|mermaid|svg|xml|html)?\\s*\\n([\\s\\S]*?)\\n\\s*' + fence, 'gi');
     clean = clean.replace(fencedPattern, function(match, lang, content) {
       var l = (lang || '').toLowerCase();
       var c = content.trim();
@@ -919,44 +919,44 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
       if (l === 'drawio' || l === 'draw.io') {
         var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
         extractedDiagrams.push({ kind: 'drawio', source: c });
-        return '\\n\\n' + token + '\\n\\n';
+        return '\n\n' + token + '\n\n';
       }
       if (l === 'mermaid') {
         var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
         extractedDiagrams.push({ kind: 'mermaid', source: c });
-        return '\\n\\n' + token + '\\n\\n';
+        return '\n\n' + token + '\n\n';
       }
       if (l === 'xml' || !l) {
         if (isDrawioXml(c)) {
           var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
           extractedDiagrams.push({ kind: 'drawio', source: c });
-          return '\\n\\n' + token + '\\n\\n';
+          return '\n\n' + token + '\n\n';
         }
       }
       if (l === 'svg' || l === 'xml' || l === 'html' || !l) {
-        if (c.indexOf('<svg') !== -1 && c.indexOf('</svg>') !== -1) {
+        if (c.indexOf('<svg') !== -1 && c.indexOf('<\/svg>') !== -1) {
           var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
           extractedDiagrams.push({ kind: 'svg', source: c });
-          return '\\n\\n' + token + '\\n\\n';
+          return '\n\n' + token + '\n\n';
         }
       }
       return match;
     });
 
     // 2. Isolate raw <mxfile>...</mxfile> blocks
-    var rawDrawioPattern = new RegExp('(<mxfile[\\\\s\\\\S]*?<\\\\/mxfile>)', 'gi');
+    var rawDrawioPattern = new RegExp('(<mxfile[\\s\\S]*?<\/mxfile>)', 'gi');
     clean = clean.replace(rawDrawioPattern, function(match) {
       var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
       extractedDiagrams.push({ kind: 'drawio', source: match.trim() });
-      return '\\n\\n' + token + '\\n\\n';
+      return '\n\n' + token + '\n\n';
     });
 
     // 3. Isolate raw <svg>...</svg> blocks
-    var rawSvgPattern = new RegExp('(<svg[\\\\s\\\\S]*?<\\\\/svg>)', 'gi');
+    var rawSvgPattern = new RegExp('(<svg[\\s\\S]*?<\/svg>)', 'gi');
     clean = clean.replace(rawSvgPattern, function(match) {
       var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
       extractedDiagrams.push({ kind: 'svg', source: match.trim() });
-      return '\\n\\n' + token + '\\n\\n';
+      return '\n\n' + token + '\n\n';
     });
 
     // Render ordinary Markdown

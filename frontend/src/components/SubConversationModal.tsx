@@ -236,7 +236,7 @@ export function SubConversationModal({
       <div
         style={{
           width: "100%",
-          maxWidth: "1050px",
+          maxWidth: "1400px",
           height: "88vh",
           maxHeight: "90vh",
           minHeight: "500px",
@@ -359,8 +359,9 @@ export function SubConversationModal({
         <div style={{ display: "flex", flex: 1, minHeight: 0, height: "calc(100% - 65px)", overflow: "hidden" }}>
           {/* Left Column: Turn Navigation List */}
           <div
+            className="modal-turn-scroll"
             style={{
-              width: "290px",
+              width: "340px",
               borderRight: "1px solid var(--border-color)",
               backgroundColor: "var(--bg-primary)",
               display: "flex",
@@ -475,7 +476,8 @@ export function SubConversationModal({
               display: "flex",
               flexDirection: "column",
               backgroundColor: "var(--bg-card)",
-              overflow: "hidden",
+              overflowX: "hidden",
+              overflowY: "visible",
               height: "100%",
               minHeight: 0,
               minWidth: 0,
@@ -702,15 +704,12 @@ export function SubConversationModal({
               className="modal-turn-scroll"
               style={{
                 flex: 1,
-                overflowY: "auto",
-                height: "100%",
+                overflowY: "scroll",
                 minHeight: 0,
                 padding: "20px",
                 display: "flex",
                 flexDirection: "column",
                 gap: 18,
-                scrollbarWidth: "auto",
-                scrollbarColor: "#64748b rgba(0, 0, 0, 0.08)",
               }}
             >
               {currentTurn ? (
@@ -722,6 +721,7 @@ export function SubConversationModal({
                       borderRadius: 10,
                       border: "1px solid var(--border-color)",
                       overflow: "hidden",
+                      flexShrink: 0,
                     }}
                   >
                     <div
@@ -785,6 +785,7 @@ export function SubConversationModal({
                         borderRadius: 10,
                         border: "1px solid var(--border-color)",
                         overflow: "hidden",
+                        flexShrink: 0,
                       }}
                     >
                       <div
@@ -833,9 +834,9 @@ export function SubConversationModal({
                       backgroundColor: "var(--bg-primary)",
                       borderRadius: 10,
                       border: "1px solid var(--border-color)",
-                      overflow: "hidden",
                       display: "flex",
                       flexDirection: "column",
+                      flexShrink: 0,
                     }}
                   >
                     <div
