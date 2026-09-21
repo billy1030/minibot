@@ -74,67 +74,21 @@ export async function unpackDrawioDiagram(compressedBase64: string): Promise<str
  */
 export async function extractDrawioXml(rawContent: string): Promise<string> {
   if (!rawContent) return '';
-  let trimmed = rawContent.trim();
+  const trimmed = rawContent.trim();
 
-  // 1. Check if there is a <diagram>...</diagram> tag with compressed payload
+  // If there is a compressed <diagram>...</diagram> payload, unpack it
   const match = /<diagram[^>]*>([\s\S]*?)<\/diagram>/i.exec(trimmed);
   if (match && match[1]) {
     const innerContent = match[1].trim();
     if (!innerContent.startsWith('<')) {
       const decompressed = await unpackDrawioDiagram(innerContent);
       if (decompressed && decompressed.includes('<mxGraphModel')) {
-        trimmed = decompressed;
+        return decompressed;
       }
     }
   }
 
-  // 2. Parse XML with DOMParser if available, to properly unescape and configure cells
-  if (typeof DOMParser !== 'undefined') {
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(trimmed, 'application/xml');
-      const cells = doc.querySelectorAll('mxCell');
-      let changed = false;
-
-      cells.forEach((cell) => {
-        let val = cell.getAttribute('value');
-        let style = cell.getAttribute('style') || '';
-
-        if (val) {
-          // If value has escaped tags like &lt;b or raw tags like <b
-          if (val.includes('&lt;') || val.includes('<b') || val.includes('<span') || val.includes('<font') || val.includes('<div')) {
-            // Unescape entities
-            const unescaped = val
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>')
-              .replace(/&quot;/g, '"')
-              .replace(/&apos;/g, "'")
-              .replace(/&amp;/g, '&');
-
-            if (unescaped !== val) {
-              cell.setAttribute('value', unescaped);
-              changed = true;
-            }
-
-            // Ensure html=1 is in cell style so mxGraph treats it as rich formatted HTML
-            if (!style.includes('html=1')) {
-              style = style ? `html=1;${style}` : 'html=1;';
-              cell.setAttribute('style', style);
-              changed = true;
-            }
-          }
-        }
-      });
-
-      if (changed) {
-        const serializer = new XMLSerializer();
-        trimmed = serializer.serializeToString(doc);
-      }
-    } catch (e) {
-      console.warn('[DrawioHelper] DOM parsing failed, falling back to regex:', e);
-    }
-  }
-
+  // Otherwise return standard Draw.io XML exactly as-is so it never violates XML attribute grammar
   return trimmed;
 }
 
