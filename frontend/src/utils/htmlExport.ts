@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Generates a standalone, beautiful, self-contained HTML document
  * with robust, deterministic SVG/Mermaid rendering architecture:
  *
@@ -27,7 +27,6 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Noto+Sans+TC:wght@300;400;500;700;900&family=Roboto:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"><\/script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"><\/script>
-  <script src="https://viewer.diagrams.net/js/viewer-static.min.js"><\/script>
   <style>
     :root {
       --bg: #f8fafc;
@@ -176,8 +175,7 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
       line-height: 1.6;
     }
 
-    /* ==================== Diagram Containers (Draw.io, SVG & Mermaid) ==================== */
-    .drawio-diagram-wrapper,
+    /* ==================== Diagram Containers (SVG & Mermaid) ==================== */
     .svg-diagram-wrapper,
     .mermaid-wrapper {
       background: var(--card);
@@ -188,7 +186,6 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
       box-shadow: 0 4px 20px rgba(0,0,0,0.04);
       transition: border-color 0.2s, box-shadow 0.2s;
     }
-    html.dark .drawio-diagram-wrapper,
     html.dark .svg-diagram-wrapper,
     html.dark .mermaid-wrapper {
       background: #0f172a;
@@ -773,7 +770,6 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
 
     var codePanel = wrapper.querySelector('.diagram-code-panel');
     var copyBtn = wrapper.querySelector('[data-action="copy"]');
-    var downloadSvgBtn = wrapper.querySelector('[data-action="download-svg"]');
     var viewBtn = wrapper.querySelector('[data-action="view"]');
     var zoomOutBtn = wrapper.querySelector('[data-action="zoom-out"]');
     var resetBtn = wrapper.querySelector('[data-action="reset"]');
@@ -789,20 +785,6 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
       panY = 0;
       if (resetBtn) resetBtn.textContent = '100%';
       applyTransform();
-    }
-
-    if (downloadSvgBtn) {
-      downloadSvgBtn.onclick = function() {
-        var svgBlob = new Blob([rawCode], { type: 'image/svg+xml;charset=utf-8' });
-        var blobUrl = URL.createObjectURL(svgBlob);
-        var dlLink = document.createElement('a');
-        dlLink.href = blobUrl;
-        dlLink.download = 'diagram.svg';
-        document.body.appendChild(dlLink);
-        dlLink.click();
-        document.body.removeChild(dlLink);
-        URL.revokeObjectURL(blobUrl);
-      };
     }
 
     if (copyBtn) {
@@ -873,10 +855,8 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
   // Rendering Pipeline
   // -------------------------------------------------------------
   var rawMermaidMap = {};
-  var rawDrawioMap = {};
   var mCount = 0;
   var svgCount = 0;
-  var drawioCount = 0;
 
   function renderDocument() {
     var el = document.getElementById('md-content');
@@ -893,70 +873,39 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
     }
 
     // Convert <think>...</think> blocks into sleek collapsible blocks
-    clean = clean.replace(new RegExp('<think>([\\s\\S]*?)<\/think>', 'gi'), function(_, thought) {
-      return '\n\n<details class="think-block"><summary>💭 Thought Process</summary><div class="think-content">' + thought.trim() + '</div></details>\n\n';
+    clean = clean.replace(new RegExp('<think>([\\\\s\\\\S]*?)<\\\\/think>', 'gi'), function(_, thought) {
+      return '\\n\\n<details class="think-block"><summary>💭 Thought Process</summary><div class="think-content">' + thought.trim() + '</div></details>\\n\\n';
     });
 
     var extractedDiagrams = [];
 
-    function isDrawioXml(text) {
-      if (!text || typeof text !== 'string') return false;
-      var trimmed = text.trim();
-      return (
-        trimmed.indexOf('<mxfile') !== -1 ||
-        trimmed.indexOf('<mxGraphModel') !== -1 ||
-        (trimmed.indexOf('<diagram') !== -1 && (trimmed.indexOf('mxGraphModel') !== -1 || /<diagram[^>]*>[A-Za-z0-9+/=]+<\/diagram>/.test(trimmed)))
-      );
-    }
-
-    // 1. Isolate code-fenced blocks (drawio, draw.io, mermaid, svg, xml, html)
+    // 1. Isolate code-fenced blocks (\`\`\`mermaid, \`\`\`svg, \`\`\`xml, \`\`\`html)
     var fence = String.fromCharCode(96) + '{3,}';
-    var fencedPattern = new RegExp(fence + '(drawio|draw\.io|mermaid|svg|xml|html)?\\s*\\n([\\s\\S]*?)\\n\\s*' + fence, 'gi');
+    var fencedPattern = new RegExp(fence + '(mermaid|svg|xml|html)?\\\\s*\\\\n([\\\\s\\\\S]*?)\\\\n\\\\s*' + fence, 'gi');
     clean = clean.replace(fencedPattern, function(match, lang, content) {
       var l = (lang || '').toLowerCase();
       var c = content.trim();
-
-      if (l === 'drawio' || l === 'draw.io') {
-        var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
-        extractedDiagrams.push({ kind: 'drawio', source: c });
-        return '\n\n' + token + '\n\n';
-      }
       if (l === 'mermaid') {
         var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
         extractedDiagrams.push({ kind: 'mermaid', source: c });
-        return '\n\n' + token + '\n\n';
-      }
-      if (l === 'xml' || !l) {
-        if (isDrawioXml(c)) {
-          var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
-          extractedDiagrams.push({ kind: 'drawio', source: c });
-          return '\n\n' + token + '\n\n';
-        }
+        return '\\n\\n' + token + '\\n\\n';
       }
       if (l === 'svg' || l === 'xml' || l === 'html' || !l) {
-        if (c.indexOf('<svg') !== -1 && c.indexOf('<\/svg>') !== -1) {
+        if (c.indexOf('<svg') !== -1 && c.indexOf('</svg>') !== -1) {
           var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
           extractedDiagrams.push({ kind: 'svg', source: c });
-          return '\n\n' + token + '\n\n';
+          return '\\n\\n' + token + '\\n\\n';
         }
       }
       return match;
     });
 
-    // 2. Isolate raw <mxfile>...</mxfile> blocks
-    var rawDrawioPattern = new RegExp('(<mxfile[\\s\\S]*?<\/mxfile>)', 'gi');
-    clean = clean.replace(rawDrawioPattern, function(match) {
-      var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
-      extractedDiagrams.push({ kind: 'drawio', source: match.trim() });
-      return '\n\n' + token + '\n\n';
-    });
-
-    // 3. Isolate raw <svg>...</svg> blocks
-    var rawSvgPattern = new RegExp('(<svg[\\s\\S]*?<\/svg>)', 'gi');
+    // 2. Isolate raw <svg>...</svg> blocks
+    var rawSvgPattern = new RegExp('(<svg[\\\\s\\\\S]*?<\\\\/svg>)', 'gi');
     clean = clean.replace(rawSvgPattern, function(match) {
       var token = 'DIAGRAMPLACEHOLDER' + extractedDiagrams.length + 'ENDTOKEN';
       extractedDiagrams.push({ kind: 'svg', source: match.trim() });
-      return '\n\n' + token + '\n\n';
+      return '\\n\\n' + token + '\\n\\n';
     });
 
     // Render ordinary Markdown
@@ -1017,31 +966,20 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
 
   function createDiagramDOM(diag, index) {
     var isSvg = diag.kind === 'svg';
-    var isDrawio = diag.kind === 'drawio';
     var wrapper = document.createElement('section');
-    wrapper.className = isDrawio ? 'drawio-diagram-wrapper' : (isSvg ? 'svg-diagram-wrapper' : 'mermaid-wrapper');
+    wrapper.className = isSvg ? 'svg-diagram-wrapper' : 'mermaid-wrapper';
     wrapper.dataset.diagramType = diag.kind;
 
     var numStr = (index + 1).toString().padStart(2, '0');
-    var title = isDrawio ? ('Draw.io Diagram (' + numStr + ')') : (isSvg ? ('SVG Diagram (' + numStr + ')') : ('Diagram (' + numStr + ')'));
-
-    var editUrl = isDrawio ? ('https://app.diagrams.net/#R' + encodeURIComponent(diag.source.trim())) : '';
+    var title = isSvg ? ('SVG Diagram (' + numStr + ')') : ('Diagram (' + numStr + ')');
 
     var topbar = document.createElement('div');
     topbar.className = 'diagram-topbar';
     topbar.innerHTML = '<div class="diagram-topbar-title">'
-      + (isDrawio
-          ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#10b981"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>'
-          : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="15" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/><path d="M12 9v3M6 15v-1a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>')
+      + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="15" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/><path d="M12 9v3M6 15v-1a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>'
       + '<span>' + title + '</span>'
       + '</div>'
       + '<div class="diagram-tools-group">'
-      + (isDrawio
-          ? '<a href="' + editUrl + '" target="_blank" rel="noopener noreferrer" class="diag-btn" style="text-decoration:none;color:#10b981;font-weight:700;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Edit in Diagrams.net</a>'
-          : '')
-      + (isSvg
-          ? '<button class="diag-btn" data-action="download-svg" style="color:#eb6c36;font-weight:700;" title="Download standalone SVG file"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download SVG</button>'
-          : '')
       + '<button class="diag-btn" data-action="view"><span style="color:#4f46e5;font-weight:bold;font-family:monospace;">&lt;&gt;</span> Source</button>'
       + '<button class="diag-btn" data-action="copy"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>'
       + '<div style="display:inline-flex;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:0 6px;height:28px;gap:2px;">'
@@ -1062,11 +1000,7 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
     wrapper.appendChild(codePanel);
     wrapper.appendChild(viewport);
 
-    if (isDrawio) {
-      var dId = 'drawio-render-' + (++drawioCount) + '-' + Date.now();
-      wrapper.id = dId;
-      rawDrawioMap[dId] = diag.source;
-    } else if (isSvg) {
+    if (isSvg) {
       // Direct SVG injection into DOM
       var tempDiv = document.createElement('div');
       tempDiv.innerHTML = diag.source;
@@ -1108,64 +1042,6 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
           }
         }
       }
-    });
-  }
-
-  function renderAllDrawio() {
-    var ids = Object.keys(rawDrawioMap);
-    if (ids.length === 0) return;
-
-    ids.forEach(function(id, idx) {
-      var wrapper = document.getElementById(id);
-      if (!wrapper) return;
-      var xml = rawDrawioMap[id];
-      var viewport = wrapper.querySelector('.diagram-viewport');
-      if (!viewport) return;
-
-      // Render viewer-static.min.js mxgraph container
-      var mxDiv = document.createElement('div');
-      mxDiv.className = 'mxgraph';
-      mxDiv.style.maxWidth = '100%';
-      mxDiv.style.border = 'none';
-
-      var mxConfig = {
-        highlight: '#0000ff',
-        nav: true,
-        resize: true,
-        toolbar: 'zoom layers lightbox',
-        xml: xml
-      };
-      mxDiv.setAttribute('data-mxgraph', JSON.stringify(mxConfig));
-      viewport.appendChild(mxDiv);
-
-      // Invoke GraphViewer if viewer-static is already loaded
-      if (window.GraphViewer && typeof window.GraphViewer.processElements === 'function') {
-        try {
-          window.GraphViewer.processElements();
-        } catch(e) {
-          console.warn('[Draw.io GraphViewer error]', e);
-        }
-      }
-
-      // Check after a brief delay if SVG was rendered inside mxgraph div to wire zoom/pan controls
-      setTimeout(function() {
-        var svgEl = viewport.querySelector('svg');
-        if (svgEl) {
-          setupDiagramControls(wrapper, viewport, svgEl, xml);
-        } else {
-          // If offline or viewer-static script not accessible, offer fallback card
-          var editUrl = 'https://app.diagrams.net/#R' + encodeURIComponent(xml.trim());
-          if (!viewport.querySelector('svg') && !viewport.querySelector('iframe')) {
-            viewport.innerHTML = '<div class="diagram-error" style="background:var(--accent-glow);border-color:var(--accent);color:var(--text);">'
-              + '<strong>Draw.io Diagram (' + (idx + 1) + ')</strong>'
-              + '<p style="margin-top:4px;font-size:0.82rem;">Rendered with diagrams.net. If offline, click below to open and edit directly in diagrams.net:</p>'
-              + '<p style="margin-top:8px;"><a href="' + editUrl + '" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-weight:700;text-decoration:underline;">📐 Open &amp; Edit in diagrams.net</a></p>'
-              + '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:600;font-size:0.8rem;">View Raw XML Model</summary>'
-              + '<pre style="max-height:180px;overflow-y:auto;font-size:0.75rem;margin-top:6px;">' + escapeHtml(xml) + '</pre></details>'
-              + '</div>';
-          }
-        }
-      }, 1200);
     });
   }
 
@@ -1246,7 +1122,6 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
   applyMermaidConfig();
   renderDocument();
   renderAllMermaids();
-  renderAllDrawio();
 })();
 <\/script>
 </body>
