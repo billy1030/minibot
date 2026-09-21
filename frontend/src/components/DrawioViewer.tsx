@@ -10,7 +10,9 @@ import {
   ExternalLink,
   Code,
   Eye,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Download,
+  Loader2
 } from 'lucide-react';
 import { extractDrawioXml, createDiagramsNetEditUrl } from '../utils/drawioHelper';
 
@@ -65,7 +67,24 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
     }
   }, []);
 
-  // Handle postMessage communication with diagrams.net embedded viewer
+  const [isExporting, setIsExporting] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close download menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
+        setShowDownloadMenu(false);
+      }
+    };
+    if (showDownloadMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showDownloadMenu]);
+
+  // Handle postMessage communication with diagrams.net embedded viewer (load & export)
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (typeof e.data !== 'string') return;
@@ -74,6 +93,17 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
         if (msg.event === 'init') {
           // Send the XML payload to the diagrams.net embed iframe
           sendLoadToIframe(unpackedXml);
+        } else if (msg.event === 'export') {
+          // Export response from diagrams.net
+          setIsExporting(false);
+          if (msg.data) {
+            const a = document.createElement('a');
+            a.href = msg.data;
+            a.download = `drawio-diagram-${index + 1}-${Date.now()}.${msg.format || 'svg'}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }
         }
       } catch {
         // Ignore non-JSON messages
@@ -82,7 +112,7 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [unpackedXml, sendLoadToIframe]);
+  }, [unpackedXml, sendLoadToIframe, index]);
 
   // If unpackedXml updates after iframe was already initialized, re-send load action
   useEffect(() => {
@@ -90,6 +120,39 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
       sendLoadToIframe(unpackedXml);
     }
   }, [unpackedXml, iframeLoaded, sendLoadToIframe]);
+
+  // Trigger export from diagrams.net iframe (SVG or PNG)
+  const handleExportImage = (format: 'svg' | 'png') => {
+    setShowDownloadMenu(false);
+    if (iframeRef.current && iframeRef.current.contentWindow) {
+      setIsExporting(true);
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({
+          action: 'export',
+          format,
+          xml: unpackedXml || xml,
+        }),
+        '*'
+      );
+      // Fallback timeout in case export doesn't return
+      setTimeout(() => setIsExporting(false), 5000);
+    }
+  };
+
+  // Download raw .drawio XML file
+  const handleDownloadDrawioFile = () => {
+    setShowDownloadMenu(false);
+    const content = unpackedXml || xml;
+    const blob = new Blob([content], { type: 'application/xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `diagram-${index + 1}-${Date.now()}.drawio`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Zoom controls
   const handleZoomIn = () => setScale((s) => Math.min(MAX_ZOOM, Number((s + ZOOM_STEP).toFixed(2))));
@@ -264,6 +327,81 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
           </button>
+
+          {/* Download Dropdown (SVG, PNG, .drawio) */}
+          <div style={{ position: 'relative' }} ref={downloadMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+              title="Download diagram image (SVG / PNG) or .drawio file"
+              disabled={isExporting}
+              className="mm-btn-icon"
+              style={{
+                color: isExporting ? '#0284c7' : undefined,
+              }}
+            >
+              {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            </button>
+
+            {showDownloadMenu && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: 4,
+                  width: 170,
+                  background: 'var(--bg-secondary, #ffffff)',
+                  border: '1px solid var(--border-color, #cbd5e1)',
+                  borderRadius: 8,
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1)',
+                  padding: '4px',
+                  zIndex: 100000,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                }}
+              >
+                <div style={{ padding: '4px 8px 2px', fontSize: 10, fontWeight: 700, color: 'var(--text-muted, #64748b)', textTransform: 'uppercase' }}>
+                  Download Diagram
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleExportImage('svg')}
+                  className="mm-group-btn"
+                  style={{ justifyContent: 'flex-start', padding: '6px 8px', height: 'auto', fontSize: 11, borderRadius: 6 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card, #f1f5f9)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <Download className="w-3.5 h-3.5 mr-1.5 text-blue-500" />
+                  <span>Download SVG Image</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportImage('png')}
+                  className="mm-group-btn"
+                  style={{ justifyContent: 'flex-start', padding: '6px 8px', height: 'auto', fontSize: 11, borderRadius: 6 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card, #f1f5f9)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <Download className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
+                  <span>Download PNG Image</span>
+                </button>
+                <div style={{ height: 1, backgroundColor: 'var(--border-color, #e2e8f0)', margin: '2px 0' }} />
+                <button
+                  type="button"
+                  onClick={handleDownloadDrawioFile}
+                  className="mm-group-btn"
+                  style={{ justifyContent: 'flex-start', padding: '6px 8px', height: 'auto', fontSize: 11, borderRadius: 6 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-card, #f1f5f9)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 text-amber-500" />
+                  <span>Save .drawio File</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Fullscreen Toggle */}
           <button
