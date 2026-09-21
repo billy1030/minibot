@@ -8,6 +8,7 @@
     "build": "tsc",
     "build:backend": "bun build src/server.ts --compile --outfile src-tauri/bin/minibot-backend.exe",
     "cli": "tsx src/cli/index.ts",
+    "drawio2svg": "tsx tools/drawio-to-svg.ts",
     "test": "tsx test/test-loop.ts",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
