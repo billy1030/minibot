@@ -50,6 +50,21 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
     };
   }, [xml]);
 
+  // Send load action to diagrams.net embed iframe
+  const sendLoadToIframe = useCallback((payloadXml: string) => {
+    if (iframeRef.current && iframeRef.current.contentWindow && payloadXml) {
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({
+          action: 'load',
+          autosave: 0,
+          xml: payloadXml,
+        }),
+        '*'
+      );
+      setIframeLoaded(true);
+    }
+  }, []);
+
   // Handle postMessage communication with diagrams.net embedded viewer
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
@@ -58,17 +73,7 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
         const msg = JSON.parse(e.data);
         if (msg.event === 'init') {
           // Send the XML payload to the diagrams.net embed iframe
-          if (iframeRef.current && iframeRef.current.contentWindow) {
-            iframeRef.current.contentWindow.postMessage(
-              JSON.stringify({
-                action: 'load',
-                autosave: 0,
-                xml: unpackedXml,
-              }),
-              '*'
-            );
-            setIframeLoaded(true);
-          }
+          sendLoadToIframe(unpackedXml);
         }
       } catch {
         // Ignore non-JSON messages
@@ -77,7 +82,14 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [unpackedXml]);
+  }, [unpackedXml, sendLoadToIframe]);
+
+  // If unpackedXml updates after iframe was already initialized, re-send load action
+  useEffect(() => {
+    if (iframeLoaded && unpackedXml) {
+      sendLoadToIframe(unpackedXml);
+    }
+  }, [unpackedXml, iframeLoaded, sendLoadToIframe]);
 
   // Zoom controls
   const handleZoomIn = () => setScale((s) => Math.min(MAX_ZOOM, Number((s + ZOOM_STEP).toFixed(2))));

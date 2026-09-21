@@ -88,18 +88,52 @@ export async function extractDrawioXml(rawContent: string): Promise<string> {
     }
   }
 
-  // 2. Fix double-escaped HTML inside value="..." (e.g. &lt;b style=&quot;...&gt;)
-  // If a value contains escaped HTML tags like &lt;b or &lt;span, unescape them so Draw.io renders them formatted
-  trimmed = trimmed.replace(/value="([^"]*)"/g, (match, val) => {
-    if (val.includes('&lt;') && (val.includes('&lt;b') || val.includes('&lt;span') || val.includes('&lt;div') || val.includes('&lt;font'))) {
-      const unescapedVal = val
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, "'");
-      return `value="${unescapedVal}"`;
+  // 2. Parse XML with DOMParser if available, to properly unescape and configure cells
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(trimmed, 'application/xml');
+      const cells = doc.querySelectorAll('mxCell');
+      let changed = false;
+
+      cells.forEach((cell) => {
+        let val = cell.getAttribute('value');
+        let style = cell.getAttribute('style') || '';
+
+        if (val) {
+          // If value has escaped tags like &lt;b or raw tags like <b
+          if (val.includes('&lt;') || val.includes('<b') || val.includes('<span') || val.includes('<font') || val.includes('<div')) {
+            // Unescape entities
+            const unescaped = val
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&apos;/g, "'")
+              .replace(/&amp;/g, '&');
+
+            if (unescaped !== val) {
+              cell.setAttribute('value', unescaped);
+              changed = true;
+            }
+
+            // Ensure html=1 is in cell style so mxGraph treats it as rich formatted HTML
+            if (!style.includes('html=1')) {
+              style = style ? `html=1;${style}` : 'html=1;';
+              cell.setAttribute('style', style);
+              changed = true;
+            }
+          }
+        }
+      });
+
+      if (changed) {
+        const serializer = new XMLSerializer();
+        trimmed = serializer.serializeToString(doc);
+      }
+    } catch (e) {
+      console.warn('[DrawioHelper] DOM parsing failed, falling back to regex:', e);
     }
-    return match;
-  });
+  }
 
   return trimmed;
 }
