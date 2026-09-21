@@ -356,7 +356,7 @@ export function SubConversationModal({
         </div>
 
         {/* Content Area */}
-        <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+        <div style={{ display: "flex", flex: 1, minHeight: 0, height: "calc(100% - 65px)", overflow: "hidden" }}>
           {/* Left Column: Turn Navigation List */}
           <div
             style={{
@@ -476,6 +476,7 @@ export function SubConversationModal({
               flexDirection: "column",
               backgroundColor: "var(--bg-card)",
               overflow: "hidden",
+              height: "100%",
               minHeight: 0,
               minWidth: 0,
             }}
@@ -701,14 +702,15 @@ export function SubConversationModal({
               className="modal-turn-scroll"
               style={{
                 flex: 1,
-                overflowY: "scroll",
+                overflowY: "auto",
+                height: "100%",
                 minHeight: 0,
                 padding: "20px",
                 display: "flex",
                 flexDirection: "column",
                 gap: 18,
-                scrollbarWidth: "thin",
-                scrollbarColor: "#94a3b8 rgba(0, 0, 0, 0.05)",
+                scrollbarWidth: "auto",
+                scrollbarColor: "#64748b rgba(0, 0, 0, 0.08)",
               }}
             >
               {currentTurn ? (
