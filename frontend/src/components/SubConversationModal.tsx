@@ -238,7 +238,8 @@ export function SubConversationModal({
           width: "100%",
           maxWidth: "1050px",
           height: "88vh",
-          maxHeight: "880px",
+          maxHeight: "90vh",
+          minHeight: "500px",
           backgroundColor: "var(--bg-card)",
           borderRadius: "14px",
           border: "1px solid var(--border-color)",
@@ -700,6 +701,7 @@ export function SubConversationModal({
               style={{
                 flex: 1,
                 overflowY: "auto",
+                minHeight: 0,
                 padding: "20px",
                 display: "flex",
                 flexDirection: "column",
