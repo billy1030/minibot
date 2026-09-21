@@ -245,6 +245,7 @@ export function App() {
   const [draggedSessionKey, setDraggedSessionKey] = useState<string | null>(null);
   const [dragOverSessionKey, setDragOverSessionKey] = useState<string | null>(null);
   const [deletingSessionFile, setDeletingSessionFile] = useState<string | null>(null);
+  const [copiedSessionFilename, setCopiedSessionFilename] = useState<string | null>(null);
   const [isDeletingWs, setIsDeletingWs] = useState<boolean>(false);
   const [showModelSelectorModal, setShowModelSelectorModal] = useState<boolean>(false);
   const [showQuickModelMenu, setShowQuickModelMenu] = useState<boolean>(false);
@@ -2858,18 +2859,62 @@ export function App() {
                             gap: 2,
                           }}
                         >
-                          {/* Left Side: Timestamp */}
+                          {/* Left Side: Timestamp / Filename (Click to copy to clipboard) */}
                           <div style={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
                             <span
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                try {
+                                  await navigator.clipboard.writeText(session.filename);
+                                  setCopiedSessionFilename(session.filename);
+                                  setTimeout(() => {
+                                    setCopiedSessionFilename((curr) => (curr === session.filename ? null : curr));
+                                  }, 1800);
+                                } catch (err) {
+                                  console.error("Failed to copy filename:", err);
+                                }
+                              }}
+                              title={copiedSessionFilename === session.filename ? "Copied to clipboard!" : `Click to copy filename (${session.filename})`}
                               style={{
                                 fontFamily: "ui-monospace, monospace",
                                 fontSize: 9.5,
                                 whiteSpace: "nowrap",
-                                color: "var(--text-muted)",
+                                color: copiedSessionFilename === session.filename ? "#10b981" : "var(--text-muted)",
                                 letterSpacing: "-0.2px",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 3,
+                                padding: "1px 3px",
+                                borderRadius: 3,
+                                transition: "all 0.15s ease",
+                                backgroundColor: copiedSessionFilename === session.filename ? "rgba(16, 185, 129, 0.12)" : "transparent",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (copiedSessionFilename !== session.filename) {
+                                  e.currentTarget.style.color = "var(--accent)";
+                                  e.currentTarget.style.backgroundColor = "rgba(2, 132, 199, 0.08)";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (copiedSessionFilename !== session.filename) {
+                                  e.currentTarget.style.color = "var(--text-muted)";
+                                  e.currentTarget.style.backgroundColor = "transparent";
+                                }
                               }}
                             >
-                              {session.filename.replace(".md", "")}
+                              {copiedSessionFilename === session.filename ? (
+                                <>
+                                  <Check size={9.5} style={{ color: "#10b981" }} />
+                                  <span style={{ fontWeight: 600 }}>Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy size={9} style={{ opacity: 0.6 }} />
+                                  <span>{session.filename.replace(".md", "")}</span>
+                                </>
+                              )}
                             </span>
                           </div>
 
