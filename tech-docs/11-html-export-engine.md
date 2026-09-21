@@ -66,7 +66,18 @@ async function renderMermaid() {
 }
 ```
 
-### 2. 純前端免伺服器下載觸發
+### 2. Editorial 原生 SVG 向量圖零耗損嵌入
+對於模型生成的 ````xml` 或 ````svg` 標籤架構圖，匯出引擎採用原生 DOM 保真管線：
+- **命名空間安全隔離（Namespace & SVG Sanitation）**：為避免 SVG 內部 `<style>` 或 ID 碰撞影響宿主 HTML，匯出引擎對 SVG 內部引用 ID 進行作用域前綴隔離。
+- **響應式 ViewBox 保留**：強制確保 `<svg viewBox="..." width="100%" height="auto">` 比例不變形，不論在 4K 螢幕或 A4 紙本列印時皆可向量級無損縮放。
+- **零外部依賴**：SVG 原始標籤直接輸出於靜態 HTML，完全無需任何遠端網路請求或 JavaScript 載入，即使在無網路環境（Air-gapped）中亦能秒開。
+
+### 3. Draw.io 向量化與降級匯出管線
+針對包含 ````drawio` 代碼區塊的對話內容，匯出引擎具備多層保障：
+- **靜態渲染容器（Static Draw.io Container）**：匯出時注入包含 `class="mxgraph"` 與 JSON 圖表規格的標準容器，並動態加載 `viewer-static.min.js`，將 `<mxfile>` 自動於離線頁面中直接轉換繪製為原生向量 SVG。
+- **SVG 重繪回退（Redraw Fallback）**：若使用者處於離線未連網狀態無法載入 viewer 腳本，HTML 內置輕量級降級卡片，提供一鍵複製原始 XML 代碼或下載 `.drawio` 檔案至本機離線軟體開啟。
+
+### 4. 純前端免伺服器下載觸發
 利用瀏覽器 `Blob` 與 `URL.createObjectURL` 實現點擊即時下載，無需後端磁碟 I/O：
 
 ```typescript
@@ -89,7 +100,7 @@ export function downloadHtmlFile(content: string, filename: string = "export.htm
 
 1. **全會話匯出**：
    - 在任何聊天視窗中，點擊頂部工具列右側的 **`📥 Export HTML`** 按鈕。
-   - 瀏覽器將自動下載包含完整問答、時間戳與樣式的 HTML 文件。
+   - 瀏覽器將自動下載包含完整問答、時間戳、Editorial SVG 向量圖與樣式的 HTML 文件。
 2. **單條回答匯出**：
    - 在任何 Assistant 回答氣泡的底部指標列最右側，點擊 **`📥 Export HTML`**。
    - 即可單獨下載該則報告的獨立 HTML。

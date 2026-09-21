@@ -26,21 +26,28 @@ export const PromptsConfigSchema = z.object({
   skillsPrompt: z.string().default(
     "## AI Skills & Protocols:\n" +
     "- Internet Search & Web Ingestion: Use MCP search/fetch tools to gather facts before answering questions on dynamic topics.\n" +
-    "- High-Priority Visuals (Draw.io over SVG & Mermaid): When asked to generate diagrams, architecture, flowcharts, or system designs, DO NOT call `minimax_generate_image`. PRIORITIZE complete, standard Draw.io diagrams (`<mxfile>` XML format) inside ```drawio or ```xml code blocks so users can interact, edit, and export them directly. Fall back to standalone Editorial SVG or Mermaid only if explicitly requested.\n" +
-    "- Draw.io XML Guidelines: Output clean, standard Draw.io XML containing `<mxfile><diagram><mxGraphModel>...`. Use proper orthogonal routing, hierarchical zones, distinct fill colors for components, and ensure XML attribute values are properly XML-escaped (e.g. `value=\"&lt;b&gt;Text&lt;/b&gt;\"`).\n" +
+    "- High-Priority Visuals (Editorial SVG over Mermaid): When asked to generate diagrams, architecture, flowcharts, or system designs, DO NOT call `minimax_generate_image`. PRIORITIZE standalone editorial SVG diagrams following the `diagram-design` skill over standard Mermaid charts. Provide clean Draw.io (<mxfile>) or Mermaid diagrams only if specifically requested.\n" +
     "- Technical Poster & Dashboard Layout: For protocol state machines, complex pipelines, or multi-component architectures, adopt the Technical Poster Archetype: Top Hero Header with pill tags, main stage progression pipeline (1..N), comparison/packet matrix, and a dedicated right-side KPI/reference dark slate sidebar (`#0f172a`) for commands and facts.\n" +
+    "- Strict Arrow Positioning & Corridor Routing: For horizontal connectors, anchor points MUST be at the exact vertical midpoint (`y = card_y + height/2`). For multi-row wrapping (e.g. Stage 3 -> Stage 4), NEVER cut diagonally across middle cards; use an external right-side corridor or S-curve snake layout with >= 24px clearance from any intermediate card edges. All non-straight arrows MUST use rounded 90-degree orthogonal elbows (`r=8`). Labels MUST have opaque `<rect>` background badges with 4px padding.\n" +
+    "- Canvas Bottom Safety Margin: ALWAYS add at least 60-80px vertical padding to viewBox height so footer notes and bottom alerts are never cut off by the canvas edge.\n" +
+    "- Zero-Collision Zone Layout: When stacking vertical stages or cards (e.g. L1..L9) above a lower section (e.g. Zone D Matrix/Foundation), the lower section Y MUST be strictly calculated from the cumulative bottom of the upper stack: `lower_y >= stack_start_y + (num_cards * (card_height + gap)) + 40px`. NEVER hardcode an overlapping Y position that collides with the final card of the upper stack.\n" +
+    "- SVG Diagram Geometry Quality: Apply dynamic canvas geometry: calculate viewBox height dynamically based on tier count (`140 + (tiers * 180) + 120`), or adaptively place the Legend in the header (`x=800..1300, y=35`) or as a right sidebar (`x=1120, width=240`) so it never collides with components. Strictly follow §6 connector rules: NEVER draw connector lines striking through text labels; always mask labels with an opaque `<rect>` matching the canvas background.\n" +
     "- Skills Installation & Management: When a user asks to install, create, or import a skill (such as from GitHub, markdown, or custom instructions), DO NOT use `install_mcp_package` (which is only for long-lived MCP servers). Use fetch/search tools if needed to read the skill content, and then call `install_skill(skillName, content, scope)` to install the skill with valid YAML frontmatter (name, description, triggers) and markdown instructions directly into MiniBot.\n" +
     "- Image Generation: Only invoke `minimax_generate_image` when the user explicitly requests an artistic photo, illustration, drawing, or painting.\n" +
     "- Verification: Cross-check information from multiple snippets.\n" +
     "- Tool Transparency: Always clearly state what action you are taking."
   ),
   svgPrompt: z.string().optional().default(
-    "### Diagram Generation Guidelines (Draw.io Priority):\n" +
-    "1. Default Diagram Format: Draw.io XML inside ```drawio or ```xml blocks (`<mxfile host=\"Electron\" ...><diagram>...<mxGraphModel>...</mxGraphModel></diagram></mxfile>`).\n" +
+    "### Standalone Editorial SVG Generation & Color System Guidelines:\n" +
+    "1. Palette & Theming (Default: Clean Light Minimalist):\n" +
+    "   - Canvas Background: Pure White `#ffffff` or Soft Slate `#f8fafc` with crisp border `stroke=\"#e2e8f0\"`\n" +
+    "   - Primary Accents: Ocean Blue `#2563eb`, Forest Emerald `#059669`, Royal Violet `#7c3aed`, Warm Amber `#d97706`, Crimson Red `#e11d48`\n" +
+    "   - Neutral Card Containers: `#f8fafc` (cards), `#f1f5f9` (active highlights), `#ffffff` (sub-cards), `#e2e8f0` (border lines)\n" +
+    "   - Typography: Title `#0f172a`, Body `#334155`, Subtitle/Labels `#64748b`, Muted Badges `#94a3b8`\n" +
     "2. Quality Protocols:\n" +
-    "   - Always escape XML entities in text/attribute nodes (e.g. `&amp;`, `&lt;`, `&gt;`).\n" +
-    "   - Provide clean grid alignment and distinct node colors for tiers.\n" +
-    "   - If SVG is explicitly requested, output clean SVG in ```xml or ```svg code blocks with responsive viewBox."
+    "   - Always escape XML entities in text nodes: use `&amp;` instead of `&` (e.g., `lasers &amp; fiber`).\n" +
+    "   - Explicit `viewBox` with ample height padding (+60px to 80px) to prevent bottom cutoff.\n" +
+    "   - Output format: Wrap raw SVG in ```xml or ```svg code blocks without markdown wrapping."
   ),
 });
 

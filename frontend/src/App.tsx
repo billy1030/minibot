@@ -6172,7 +6172,7 @@ export function App() {
                   </div>
                 </button>
 
-                {/* 🌟 Draw.io Section (Top Default) */}
+                {/* 🌟 Editorial SVG Section (Top Recommended & Default) */}
                 <div
                   style={{
                     padding: "4px 8px 6px",
@@ -6186,7 +6186,80 @@ export function App() {
                     justifyContent: "space-between",
                   }}
                 >
-                  <span>📐 Draw.io & Visual Architecture</span>
+                  <span>🎨 Editorial SVG Architecture</span>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      background: "rgba(235, 108, 54, 0.15)",
+                      color: "#eb6c36",
+                      padding: "1px 6px",
+                      borderRadius: 4,
+                      fontWeight: 700,
+                    }}
+                  >
+                    Default & Recommended
+                  </span>
+                </div>
+
+                {/* 1. Create Editorial SVG Diagram */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSelectDiagramMode({
+                      id: "svg-create",
+                      label: "Editorial SVG",
+                      icon: "🎨",
+                      color: "#eb6c36",
+                      prompt:
+                        "Please output a high-fidelity standalone Editorial SVG architecture diagram directly as raw ```xml or ```svg code following the `diagram-design` skill. DO NOT call any image generation tools (DO NOT call `minimax_generate_image`). Output the SVG code directly in your response text. Apply the flexible layout matrix with Top-Right Header Legend chips or Sidebar to prevent legend collision, clear focal hierarchy, orthogonal connectors, and opaque background badges behind connector labels.",
+                    })
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 10px",
+                    background: selectedDiagramMode?.id === "svg-create" ? "rgba(235, 108, 54, 0.18)" : "transparent",
+                    border: selectedDiagramMode?.id === "svg-create" ? "1px solid rgba(235, 108, 54, 0.45)" : "1px solid transparent",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    color: "var(--text-main)",
+                    fontSize: 12.5,
+                    textAlign: "left",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(235, 108, 54, 0.12)")}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background =
+                      selectedDiagramMode?.id === "svg-create" ? "rgba(235, 108, 54, 0.18)" : "transparent")
+                  }
+                >
+                  <span style={{ fontSize: 16 }}>🎨</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, color: "#eb6c36", display: "flex", justifyContent: "space-between" }}>
+                      <span>Editorial SVG Diagram</span>
+                      {selectedDiagramMode?.id === "svg-create" && <span style={{ fontSize: 11 }}>✓ Active</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Publication-grade standalone vector graphics (Zero sandbox, 100% vector SVG export)</div>
+                  </div>
+                </button>
+
+                {/* 🌟 Draw.io Section */}
+                <div
+                  style={{
+                    padding: "4px 8px 6px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "var(--text-muted)",
+                    borderTop: "1px solid var(--border-color)",
+                    borderBottom: "1px solid var(--border-color)",
+                    marginTop: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span>📐 Draw.io Diagram</span>
                   <span
                     style={{
                       fontSize: 10,
@@ -6197,11 +6270,11 @@ export function App() {
                       fontWeight: 700,
                     }}
                   >
-                    Default & Recommended
+                    Interactive
                   </span>
                 </div>
 
-                {/* 1. Create Draw.io Diagram */}
+                {/* 2. Create Draw.io Diagram */}
                 <button
                   type="button"
                   onClick={() =>
@@ -6240,84 +6313,11 @@ export function App() {
                       <span>Draw.io Diagram</span>
                       {selectedDiagramMode?.id === "drawio-create" && <span style={{ fontSize: 11 }}>✓ Active</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Interactive & fully editable vector diagrams (.drawio)</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Interactive & editable in diagrams.net (.drawio)</div>
                   </div>
                 </button>
 
-                {/* 🌟 Editorial SVG Section */}
-                <div
-                  style={{
-                    padding: "4px 8px 6px",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "var(--text-muted)",
-                    borderTop: "1px solid var(--border-color)",
-                    borderBottom: "1px solid var(--border-color)",
-                    marginTop: 2,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <span>🎨 Editorial SVG</span>
-                  <span
-                    style={{
-                      fontSize: 10,
-                      background: "rgba(235, 108, 54, 0.15)",
-                      color: "#eb6c36",
-                      padding: "1px 6px",
-                      borderRadius: 4,
-                      fontWeight: 700,
-                    }}
-                  >
-                    Vector Graphic
-                  </span>
-                </div>
-
-                {/* 2. Create Editorial SVG Diagram */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleSelectDiagramMode({
-                      id: "svg-create",
-                      label: "Editorial SVG",
-                      icon: "🎨",
-                      color: "#eb6c36",
-                      prompt:
-                        "Please output a high-fidelity standalone Editorial SVG architecture diagram directly as raw ```xml or ```svg code following the `diagram-design` skill. DO NOT call any image generation tools (DO NOT call `minimax_generate_image`). Output the SVG code directly in your response text. Apply the flexible layout matrix with Top-Right Header Legend chips or Sidebar to prevent legend collision, clear focal hierarchy, orthogonal connectors, and opaque background badges behind connector labels.",
-                    })
-                  }
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "8px 10px",
-                    background: selectedDiagramMode?.id === "svg-create" ? "rgba(235, 108, 54, 0.15)" : "transparent",
-                    border: selectedDiagramMode?.id === "svg-create" ? "1px solid rgba(235, 108, 54, 0.4)" : "1px solid transparent",
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    color: "var(--text-main)",
-                    fontSize: 12.5,
-                    textAlign: "left",
-                    transition: "all 0.15s",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(235, 108, 54, 0.12)")}
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background =
-                      selectedDiagramMode?.id === "svg-create" ? "rgba(235, 108, 54, 0.15)" : "transparent")
-                  }
-                >
-                  <span style={{ fontSize: 16 }}>🎨</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, color: "#eb6c36", display: "flex", justifyContent: "space-between" }}>
-                      <span>Create Editorial SVG</span>
-                      {selectedDiagramMode?.id === "svg-create" && <span style={{ fontSize: 11 }}>✓ Active</span>}
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>High-fidelity vector graphic with flexible layout</div>
-                  </div>
-                </button>
-
-                {/* 2. Auto-Fix Diagram */}
+                {/* 3. Auto-Fix Diagram */}
                 <button
                   type="button"
                   onClick={() =>
