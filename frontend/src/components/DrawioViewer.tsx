@@ -121,21 +121,53 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
     }
   }, [unpackedXml, iframeLoaded, sendLoadToIframe]);
 
-  // Trigger export from diagrams.net iframe (SVG or PNG)
+  // Trigger export from diagrams.net iframe (SVG or PNG) with direct fallback
   const handleExportImage = (format: 'svg' | 'png') => {
     setShowDownloadMenu(false);
+
+    // If iframe supports postMessage export
     if (iframeRef.current && iframeRef.current.contentWindow) {
       setIsExporting(true);
-      iframeRef.current.contentWindow.postMessage(
-        JSON.stringify({
-          action: 'export',
-          format,
-          xml: unpackedXml || xml,
-        }),
-        '*'
-      );
-      // Fallback timeout in case export doesn't return
-      setTimeout(() => setIsExporting(false), 5000);
+      try {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({
+            action: 'export',
+            format,
+            xml: unpackedXml || xml,
+          }),
+          '*'
+        );
+      } catch (err) {
+        console.warn('postMessage export error, triggering fallback:', err);
+      }
+
+      // Fallback: If diagrams.net didn't respond within 1.5s, extract SVG from DOM or save XML
+      setTimeout(() => {
+        setIsExporting(false);
+        try {
+          // Attempt to extract SVG directly from iframe if same-origin or accessible
+          const doc = iframeRef.current?.contentDocument;
+          const svgEl = doc?.querySelector('svg');
+          if (svgEl) {
+            const svgXml = new XMLSerializer().serializeToString(svgEl);
+            const blob = new Blob([svgXml], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `drawio-diagram-${index + 1}-${Date.now()}.svg`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            return;
+          }
+        } catch {
+          // Cross-origin iframe fallback: download the .drawio XML file
+        }
+        handleDownloadDrawioFile();
+      }, 2000);
+    } else {
+      handleDownloadDrawioFile();
     }
   };
 
@@ -241,18 +273,18 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
         ref={containerRef}
         style={{
           margin: isFullscreen ? 0 : "1.25rem 0",
-          borderRadius: 16,
+          borderRadius: isFullscreen ? 12 : 12,
           border: "1px solid var(--border-color, #e2e8f0)",
           background: "var(--bg-secondary, #ffffff)",
-          boxShadow: isFullscreen ? "0 25px 50px -12px rgba(0, 0, 0, 0.35)" : "0 4px 20px rgba(0, 0, 0, 0.06)",
+          boxShadow: isFullscreen ? "0 25px 50px -12px rgba(0, 0, 0, 0.5)" : "0 4px 20px rgba(0, 0, 0, 0.06)",
           overflow: "hidden",
           position: isFullscreen ? "fixed" : "relative",
           top: isFullscreen ? "50%" : undefined,
           left: isFullscreen ? "50%" : undefined,
           transform: isFullscreen ? "translate(-50%, -50%)" : undefined,
-          width: isFullscreen ? "88vw" : "100%",
-          maxWidth: isFullscreen ? "1400px" : "100%",
-          height: isFullscreen ? "86vh" : "auto",
+          width: isFullscreen ? "96vw" : "100%",
+          maxWidth: isFullscreen ? "98vw" : "100%",
+          height: isFullscreen ? "94vh" : "auto",
           zIndex: isFullscreen ? 99999 : 10,
           display: "flex",
           flexDirection: "column",
@@ -438,7 +470,7 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
         style={{
           position: 'relative',
           width: '100%',
-          height: isFullscreen ? 'calc(86vh - 45px)' : '540px',
+          height: isFullscreen ? 'calc(94vh - 45px)' : '540px',
           overflow: 'hidden',
           background: 'var(--bg-primary, #f8fafc)',
           cursor: isDragging ? 'grabbing' : 'grab',
