@@ -14,6 +14,7 @@ import {
   EyeOff,
   Server,
   Info,
+  Plus,
   PlusCircle,
   History,
   MessageSquare,
@@ -67,6 +68,7 @@ import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { ExportHtmlModal } from "./components/ExportHtmlModal";
 import { GitSyncModal } from "./components/GitSyncModal";
 import { ToolHubModal, type ToolItem, type SkillItem } from "./components/ToolHubModal";
+import { ModelSelectorModal, type LLMProfile } from "./components/ModelSelectorModal";
 import { Wrench } from "lucide-react";
 
 interface ToolCallLog {
@@ -82,6 +84,7 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  model?: string;
   toolCalls?: ToolCallLog[];
   activeSkills?: string[];
   isStreaming?: boolean;
@@ -101,6 +104,8 @@ interface ConfigState {
     temperature: number;
     maxTokens: number;
   };
+  models?: LLMProfile[];
+  activeModelId?: string;
   voice?: {
     baseUrl?: string;
     apiKey: string;
@@ -152,6 +157,9 @@ export function App() {
     const handleClickOutside = (e: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setIsUserMenuOpen(false);
+      }
+      if (quickModelMenuRef.current && !quickModelMenuRef.current.contains(e.target as Node)) {
+        setShowQuickModelMenu(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -238,6 +246,9 @@ export function App() {
   const [dragOverSessionKey, setDragOverSessionKey] = useState<string | null>(null);
   const [deletingSessionFile, setDeletingSessionFile] = useState<string | null>(null);
   const [isDeletingWs, setIsDeletingWs] = useState<boolean>(false);
+  const [showModelSelectorModal, setShowModelSelectorModal] = useState<boolean>(false);
+  const [showQuickModelMenu, setShowQuickModelMenu] = useState<boolean>(false);
+  const quickModelMenuRef = useRef<HTMLDivElement>(null);
   const [showMermaidMenu, setShowMermaidMenu] = useState<boolean>(false);
   const [selectedDiagramMode, setSelectedDiagramMode] = useState<{
     id: string;
@@ -1148,6 +1159,78 @@ export function App() {
     }
   };
 
+  const handleSelectActiveModel = async (modelId: string) => {
+    if (!config) return;
+    try {
+      const matchedProfile = (config.models || []).find((m) => m.id === modelId);
+      const updatedConfig: ConfigState = {
+        ...config,
+        activeModelId: modelId,
+        llm: matchedProfile
+          ? {
+              baseUrl: matchedProfile.baseUrl,
+              apiKey: matchedProfile.apiKey,
+              model: matchedProfile.model,
+              temperature: matchedProfile.temperature,
+              maxTokens: matchedProfile.maxTokens ?? config.llm.maxTokens,
+            }
+          : config.llm,
+      };
+      setConfig(updatedConfig);
+
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          activeModelId: modelId,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.config) setConfig(data.config);
+      }
+    } catch (err) {
+      console.error("Failed to switch active model:", err);
+    }
+  };
+
+  const handleSaveProfiles = async (newModels: LLMProfile[], newActiveModelId?: string) => {
+    if (!config) return;
+    try {
+      const activeId = newActiveModelId || config.activeModelId || newModels[0]?.id;
+      const matchedProfile = newModels.find((m) => m.id === activeId);
+
+      const payload = {
+        models: newModels,
+        activeModelId: activeId,
+        llm: matchedProfile
+          ? {
+              baseUrl: matchedProfile.baseUrl,
+              apiKey: matchedProfile.apiKey,
+              model: matchedProfile.model,
+              temperature: matchedProfile.temperature,
+              maxTokens: matchedProfile.maxTokens ?? config.llm.maxTokens,
+            }
+          : config.llm,
+      };
+
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.config) setConfig(data.config);
+        showAlert("Model profiles saved successfully!", "success", "Models Updated");
+      }
+    } catch (err: any) {
+      showAlert(`Failed to save model profiles: ${err.message}`, "error", "Save Failed");
+    }
+  };
+
   // 🎙️ Save Voice LLM API Key Only (Directly updates voice.apiKey without touching other settings)
   const saveVoiceApiKeyOnly = async (newKey: string) => {
     setIsSavingVoiceKey(true);
@@ -1893,6 +1976,8 @@ export function App() {
           workspace: currentWorkspace,
           enableThinking,
           maxIterations: extraIterationsOverride,
+          modelId: config?.activeModelId,
+          model: config?.llm?.model,
         }),
       });
 
@@ -2007,6 +2092,7 @@ export function App() {
                       isStreaming: false,
                       activeSkills: finalSkills && finalSkills.length > 0 ? finalSkills : undefined,
                       limitReached: isLimitHit,
+                      model: data.model || config?.llm?.model,
                     }
                   : m
               )
@@ -3019,9 +3105,45 @@ export function App() {
           {/* Expanded Content: Model Details + Active MCP Tools */}
           {showModelPanel && (
             <div style={{ padding: "12px 14px", borderTop: "1px solid var(--border-color)", display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>CURRENT LLM MODEL</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent)", display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
-                <Cpu size={14} /> {config?.llm.model || "Loading..."}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>CURRENT LLM MODEL</div>
+                <button
+                  type="button"
+                  onClick={() => setShowModelSelectorModal(true)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--accent, #0284c7)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                >
+                  Manage ⚙️
+                </button>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <Cpu size={14} /> {config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm.model || "Loading..."}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowModelSelectorModal(true)}
+                  style={{
+                    fontSize: 10,
+                    padding: "2px 7px",
+                    borderRadius: 4,
+                    background: "rgba(2, 132, 199, 0.12)",
+                    color: "var(--accent, #0284c7)",
+                    border: "1px solid rgba(2, 132, 199, 0.3)",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Switch
+                </button>
               </div>
 
               <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
@@ -5242,6 +5364,24 @@ export function App() {
                               flexWrap: "wrap",
                             }}
                           >
+                          {m.model && (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                padding: "1px 6px",
+                                borderRadius: 4,
+                                background: "rgba(2, 132, 199, 0.1)",
+                                color: "var(--accent, #0284c7)",
+                                fontWeight: 600,
+                              }}
+                              title={`Generated with model: ${m.model}`}
+                            >
+                              <Cpu size={12} />
+                              {m.model}
+                            </span>
+                          )}
                           <span>Tokens: ~{Math.round(m.content.length / 3.5)}</span>
                           <span>Length: {m.content.length} chars</span>
                           {m.duration !== undefined && (
@@ -5670,7 +5810,158 @@ export function App() {
             </span>
           </button>
 
-          {/* 📊 Mermaid Architecture Diagram Quick Action (Compact Icon with mode badge) */}
+          {/* ⚡ Quick LLM Model Switcher Dropdown Button */}
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setShowQuickModelMenu((v) => !v)}
+              title={`Current Model: ${config?.llm?.model || "Loading..."} (Click to switch model)`}
+              style={{
+                height: 34,
+                padding: "0 10px",
+                borderRadius: 7,
+                background: showQuickModelMenu ? "rgba(2, 132, 199, 0.15)" : "var(--bg-card)",
+                border: showQuickModelMenu ? "1.5px solid var(--accent, #0284c7)" : "1px solid var(--border-color)",
+                color: "var(--accent, #0284c7)",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 12,
+                fontWeight: 700,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Cpu size={14} />
+              <span style={{ maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm?.model || "Model"}
+              </span>
+              <ChevronDown size={12} color="var(--text-muted)" />
+            </button>
+
+            {showQuickModelMenu && (
+              <div
+                ref={quickModelMenuRef}
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 8px)",
+                  left: 0,
+                  zIndex: 1200,
+                  background: "var(--bg-secondary)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: 12,
+                  padding: 8,
+                  boxShadow: "0 12px 28px rgba(0,0,0,0.25)",
+                  minWidth: 280,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 8px", borderBottom: "1px solid var(--border-color)", marginBottom: 4 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent, #0284c7)" }}>
+                    SWITCH LLM MODEL
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQuickModelMenu(false);
+                      setShowModelSelectorModal(true);
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--text-muted)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      padding: "2px 4px",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent, #0284c7)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                  >
+                    Manage Models ⚙️
+                  </button>
+                </div>
+
+                {(config?.models || []).map((profile) => {
+                  const isActive = profile.id === config?.activeModelId || profile.model === config?.llm?.model;
+                  return (
+                    <button
+                      key={profile.id}
+                      type="button"
+                      onClick={() => {
+                        handleSelectActiveModel(profile.id);
+                        setShowQuickModelMenu(false);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "7px 10px",
+                        background: isActive ? "rgba(2, 132, 199, 0.15)" : "transparent",
+                        border: isActive ? "1px solid rgba(2, 132, 199, 0.4)" : "1px solid transparent",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        color: "var(--text-main)",
+                        fontSize: 12,
+                        textAlign: "left",
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive) e.currentTarget.style.background = "var(--bg-card)";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) e.currentTarget.style.background = "transparent";
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        <Cpu size={13} color={isActive ? "var(--accent, #0284c7)" : "var(--text-muted)"} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {profile.name}
+                          </div>
+                          <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                            {profile.model}
+                          </div>
+                        </div>
+                      </div>
+                      {isActive && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent, #0284c7)", background: "rgba(2, 132, 199, 0.2)", padding: "1px 5px", borderRadius: 4 }}>
+                          ACTIVE
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowQuickModelMenu(false);
+                    setShowModelSelectorModal(true);
+                  }}
+                  style={{
+                    marginTop: 4,
+                    padding: "7px 10px",
+                    borderRadius: 6,
+                    background: "var(--bg-primary)",
+                    border: "1px dashed var(--border-color)",
+                    color: "var(--text-main)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Plus size={13} /> Add / Configure Models
+                </button>
+              </div>
+            )}
+          </div>
           <div style={{ position: "relative", flexShrink: 0 }}>
             <button
               type="button"
@@ -6838,6 +7129,102 @@ export function App() {
               {/* TAB 1: Model & Parameters */}
               {configActiveTab === "model" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 880 }}>
+                  
+                  {/* Model Profiles Management Header Bar */}
+                  <div
+                    style={{
+                      background: "rgba(2, 132, 199, 0.08)",
+                      border: "1px solid rgba(2, 132, 199, 0.25)",
+                      borderRadius: 10,
+                      padding: "12px 16px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          background: "var(--accent, #0284c7)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#ffffff",
+                        }}
+                      >
+                        <Cpu size={18} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)" }}>
+                          Active Model: {config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm.model}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: "var(--text-muted)" }}>
+                          {(config?.models || []).length} Model Profiles Configured (Gemini, MiniMax, OpenAI, DeepSeek, Ollama)
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <select
+                        value={config.activeModelId || ""}
+                        onChange={(e) => {
+                          const selectedId = e.target.value;
+                          const found = (config.models || []).find((m) => m.id === selectedId);
+                          if (found) {
+                            setConfig({
+                              ...config,
+                              activeModelId: selectedId,
+                              llm: {
+                                baseUrl: found.baseUrl,
+                                apiKey: found.apiKey,
+                                model: found.model,
+                                temperature: found.temperature,
+                                maxTokens: found.maxTokens ?? config.llm.maxTokens,
+                              },
+                            });
+                          }
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: 6,
+                          background: "var(--bg-card)",
+                          border: "1px solid var(--border-color)",
+                          color: "var(--text-main)",
+                          fontSize: 12,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {(config.models || []).map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} ({m.model})
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowModelSelectorModal(true)}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 6,
+                          background: "linear-gradient(135deg, var(--accent, #0284c7), #0369a1)",
+                          color: "#ffffff",
+                          border: "none",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Manage All Models ⚙️
+                      </button>
+                    </div>
+                  </div>
+
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)", display: "block", marginBottom: 6 }}>
@@ -7704,6 +8091,16 @@ export function App() {
         currentWorkspace={currentWorkspace}
         initialTab="installed"
         onSkillsLoaded={(skills) => setActiveSkillsList(skills)}
+      />
+
+      {/* Multiple LLM Model Management & Switching Modal */}
+      <ModelSelectorModal
+        isOpen={showModelSelectorModal}
+        onClose={() => setShowModelSelectorModal(false)}
+        models={config?.models || []}
+        activeModelId={config?.activeModelId}
+        onSelectActiveModel={handleSelectActiveModel}
+        onSaveProfiles={handleSaveProfiles}
       />
     </div>
   );

@@ -51,6 +51,18 @@ export const PromptsConfigSchema = z.object({
   ),
 });
 
+export const LLMProfileSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  provider: z.string().default("custom"),
+  baseUrl: z.string().default("https://api.openai.com/v1"),
+  apiKey: z.string().default(""),
+  model: z.string().default("gpt-4o"),
+  temperature: z.number().min(0).max(2).default(0.7),
+  maxTokens: z.number().positive().optional().default(4096),
+  description: z.string().optional(),
+});
+
 export const MCPServerDefSchema = z.object({
   type: z.enum(["stdio", "http", "streamable-http"]).default("stdio"),
   command: z.string().optional(),
@@ -66,6 +78,8 @@ export const MCPServerDefSchema = z.object({
 
 export const LoopConfigSchema = z.object({
   llm: LLMConfigSchema,
+  models: z.array(LLMProfileSchema).default([]),
+  activeModelId: z.string().optional(),
   voice: VoiceConfigSchema.optional(),
   prompts: PromptsConfigSchema,
   mcpServers: z.record(z.string(), MCPServerDefSchema),
@@ -73,6 +87,7 @@ export const LoopConfigSchema = z.object({
 });
 
 export type LLMConfig = z.infer<typeof LLMConfigSchema>;
+export type LLMProfile = z.infer<typeof LLMProfileSchema>;
 export type VoiceConfig = z.infer<typeof VoiceConfigSchema>;
 export type PromptsConfig = z.infer<typeof PromptsConfigSchema>;
 export type MCPServerDef = z.infer<typeof MCPServerDefSchema>;

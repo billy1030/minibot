@@ -640,12 +640,21 @@ app.get("/api/config", (req, res) => {
     ? (config.voice.apiKey.length > 8 ? `${config.voice.apiKey.slice(0, 6)}...****` : "****")
     : "";
 
+  const safeModels = (config.models || []).map((m) => ({
+    ...m,
+    apiKey: m.apiKey
+      ? (m.apiKey.length > 8 ? `${m.apiKey.slice(0, 6)}...****` : "****")
+      : "",
+  }));
+
   const safeConfig = {
     ...config,
     llm: {
       ...config.llm,
       apiKey: maskedKey,
     },
+    models: safeModels,
+    activeModelId: config.activeModelId,
     voice: {
       baseUrl: config.voice?.baseUrl || "https://api.minimaxi.com/v1",
       apiKey: maskedVoiceKey,
@@ -664,6 +673,35 @@ app.get("/api/config", (req, res) => {
 app.post("/api/config", requireAuth, async (req, res) => {
   try {
     const updates = req.body;
+
+    if (updates.models && Array.isArray(updates.models)) {
+      const existingModelsMap = new Map<string, any>(
+        (config.models || []).map((m) => [m.id, m])
+      );
+      config.models = updates.models.map((m: any) => {
+        const existing = existingModelsMap.get(m.id);
+        const isMasked = m.apiKey?.includes("...****") || m.apiKey === "****";
+        return {
+          ...m,
+          apiKey: isMasked ? (existing?.apiKey || "") : (m.apiKey ?? ""),
+        };
+      });
+    }
+
+    if (updates.activeModelId) {
+      config.activeModelId = updates.activeModelId;
+      const matchedProfile = (config.models || []).find((m) => m.id === updates.activeModelId);
+      if (matchedProfile) {
+        config.llm = {
+          baseUrl: matchedProfile.baseUrl || config.llm.baseUrl,
+          apiKey: matchedProfile.apiKey || config.llm.apiKey,
+          model: matchedProfile.model || config.llm.model,
+          temperature: matchedProfile.temperature ?? config.llm.temperature,
+          maxTokens: matchedProfile.maxTokens ?? config.llm.maxTokens,
+        };
+      }
+    }
+
     if (updates.llm) {
       const isMasked = updates.llm.apiKey?.includes("...****") || updates.llm.apiKey === "****";
       const newApiKey = isMasked ? config.llm.apiKey : updates.llm.apiKey;
@@ -673,6 +711,21 @@ app.post("/api/config", requireAuth, async (req, res) => {
         ...updates.llm,
         apiKey: newApiKey || config.llm.apiKey,
       };
+
+      // Also update currently active model profile in models array if present
+      if (config.activeModelId && config.models) {
+        const idx = config.models.findIndex((m) => m.id === config.activeModelId);
+        if (idx !== -1) {
+          config.models[idx] = {
+            ...config.models[idx],
+            baseUrl: config.llm.baseUrl,
+            apiKey: config.llm.apiKey,
+            model: config.llm.model,
+            temperature: config.llm.temperature,
+            maxTokens: config.llm.maxTokens,
+          };
+        }
+      }
     }
     if (updates.voice) {
       const isMasked = updates.voice.apiKey?.includes("...****") || updates.voice.apiKey === "****";
@@ -709,6 +762,13 @@ app.post("/api/config", requireAuth, async (req, res) => {
       ? (config.voice.apiKey.length > 8 ? `${config.voice.apiKey.slice(0, 6)}...****` : "****")
       : "";
 
+    const safeModels = (config.models || []).map((m) => ({
+      ...m,
+      apiKey: m.apiKey
+        ? (m.apiKey.length > 8 ? `${m.apiKey.slice(0, 6)}...****` : "****")
+        : "",
+    }));
+
     res.json({
       success: true,
       config: {
@@ -717,6 +777,8 @@ app.post("/api/config", requireAuth, async (req, res) => {
           ...config.llm,
           apiKey: maskedKey,
         },
+        models: safeModels,
+        activeModelId: config.activeModelId,
         voice: {
           ...config.voice,
           apiKey: maskedVoiceKey,
@@ -895,16 +957,45 @@ app.post("/api/llm/completions", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/llm/test", requireAuth, async (req, res) => {
+app.all("/api/llm/test", async (req, res) => {
   try {
-    const client = new LLMClient(config.llm);
+    const payload = req.method === "POST" ? req.body : req.query;
+    let targetLLM = { ...config.llm };
+
+    if (payload?.modelId && Array.isArray(config.models)) {
+      const profile = config.models.find((m) => m.id === payload.modelId);
+      if (profile) {
+        targetLLM = {
+          baseUrl: profile.baseUrl || targetLLM.baseUrl,
+          apiKey: profile.apiKey || targetLLM.apiKey,
+          model: profile.model || targetLLM.model,
+          temperature: profile.temperature ?? targetLLM.temperature,
+          maxTokens: profile.maxTokens ?? targetLLM.maxTokens,
+        };
+      }
+    } else if (payload?.baseUrl || payload?.model) {
+      targetLLM = {
+        baseUrl: payload.baseUrl || targetLLM.baseUrl,
+        apiKey: payload.apiKey && !payload.apiKey.includes("...****") && payload.apiKey !== "****" ? payload.apiKey : targetLLM.apiKey,
+        model: payload.model || targetLLM.model,
+        temperature: parseFloat(payload.temperature) || targetLLM.temperature,
+        maxTokens: parseInt(payload.maxTokens, 10) || targetLLM.maxTokens,
+      };
+    }
+
+    const client = new LLMClient(targetLLM);
     const result = await client.createChatCompletion([
       { role: "user", content: "Reply with 'LLM connection successful'" },
     ]);
     const message = result.choices[0]?.message?.content || "";
-    res.json({ success: true, message, model: config.llm.model });
+    res.json({ success: true, message, model: targetLLM.model, baseUrl: targetLLM.baseUrl });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error("[LLM Test Connection Error]:", err?.message || err);
+    res.status(500).json({
+      success: false,
+      error: err?.message || "Failed to establish LLM connection",
+      details: err?.error || err?.status || undefined,
+    });
   }
 });
 
@@ -1010,7 +1101,7 @@ function getDocManager(req: express.Request): DocumentManager {
 // 4. Chat with Streaming Events (SSE) and Multi-Turn History, Document Attachment & Workspace Support
 app.post("/api/chat", requireAuth, async (req, res) => {
   const { userNumber } = getAuthContext(req);
-  const { message, history, attachedDocHashes, sessionFile, workspace, enableThinking = true, maxIterations } = req.body;
+  const { message, history, attachedDocHashes, sessionFile, workspace, enableThinking = true, maxIterations, modelId, model } = req.body;
   if (!message) {
     return res.status(400).json({ error: "Message is required." });
   }
@@ -1036,6 +1127,38 @@ app.post("/api/chat", requireAuth, async (req, res) => {
 
   try {
     const currentConfig = loadConfig();
+
+    // Resolve model profile if modelId or model override is requested
+    if (modelId && Array.isArray(currentConfig.models)) {
+      const matchedProfile = currentConfig.models.find((m) => m.id === modelId);
+      if (matchedProfile) {
+        currentConfig.llm = {
+          baseUrl: matchedProfile.baseUrl || currentConfig.llm.baseUrl,
+          apiKey: matchedProfile.apiKey || currentConfig.llm.apiKey,
+          model: matchedProfile.model || currentConfig.llm.model,
+          temperature: matchedProfile.temperature ?? currentConfig.llm.temperature,
+          maxTokens: matchedProfile.maxTokens ?? currentConfig.llm.maxTokens,
+        };
+      }
+    } else if (model) {
+      // Find matching profile by model name if exists, else keep current config base
+      const matchedByName = Array.isArray(currentConfig.models)
+        ? currentConfig.models.find((m) => m.model === model)
+        : null;
+      if (matchedByName) {
+        currentConfig.llm = {
+          baseUrl: matchedByName.baseUrl || currentConfig.llm.baseUrl,
+          apiKey: matchedByName.apiKey || currentConfig.llm.apiKey,
+          model: matchedByName.model,
+          temperature: matchedByName.temperature ?? currentConfig.llm.temperature,
+          maxTokens: matchedByName.maxTokens ?? currentConfig.llm.maxTokens,
+        };
+      } else {
+        currentConfig.llm.model = model;
+      }
+    }
+
+    const effectiveModel = currentConfig.llm.model;
     const orchestrator = new LoopOrchestrator(currentConfig, mcpManager);
     const docManager = getDocManager(req);
 
@@ -1049,7 +1172,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
       message,
       {
         onStepStart: (iteration) => {
-          sendEvent("step_start", { iteration });
+          sendEvent("step_start", { iteration, model: effectiveModel });
         },
         onSkillActivated: (skillNames) => {
           console.log(`[Loop Server] ✨ Skills dynamically activated:`, skillNames);
@@ -1111,7 +1234,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
                 workspace: workspace || "default",
                 userNumber,
                 userPrompt: message,
-                model: config.llm.model,
+                model: effectiveModel,
                 iterations,
                 toolCalls: sessionToolCalls,
                 finalAnswer: answer,
@@ -1134,6 +1257,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
             workspace: workspace || "default",
             activeSkills: finalSkills,
             limitReached: Boolean(limitReached),
+            model: effectiveModel,
           });
           if (!res.writableEnded) {
             res.write("event: end\ndata: {}\n\n");
