@@ -2,6 +2,8 @@ import React, { useMemo, useEffect, useRef } from "react";
 import { marked } from "marked";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { SvgDiagramViewer } from "./SvgDiagramViewer";
+import { DrawioViewer } from "./DrawioViewer";
+import { isDrawioXml } from "../utils/drawioHelper";
 
 // Configure marked options for clean GitHub-flavored markdown
 marked.setOptions({
@@ -15,7 +17,7 @@ interface MarkdownRendererProps {
 }
 
 interface ContentSegment {
-  type: 'markdown' | 'mermaid' | 'svg';
+  type: 'markdown' | 'mermaid' | 'svg' | 'drawio';
   content: string;
   html?: string;
 }
@@ -31,6 +33,27 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     if (clean.startsWith("```markdown") && clean.endsWith("```")) {
       clean = clean.slice(11, -3).trim();
     }
+
+    // Isolate Draw.io diagram blocks (````drawio, ````draw.io, ````xml with mxfile, or standalone <mxfile> tags)
+    const drawioBlocks: string[] = [];
+
+    // 1. Capture fenced drawio/draw.io blocks or xml blocks containing mxfile/mxGraphModel
+    clean = clean.replace(/`{3,}(?:drawio|draw\.io|xml)?\s*([\s\S]*?`{3,}|$)/gi, (match, innerContent) => {
+      const trimmedInner = innerContent.replace(/`{3,}$/, '').trim();
+      if (isDrawioXml(trimmedInner)) {
+        const token = `MINIBOTDRAWIOBLOCKTOKEN${drawioBlocks.length}ENDTOKEN`;
+        drawioBlocks.push(trimmedInner);
+        return `\n\n${token}\n\n`;
+      }
+      return match;
+    });
+
+    // 2. Capture standalone <mxfile>...</mxfile> blocks
+    clean = clean.replace(/(<mxfile[\s\S]*?<\/mxfile>)/gi, (match) => {
+      const token = `MINIBOTDRAWIOBLOCKTOKEN${drawioBlocks.length}ENDTOKEN`;
+      drawioBlocks.push(match.trim());
+      return `\n\n${token}\n\n`;
+    });
 
     // Isolate SVG blocks (both inside ```svg/xml/html fences and standalone <svg>...</svg>)
     const svgBlocks: string[] = [];
@@ -70,14 +93,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
       return `\n\n${token}\n\n`;
     });
 
-    // Helper: split a text into markdown and svg segments based on SVG tokens
-    const splitMarkdownAndSvg = (text: string): ContentSegment[] => {
+    // Helper: split a text into markdown, svg, and drawio segments based on tokens
+    const splitTokensAndMarkdown = (text: string): ContentSegment[] => {
       const subSegments: ContentSegment[] = [];
-      const SVG_TOKEN_REGEX = /MINIBOTSVGBLOCKTOKEN(\d+)ENDTOKEN/g;
+      const TOKEN_REGEX = /MINIBOT(SVG|DRAWIO)BLOCKTOKEN(\d+)ENDTOKEN/g;
       let lastIdx = 0;
       let m: RegExpExecArray | null;
 
-      while ((m = SVG_TOKEN_REGEX.exec(text)) !== null) {
+      while ((m = TOKEN_REGEX.exec(text)) !== null) {
         if (m.index > lastIdx) {
           const mdPiece = text.slice(lastIdx, m.index);
           if (mdPiece.trim()) {
@@ -90,11 +113,18 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           }
         }
 
-        const blockIdx = parseInt(m[1], 10);
-        if (svgBlocks[blockIdx] !== undefined) {
+        const tokenType = m[1]; // 'SVG' or 'DRAWIO'
+        const blockIdx = parseInt(m[2], 10);
+
+        if (tokenType === 'SVG' && svgBlocks[blockIdx] !== undefined) {
           subSegments.push({
             type: 'svg',
             content: svgBlocks[blockIdx],
+          });
+        } else if (tokenType === 'DRAWIO' && drawioBlocks[blockIdx] !== undefined) {
+          subSegments.push({
+            type: 'drawio',
+            content: drawioBlocks[blockIdx],
           });
         }
 
@@ -125,7 +155,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
       // Process preceding text
       if (match.index > lastIndex) {
         const textBefore = clean.slice(lastIndex, match.index);
-        result.push(...splitMarkdownAndSvg(textBefore));
+        result.push(...splitTokensAndMarkdown(textBefore));
       }
 
       // Push mermaid segment
@@ -140,12 +170,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     // Process trailing text
     if (lastIndex < clean.length) {
       const textAfter = clean.slice(lastIndex);
-      result.push(...splitMarkdownAndSvg(textAfter));
+      result.push(...splitTokensAndMarkdown(textAfter));
     }
 
     // Fallback if no segments produced but clean text exists
     if (result.length === 0 && clean) {
-      result.push(...splitMarkdownAndSvg(clean));
+      result.push(...splitTokensAndMarkdown(clean));
     }
 
     return result;
@@ -191,8 +221,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     });
   }, [segments]);
 
-  // If no interactive blocks (mermaid or svg) found, render single standard container
-  const hasInteractiveBlocks = segments.some(s => s.type === 'mermaid' || s.type === 'svg');
+  // If no interactive blocks (mermaid, svg, or drawio) found, render single standard container
+  const hasInteractiveBlocks = segments.some(s => s.type === 'mermaid' || s.type === 'svg' || s.type === 'drawio');
 
   if (!hasInteractiveBlocks) {
     const singleHtml = segments.map(s => s.html || s.content).join('');
@@ -222,6 +252,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
             <SvgDiagramViewer
               key={`svg-${idx}`}
               svgContent={seg.content}
+              index={idx}
+            />
+          );
+        }
+        if (seg.type === 'drawio') {
+          return (
+            <DrawioViewer
+              key={`drawio-${idx}`}
+              xml={seg.content}
               index={idx}
             />
           );
