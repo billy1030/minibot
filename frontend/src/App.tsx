@@ -5609,9 +5609,13 @@ export function App() {
                             <button
                               type="button"
                               onClick={() => {
-                                const title = m.content.slice(0, 40).replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, "-") || "Answer";
-                                const html = generateStandaloneExportHtml(m.content, title);
-                                downloadHtmlFile(html, `${title}.html`);
+                                const cleanTitle = m.content
+                                  .replace(/^[#\s\-_*>`~]+/, "")
+                                  .slice(0, 45)
+                                  .replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]+/g, "_")
+                                  .replace(/^_+|_+$/g, "") || "Answer";
+                                const html = generateStandaloneExportHtml(m.content, cleanTitle);
+                                downloadHtmlFile(html, `${cleanTitle}.html`);
                               }}
                               title="Export this specific answer as standalone HTML"
                               style={{

@@ -773,6 +773,7 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
 
     var codePanel = wrapper.querySelector('.diagram-code-panel');
     var copyBtn = wrapper.querySelector('[data-action="copy"]');
+    var downloadSvgBtn = wrapper.querySelector('[data-action="download-svg"]');
     var viewBtn = wrapper.querySelector('[data-action="view"]');
     var zoomOutBtn = wrapper.querySelector('[data-action="zoom-out"]');
     var resetBtn = wrapper.querySelector('[data-action="reset"]');
@@ -788,6 +789,20 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
       panY = 0;
       if (resetBtn) resetBtn.textContent = '100%';
       applyTransform();
+    }
+
+    if (downloadSvgBtn) {
+      downloadSvgBtn.onclick = function() {
+        var svgBlob = new Blob([rawCode], { type: 'image/svg+xml;charset=utf-8' });
+        var blobUrl = URL.createObjectURL(svgBlob);
+        var dlLink = document.createElement('a');
+        dlLink.href = blobUrl;
+        dlLink.download = 'diagram.svg';
+        document.body.appendChild(dlLink);
+        dlLink.click();
+        document.body.removeChild(dlLink);
+        URL.revokeObjectURL(blobUrl);
+      };
     }
 
     if (copyBtn) {
@@ -1023,6 +1038,9 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
       + '<div class="diagram-tools-group">'
       + (isDrawio
           ? '<a href="' + editUrl + '" target="_blank" rel="noopener noreferrer" class="diag-btn" style="text-decoration:none;color:#10b981;font-weight:700;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Edit in Diagrams.net</a>'
+          : '')
+      + (isSvg
+          ? '<button class="diag-btn" data-action="download-svg" style="color:#eb6c36;font-weight:700;" title="Download standalone SVG file"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download SVG</button>'
           : '')
       + '<button class="diag-btn" data-action="view"><span style="color:#4f46e5;font-weight:bold;font-family:monospace;">&lt;&gt;</span> Source</button>'
       + '<button class="diag-btn" data-action="copy"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>'
