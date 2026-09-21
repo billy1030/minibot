@@ -18,3 +18,6 @@ workspace/
 patch_sls_subgraph.mjs
 .claude/
 agent/
+
+tools/temp-*.html
+tools/output-*.html
