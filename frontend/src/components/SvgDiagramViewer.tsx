@@ -26,10 +26,10 @@ export interface SvgThemeOption {
 }
 
 export const SVG_THEME_OPTIONS: SvgThemeOption[] = [
-  { id: "dark-slate", name: "🌙 Dark Slate (Default)", dotColor: "#38bdf8", description: "Executive dark slate canvas & neon accents" },
+  { id: "original", name: "Original Source (Default)", dotColor: "#94a3b8", description: "Preserve raw generated SVG colors" },
   { id: "clean-light", name: "☀️ Clean Light", dotColor: "#2563eb", description: "Pure white canvas & high-contrast navy" },
+  { id: "dark-slate", name: "🌙 Dark Slate", dotColor: "#38bdf8", description: "Executive dark slate canvas & neon accents" },
   { id: "warm-paper", name: "📜 Warm Paper", dotColor: "#b45309", description: "Ivory cream canvas & warm editorial tones" },
-  { id: "original", name: "Original Source", dotColor: "#94a3b8", description: "Preserve raw generated SVG colors" },
 ];
 
 const MIN_ZOOM = 0.4;
@@ -224,7 +224,7 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [activeTheme, setActiveTheme] = useState<SvgThemeMode>("dark-slate");
+  const [activeTheme, setActiveTheme] = useState<SvgThemeMode>("original");
   const [showThemeMenu, setShowThemeMenu] = useState<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
