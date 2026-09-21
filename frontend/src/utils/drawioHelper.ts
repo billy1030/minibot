@@ -69,28 +69,37 @@ export async function unpackDrawioDiagram(compressedBase64: string): Promise<str
 }
 
 /**
- * Extracts and unpacks the inner XML model if it is compressed inside a <diagram> tag.
+ * Extracts and unpacks the inner XML model if it is compressed inside a <diagram> tag,
+ * and fixes double-escaped HTML in node values so Draw.io formats them as rich HTML instead of printing raw <b> tags.
  */
 export async function extractDrawioXml(rawContent: string): Promise<string> {
   if (!rawContent) return '';
-  const trimmed = rawContent.trim();
+  let trimmed = rawContent.trim();
 
-  // If it already has uncompressed mxGraphModel, return as-is
-  if (trimmed.includes('<mxGraphModel')) {
-    return trimmed;
-  }
-
-  // Check if there is a <diagram>...</diagram> tag with compressed payload
+  // 1. Check if there is a <diagram>...</diagram> tag with compressed payload
   const match = /<diagram[^>]*>([\s\S]*?)<\/diagram>/i.exec(trimmed);
   if (match && match[1]) {
     const innerContent = match[1].trim();
     if (!innerContent.startsWith('<')) {
       const decompressed = await unpackDrawioDiagram(innerContent);
       if (decompressed && decompressed.includes('<mxGraphModel')) {
-        return decompressed;
+        trimmed = decompressed;
       }
     }
   }
+
+  // 2. Fix double-escaped HTML inside value="..." (e.g. &lt;b style=&quot;...&gt;)
+  // If a value contains escaped HTML tags like &lt;b or &lt;span, unescape them so Draw.io renders them formatted
+  trimmed = trimmed.replace(/value="([^"]*)"/g, (match, val) => {
+    if (val.includes('&lt;') && (val.includes('&lt;b') || val.includes('&lt;span') || val.includes('&lt;div') || val.includes('&lt;font'))) {
+      const unescapedVal = val
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, "'");
+      return `value="${unescapedVal}"`;
+    }
+    return match;
+  });
 
   return trimmed;
 }
