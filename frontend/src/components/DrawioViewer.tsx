@@ -451,25 +451,37 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
           </div>
         ) : (
           <div
-            className="w-full h-full flex items-center justify-center transition-transform origin-center duration-75"
             style={{
-              transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-              pointerEvents: isDragging ? 'none' : 'auto',
+              position: 'relative',
+              width: '100%',
+              height: '100%',
+              overflow: 'hidden',
             }}
           >
-            <iframe
-              ref={iframeRef}
-              title={`drawio-viewer-${index}`}
-              src="https://embed.diagrams.net/?embed=1&ui=min&spin=1&proto=json&noSaveBtn=1&noExitBtn=1&chrome=0"
+            <div
               style={{
                 width: '100%',
                 height: '100%',
-                minHeight: isFullscreen ? '100%' : '540px',
-                border: 'none',
-                opacity: iframeLoaded ? 1 : 0.7,
-                transition: 'opacity 0.2s ease',
+                transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+                transformOrigin: 'center center',
+                transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+                pointerEvents: isDragging ? 'none' : 'auto',
               }}
-            />
+            >
+              <iframe
+                ref={iframeRef}
+                title={`drawio-viewer-${index}`}
+                src="https://embed.diagrams.net/?embed=1&ui=min&spin=1&proto=json&noSaveBtn=1&noExitBtn=1&chrome=0"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  display: 'block',
+                  opacity: iframeLoaded ? 1 : 0.7,
+                  transition: 'opacity 0.2s ease',
+                }}
+              />
+            </div>
           </div>
         )}
       </div>
