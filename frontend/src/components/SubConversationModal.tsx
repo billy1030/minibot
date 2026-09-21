@@ -698,14 +698,17 @@ export function SubConversationModal({
 
             {/* Scrollable Turn Content View */}
             <div
+              className="modal-turn-scroll"
               style={{
                 flex: 1,
-                overflowY: "auto",
+                overflowY: "scroll",
                 minHeight: 0,
                 padding: "20px",
                 display: "flex",
                 flexDirection: "column",
                 gap: 18,
+                scrollbarWidth: "thin",
+                scrollbarColor: "#94a3b8 rgba(0, 0, 0, 0.05)",
               }}
             >
               {currentTurn ? (
