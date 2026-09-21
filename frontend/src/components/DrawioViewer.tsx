@@ -221,34 +221,52 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
   }, [isFullscreen]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        margin: "1.25rem 0",
-        borderRadius: 12,
-        border: "1px solid var(--border-color, #e2e8f0)",
-        background: "var(--bg-secondary, #ffffff)",
-        boxShadow: "0 4px 20px rgba(0, 0, 0, 0.06)",
-        overflow: "hidden",
-        position: isFullscreen ? "fixed" : "relative",
-        top: isFullscreen ? 0 : undefined,
-        left: isFullscreen ? 0 : undefined,
-        width: isFullscreen ? "100vw" : "100%",
-        height: isFullscreen ? "100vh" : "auto",
-        zIndex: isFullscreen ? 99999 : 10,
-        display: "flex",
-        flexDirection: "column",
-        transition: "border-color 0.2s ease",
-      }}
-    >
-      {/* 🌟 Unified SLS Design Topbar */}
-      <div className="mermaid-topbar">
-        <div className="mermaid-topbar-left">
-          <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-          <span style={{ fontWeight: 700 }}>
-            DRAW.IO DIAGRAM {index > 0 ? `#${index + 1}` : ''}
-          </span>
-        </div>
+    <>
+      {/* 🌟 Backdrop Overlay when expanded */}
+      {isFullscreen && (
+        <div
+          onClick={() => setIsFullscreen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99998,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+          }}
+        />
+      )}
+
+      <div
+        ref={containerRef}
+        style={{
+          margin: isFullscreen ? 0 : "1.25rem 0",
+          borderRadius: 16,
+          border: "1px solid var(--border-color, #e2e8f0)",
+          background: "var(--bg-secondary, #ffffff)",
+          boxShadow: isFullscreen ? "0 25px 50px -12px rgba(0, 0, 0, 0.35)" : "0 4px 20px rgba(0, 0, 0, 0.06)",
+          overflow: "hidden",
+          position: isFullscreen ? "fixed" : "relative",
+          top: isFullscreen ? "50%" : undefined,
+          left: isFullscreen ? "50%" : undefined,
+          transform: isFullscreen ? "translate(-50%, -50%)" : undefined,
+          width: isFullscreen ? "88vw" : "100%",
+          maxWidth: isFullscreen ? "1400px" : "100%",
+          height: isFullscreen ? "86vh" : "auto",
+          zIndex: isFullscreen ? 99999 : 10,
+          display: "flex",
+          flexDirection: "column",
+          transition: isFullscreen ? "none" : "border-color 0.2s ease",
+        }}
+      >
+        {/* 🌟 Unified SLS Design Topbar */}
+        <div className="mermaid-topbar">
+          <div className="mermaid-topbar-left">
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span style={{ fontWeight: 700 }}>
+              {isFullscreen ? 'DRAW.IO EXPANDED VIEW' : `DRAW.IO DIAGRAM ${index > 0 ? `#${index + 1}` : ''}`}
+            </span>
+          </div>
 
         {/* Action Controls matching SLS Pill & Button standards */}
         <div className="mermaid-topbar-right">
@@ -420,7 +438,7 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
         style={{
           position: 'relative',
           width: '100%',
-          height: isFullscreen ? 'calc(100vh - 45px)' : '540px',
+          height: isFullscreen ? 'calc(86vh - 45px)' : '540px',
           overflow: 'hidden',
           background: 'var(--bg-primary, #f8fafc)',
           cursor: isDragging ? 'grabbing' : 'grab',
@@ -456,5 +474,6 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({ xml, index = 0 }) =>
         )}
       </div>
     </div>
+    </>
   );
 };
