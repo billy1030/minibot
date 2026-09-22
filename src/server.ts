@@ -1720,9 +1720,51 @@ app.get("/api/workspace/files/:filename", (req, res) => {
       return res.status(404).json({ success: false, error: `File "${safeFilename}" not found in workspace.` });
     }
 
-    // Explicitly set headers for robust browser attachment download
-    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(safeFilename)}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`);
-    res.sendFile(targetPath);
+    // Comprehensive MIME type mapping for seamless browser preview or attachment download
+    const ext = path.extname(safeFilename).toLowerCase();
+    const mimeMap: Record<string, string> = {
+      ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ".xls": "application/vnd.ms-excel",
+      ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".doc": "application/msword",
+      ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      ".pdf": "application/pdf",
+      ".html": "text/html; charset=utf-8",
+      ".htm": "text/html; charset=utf-8",
+      ".md": "text/markdown; charset=utf-8",
+      ".txt": "text/plain; charset=utf-8",
+      ".json": "application/json; charset=utf-8",
+      ".csv": "text/csv; charset=utf-8",
+      ".svg": "image/svg+xml; charset=utf-8",
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".gif": "image/gif",
+      ".webp": "image/webp",
+      ".zip": "application/zip",
+      ".tar": "application/x-tar",
+      ".gz": "application/gzip",
+      ".py": "text/x-python; charset=utf-8",
+      ".js": "application/javascript; charset=utf-8",
+      ".ts": "text/plain; charset=utf-8",
+    };
+
+    const contentType = mimeMap[ext] || "application/octet-stream";
+    res.setHeader("Content-Type", contentType);
+
+    // Optional inline preview for browser-renderable documents (html, pdf, images, markdown)
+    const isInline = req.query.inline === "true" || req.query.preview === "true";
+    if (isInline && [".html", ".htm", ".pdf", ".png", ".jpg", ".jpeg", ".svg", ".txt", ".md"].includes(ext)) {
+      res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(safeFilename)}"`);
+      return res.sendFile(targetPath);
+    }
+
+    return res.download(targetPath, safeFilename, (err) => {
+      if (err && !res.headersSent) {
+        console.error(`[Download Error]:`, err.message);
+        res.status(500).json({ success: false, error: err.message });
+      }
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
