@@ -7292,7 +7292,7 @@ export function App() {
         >
           <div
             style={{
-              width: "min(920px, 92vw)",
+              width: "min(1020px, 94vw)",
               height: "min(720px, 86vh)",
               maxHeight: "min(720px, 86vh)",
               minHeight: "min(600px, 80vh)",
@@ -7744,7 +7744,7 @@ export function App() {
 
               {/* TAB 2: System Prompt */}
               {configActiveTab === "system_prompt" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 960 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 1060 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <label style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 6 }}>
                       <Brain size={16} color="var(--accent, #0284c7)" /> Base System Prompt
@@ -7784,7 +7784,7 @@ export function App() {
 
               {/* TAB 3: SVG & Color Palette */}
               {configActiveTab === "svg_palette" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 960 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 1060 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <label style={{ fontSize: 13, fontWeight: 700, color: "#0284c7", display: "flex", alignItems: "center", gap: 6 }}>
@@ -7996,7 +7996,7 @@ export function App() {
 
               {/* TAB 4: AI Skills & Protocols */}
               {configActiveTab === "ai_skills" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 960 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 1060 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <label style={{ fontSize: 13, fontWeight: 700, color: "var(--accent, #0284c7)", display: "flex", alignItems: "center", gap: 6 }}>
@@ -8087,7 +8087,7 @@ export function App() {
 
               {/* TAB 5: Multi-Agent (AGENTS.md) */}
               {configActiveTab === "agents_rules" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 960 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 1060 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <label style={{ fontSize: 13, fontWeight: 700, color: "#8b5cf6", display: "flex", alignItems: "center", gap: 6 }}>
