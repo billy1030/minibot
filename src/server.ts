@@ -1224,6 +1224,10 @@ app.post("/api/chat", requireAuth, async (req, res) => {
             });
           }
         },
+        onSubAgentEvent: (event) => {
+          console.log(`[Loop Server] 🤖 SubAgent (${event.role}) event: ${event.type}`);
+          sendEvent("subagent_event", event);
+        },
         onComplete: (answer, iterations, activeSkills, limitReached) => {
           const finalSkills = activeSkills && activeSkills.length > 0 ? activeSkills : activatedSkillNames;
           let savedFile = sessionFile;

@@ -678,6 +678,34 @@ export const BUILTIN_INPROCESS_TOOLS: DiscoveredTool[] = [
       required: ["code"],
     },
   },
+  {
+    serverName: "web-search",
+    name: "delegate_task",
+    description: "Delegate an isolated sub-task to a specialized sub-agent (researcher, coder, designer, reviewer, or general). The sub-agent executes in its own isolated context with domain-scoped tools, preventing context bloat and instruction confusion, and returns a concise, synthesized report.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        role: {
+          type: "string",
+          enum: ["researcher", "coder", "designer", "reviewer", "general"],
+          description: "Specialized role of the sub-agent. 'researcher' for web/doc search, 'coder' for python UV/data scripts, 'designer' for SVG diagrams, 'reviewer' for verification, 'general' for general sub-tasks.",
+        },
+        taskInstruction: {
+          type: "string",
+          description: "Clear, comprehensive instructions describing what the sub-agent should accomplish and report back.",
+        },
+        contextSnippet: {
+          type: "string",
+          description: "Optional reference data, code snippets, or parameters extracted from previous steps to pass to the sub-agent.",
+        },
+        maxIterations: {
+          type: "number",
+          description: "Optional iteration limit for this sub-agent (default: 6-12 depending on role).",
+        },
+      },
+      required: ["role", "taskInstruction"],
+    },
+  },
 ];
 
 export async function executeInProcessTool(
@@ -751,6 +779,32 @@ export async function executeInProcessTool(
       return await minimaxTextToSpeech(String(args?.text || ""), args?.voice);
     case "minimax_generate_music":
       return await minimaxGenerateMusic(String(args?.prompt || ""));
+    case "delegate_task": {
+      if (!mcpManager) return "MCP manager instance not provided to delegate_task.";
+      const { SubAgentExecutor } = await import("../engine/sub-agent-executor.js");
+      const loopConfig = (context as any)?.loopConfig;
+      if (!loopConfig) return "System loop configuration not found for sub-agent delegation.";
+      
+      const parentCallbacks = (context as any)?.parentCallbacks;
+      const depth = Number((context as any)?.depth || 0);
+
+      const result = await SubAgentExecutor.runSubAgent(
+        {
+          role: args?.role || "general",
+          taskInstruction: String(args?.taskInstruction || ""),
+          contextSnippet: args?.contextSnippet ? String(args.contextSnippet) : undefined,
+          workspace: activeWorkspace,
+          userNumber: activeUserNumber,
+          maxIterations: args?.maxIterations ? Number(args.maxIterations) : undefined,
+        },
+        loopConfig,
+        mcpManager,
+        parentCallbacks,
+        depth
+      );
+
+      return `[Sub-Agent (${args?.role || "general"}) Output]:\n${result.answer}`;
+    }
     default:
       return null;
   }

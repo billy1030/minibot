@@ -170,7 +170,7 @@ export class MCPClientManager {
   /**
    * Calls a tool by name on the corresponding MCP server
    */
-  async executeTool(name: string, args: Record<string, any>, context?: { workspace?: string; userNumber?: string }): Promise<string> {
+  async executeTool(name: string, args: Record<string, any>, context?: { workspace?: string; userNumber?: string; [key: string]: any }): Promise<string> {
     const toolDef = this.tools.get(name);
     if (!toolDef) {
       throw new Error(`Tool "${name}" is not registered on any active MCP server.`);

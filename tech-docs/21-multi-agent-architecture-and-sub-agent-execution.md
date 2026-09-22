@@ -74,10 +74,10 @@ The chosen multi-agent paradigm encapsulates specialized sub-agents into callabl
 | Sub-Agent Role | Primary Responsibility | Dedicated Tool White-list | Guardrail (Max Iterations) |
 |---|---|---|---|
 | `researcher` | Fact-checking, deep web browsing, document reading, summarization | `web_search`, `fetch_page`, `download_remote_file`, `read_office_document` | 8 |
-| `coder` | Data calculation, script execution, file manipulation, unit testing | `run_python_code`, `create_excel_spreadsheet` | 12 |
-| `bigfix_operator` | Endpoint management, fixlet deployment, BigFix Relevance queries | `bigfix_*` (14 enterprise tools) | 10 |
+| `coder` | Data calculation, script execution, file manipulation, unit testing | `run_python_code`, `create_excel_spreadsheet`, `read_office_document` | 12 |
 | `designer` | Technical architecture posters, SVG vector layout, diagrammatic state machines | Pure generation, no execution tools needed | 4 |
-| `reviewer` | Quality assurance, code review, verification against prompt requirements | Document/file reading tools | 5 |
+| `reviewer` | Quality assurance, code review, verification against prompt requirements | Document/file reading tools, web_search | 5 |
+| `general` | General sub-tasks with non-delegation toolset | All MCP tools (except `delegate_task`) | 8 |
 
 ### 3.2 Context Isolation & Observation Hygiene
 When a sub-agent executes:

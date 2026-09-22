@@ -10,6 +10,20 @@ export interface LoopEventCallbacks {
   onLLMResponse?: (response: OpenAI.Chat.Completions.ChatCompletion) => void;
   onToolCall?: (toolName: string, args: any, serverName?: string) => void;
   onToolResult?: (toolName: string, result: string, serverName?: string) => void;
+  onSubAgentEvent?: (event: {
+    type: "subagent_start" | "subagent_step" | "subagent_tool_call" | "subagent_tool_result" | "subagent_complete" | "subagent_error";
+    role: string;
+    instruction?: string;
+    iteration?: number;
+    toolName?: string;
+    args?: any;
+    result?: string;
+    serverName?: string;
+    answer?: string;
+    iterations?: number;
+    error?: string;
+    timestamp: number;
+  }) => void;
   onComplete?: (finalAnswer: string, iterations: number, activeSkills?: string[], limitReached?: boolean) => void;
   onError?: (error: Error) => void;
 }
@@ -36,7 +50,8 @@ export class LoopOrchestrator {
     enableThinking: boolean = true,
     workspace: string = "default",
     userNumber: string = "00000",
-    maxIterationsOverride?: number
+    maxIterationsOverride?: number,
+    depth: number = 0
   ): Promise<{ answer: string; iterations: number; history: OpenAI.Chat.Completions.ChatCompletionMessageParam[]; activeSkills?: string[]; limitReached?: boolean }> {
     // 1. Build initial system message combining system prompt, attached docs, and AI skills
     const systemPromptParts = [this.config.prompts.systemPrompt];
@@ -158,7 +173,13 @@ export class LoopOrchestrator {
             // Execute via MCP
             let toolOutput = "";
             try {
-              toolOutput = await this.mcpManager.executeTool(toolName, parsedArgs, { workspace, userNumber });
+              toolOutput = await this.mcpManager.executeTool(toolName, parsedArgs, {
+                workspace,
+                userNumber,
+                depth,
+                parentCallbacks: callbacks,
+                loopConfig: this.config,
+              });
             } catch (execErr: any) {
               toolOutput = `[Tool Execution Error]: ${execErr.message}`;
             }
