@@ -106,7 +106,8 @@ export class SubAgentExecutor {
 
     const role = args.role || "general";
     const rolePrompt = ROLE_SYSTEM_PROMPTS[role] || ROLE_SYSTEM_PROMPTS.general;
-    const maxIterations = args.maxIterations || (role === "coder" ? 12 : role === "researcher" ? 8 : 6);
+    // Set generous budget for all sub-agents: 20 iterations ensures ample room for self-debugging and deep retrieval
+    const maxIterations = args.maxIterations || 20;
 
     // Notify caller that a subagent started
     parentCallbacks?.onSubAgentEvent?.({

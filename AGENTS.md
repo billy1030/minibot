@@ -22,11 +22,11 @@ When the user explicitly or implicitly requests a specialized sub-agent (e.g., *
 
 | Role | Domain Focus | Available Scoped Tools | Iterations Limit |
 |---|---|---|---|
-| `researcher` | Deep web search, page reading, office doc parsing | `web_search`, `fetch_page`, `download_remote_file`, `read_office_document`, `minimax_search` | 8 |
-| `coder` | Python sandbox computing, data crunching, Excel generation | `run_python_code`, `create_excel_spreadsheet`, `read_office_document` | 12 |
-| `designer` | High-fidelity vector SVG infographics & architecture diagrams | Pure vector generation (standalone SVG adhering to Clean Light Theme) | 4 |
-| `reviewer` | Cross-checking formulas, logic verification, code auditing | `read_office_document`, `web_search` | 5 |
-| `general` | General sub-tasks requiring clean context isolation | All non-delegation tools | 8 |
+| `researcher` | Deep web search, page reading, office doc parsing | `web_search`, `fetch_page`, `download_remote_file`, `read_office_document`, `minimax_search` | 20 |
+| `coder` | Python sandbox computing, data crunching, Excel generation | `run_python_code`, `create_excel_spreadsheet`, `read_office_document` | 20 |
+| `designer` | High-fidelity vector SVG infographics & architecture diagrams | Pure vector generation (standalone SVG adhering to Clean Light Theme) | 20 |
+| `reviewer` | Cross-checking formulas, logic verification, code auditing | `read_office_document`, `web_search` | 20 |
+| `general` | General sub-tasks requiring clean context isolation | All non-delegation tools | 20 |
 
 ---
 

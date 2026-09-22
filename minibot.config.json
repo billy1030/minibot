@@ -21,13 +21,13 @@
     {
       "id": "model-1789962963460",
       "name": "gemini-3.8-flash-high",
+      "provider": "custom",
       "baseUrl": "http://127.0.0.1:8045/v1",
       "apiKey": "sk-970c6a9e1184491f9be4eef33382a713",
       "model": "gemini-3.8-flash-high",
       "temperature": 0.7,
       "maxTokens": 131072,
-      "description": "",
-      "provider": "custom"
+      "description": ""
     }
   ],
   "activeModelId": "current-default",
