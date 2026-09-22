@@ -214,7 +214,9 @@ export function App() {
   }, [loading, activeRunStartTime]);
 
   const [showConfig, setShowConfig] = useState(false);
-  const [configActiveTab, setConfigActiveTab] = useState<"model" | "system_prompt" | "svg_palette" | "ai_skills">("model");
+  const [configActiveTab, setConfigActiveTab] = useState<"model" | "system_prompt" | "svg_palette" | "ai_skills" | "agents_rules">("model");
+  const [agentsRulesContent, setAgentsRulesContent] = useState<string>("");
+  const [isSavingAgentsRules, setIsSavingAgentsRules] = useState<boolean>(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showVoiceApiKey, setShowVoiceApiKey] = useState(false);
   const [config, setConfig] = useState<ConfigState | null>(null);
@@ -1063,6 +1065,7 @@ export function App() {
         setShowConfig(true);
       }
       await fetchTools();
+      await fetchAgentsRules();
     } catch (err) {
       console.error("Failed to load config:", err);
     }
@@ -1153,6 +1156,40 @@ export function App() {
     }
   };
 
+  const fetchAgentsRules = async () => {
+    try {
+      const res = await fetch("/api/agents-rules", { credentials: "include" });
+      const data = await res.json();
+      if (data.success && typeof data.content === "string") {
+        setAgentsRulesContent(data.content);
+      }
+    } catch (err) {
+      console.error("Failed to fetch AGENTS.md rules:", err);
+    }
+  };
+
+  const saveAgentsRules = async () => {
+    try {
+      setIsSavingAgentsRules(true);
+      const res = await fetch("/api/agents-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ content: agentsRulesContent }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showAlert("AGENTS.md rules updated successfully!", "success", "Multi-Agent Rules Saved");
+      } else {
+        showAlert(data.error || "Failed to update AGENTS.md", "error", "Save Failed");
+      }
+    } catch (err: any) {
+      showAlert(`Network error saving AGENTS.md: ${err.message}`, "error", "Save Failed");
+    } finally {
+      setIsSavingAgentsRules(false);
+    }
+  };
+
   const saveConfig = async () => {
     if (!config) return;
 
@@ -1167,9 +1204,20 @@ export function App() {
         credentials: "include",
         body: JSON.stringify(payload),
       });
+      
+      // Also persist AGENTS.md if on agents_rules tab or if content loaded
+      if (agentsRulesContent) {
+        await fetch("/api/agents-rules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ content: agentsRulesContent }),
+        });
+      }
+
       if (res.ok) {
         setConfig(payload);
-        showAlert("Configuration and MCP servers saved and hot-reloaded successfully!", "success", "Configuration Saved");
+        showAlert("Configuration, MCP servers, and Multi-Agent rules saved successfully!", "success", "Configuration Saved");
         setShowConfig(false);
       }
     } catch (err: any) {
@@ -3765,7 +3813,10 @@ export function App() {
 
             {/* ⚙️ Parameters & AI Configuration Icon Button */}
             <button
-              onClick={() => setShowConfig(true)}
+              onClick={() => {
+                fetchAgentsRules();
+                setShowConfig(true);
+              }}
               title="Parameters & AI Configuration (Max Loop Iterations, Temperature, Max Tokens, Model, MCP)"
               style={{
                 width: 32,
@@ -7294,6 +7345,7 @@ export function App() {
                 { id: "system_prompt", label: "System Prompt", icon: Brain },
                 { id: "svg_palette", label: "SVG & Color Palette", icon: Palette },
                 { id: "ai_skills", label: "AI Skills & Protocols", icon: Sparkles },
+                { id: "agents_rules", label: "Multi-Agent (AGENTS.md)", icon: Bot },
               ].map((t) => {
                 const IconComp = t.icon;
                 const isActive = configActiveTab === t.id;
@@ -8029,6 +8081,106 @@ export function App() {
                         Open Tool Hub →
                       </button>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 5: Multi-Agent (AGENTS.md) */}
+              {configActiveTab === "agents_rules" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 960 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <label style={{ fontSize: 13, fontWeight: 700, color: "#8b5cf6", display: "flex", alignItems: "center", gap: 6 }}>
+                        <Bot size={16} color="#8b5cf6" /> Multi-Agent Orchestration Rules (AGENTS.md)
+                      </label>
+                      <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 2 }}>
+                        Supervisor delegation boundaries, supported sub-agent roles (coder, researcher, designer, reviewer, general), and step budgets.
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={fetchAgentsRules}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 6,
+                          border: "1px solid var(--border-color)",
+                          background: "var(--bg-card)",
+                          color: "var(--text-main)",
+                          fontSize: 12,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 5,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <RefreshCw size={13} /> Reload
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveAgentsRules}
+                        disabled={isSavingAgentsRules}
+                        style={{
+                          padding: "6px 14px",
+                          borderRadius: 6,
+                          border: "none",
+                          background: "linear-gradient(135deg, #8b5cf6, #6d28d9)",
+                          color: "#fff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 5,
+                          cursor: isSavingAgentsRules ? "not-allowed" : "pointer",
+                          opacity: isSavingAgentsRules ? 0.7 : 1,
+                        }}
+                      >
+                        {isSavingAgentsRules ? <Loader2 size={13} className="spin" /> : <Save size={13} />} Save Rules
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ position: "relative" }}>
+                    <textarea
+                      rows={16}
+                      value={agentsRulesContent}
+                      onChange={(e) => setAgentsRulesContent(e.target.value)}
+                      placeholder="Enter AGENTS.md rules and supervisor delegation instructions..."
+                      style={{
+                        width: "100%",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border-color)",
+                        padding: 14,
+                        borderRadius: 8,
+                        color: "var(--text-main)",
+                        fontSize: 12.5,
+                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                        lineHeight: 1.6,
+                        resize: "vertical",
+                        minHeight: 340,
+                      }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      background: "rgba(139, 92, 246, 0.06)",
+                      border: "1px solid rgba(139, 92, 246, 0.2)",
+                      borderRadius: 8,
+                      padding: "12px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#8b5cf6", display: "flex", alignItems: "center", gap: 6 }}>
+                      🛡️ Supervisor & Sub-Agent Directives
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11.5, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      <li><strong>Supervisor Delegation</strong>: MiniBot is instructed via AGENTS.md never to roleplay sub-agent execution, but to invoke the <code>delegate_task</code> tool.</li>
+                      <li><strong>Default Iterations Budget</strong>: All sub-agent roles (<code>researcher</code>, <code>coder</code>, <code>designer</code>, <code>reviewer</code>, <code>general</code>) run with up to 20 autonomous iterations.</li>
+                      <li><strong>File Location</strong>: Changes are saved directly to <code>AGENTS.md</code> in the project workspace root and injected automatically into the supervisor prompt.</li>
+                    </ul>
                   </div>
                 </div>
               )}

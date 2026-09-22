@@ -61,17 +61,9 @@
       "args": [
         "dist/mcp/servers/minimax-server.js"
       ],
-      "strictSSL": false,
+      "description": "Provides MiniMax official web search, image generation, speech synthesis, and music creation via mmx-cli",
       "enabled": true,
-      "description": "Provides MiniMax official web search, image generation, speech synthesis, and music creation via mmx-cli"
-    },
-    "bigfix": {
-      "type": "streamable-http",
-      "args": [],
-      "url": "https://172.22.29.51:9494/mcp",
-      "strictSSL": false,
-      "enabled": true,
-      "description": "Enterprise BigFix Platform Endpoint Management MCP Server (Computers, Fixlets, Actions, Relevance Query)"
+      "strictSSL": false
     }
   },
   "maxLoopIterations": 50

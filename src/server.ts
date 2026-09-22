@@ -934,6 +934,36 @@ app.delete("/api/skills/:name", requireAuth, (req, res) => {
   }
 });
 
+// ==========================================
+// 3d. AGENTS.md Multi-Agent Rules Endpoints
+// ==========================================
+app.get("/api/agents-rules", requireAuth, (req, res) => {
+  try {
+    const agentsMdPath = path.resolve(process.cwd(), "AGENTS.md");
+    let content = "";
+    if (fs.existsSync(agentsMdPath)) {
+      content = fs.readFileSync(agentsMdPath, "utf-8");
+    }
+    res.json({ success: true, content });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/agents-rules", requireAuth, (req, res) => {
+  try {
+    const { content } = req.body;
+    if (typeof content !== "string") {
+      return res.status(400).json({ success: false, error: "Content must be a string." });
+    }
+    const agentsMdPath = path.resolve(process.cwd(), "AGENTS.md");
+    fs.writeFileSync(agentsMdPath, content, "utf-8");
+    res.json({ success: true, message: "AGENTS.md rules updated successfully." });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 
 // 3b. Server-side LLM Proxy & Health Test (Bypasses all client-side CORS and protects API keys)
