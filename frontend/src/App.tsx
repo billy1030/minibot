@@ -4,6 +4,7 @@ import {
   Cpu,
   Globe,
   Activity,
+  Bot,
   ChevronDown,
   ChevronRight,
   Sparkles,
@@ -71,6 +72,21 @@ import { ToolHubModal, type ToolItem, type SkillItem } from "./components/ToolHu
 import { ModelSelectorModal, type LLMProfile } from "./components/ModelSelectorModal";
 import { Wrench } from "lucide-react";
 
+interface SubAgentEvent {
+  type: "subagent_start" | "subagent_step" | "subagent_tool_call" | "subagent_tool_result" | "subagent_complete" | "subagent_error";
+  role: string;
+  instruction?: string;
+  iteration?: number;
+  toolName?: string;
+  args?: any;
+  result?: string;
+  serverName?: string;
+  answer?: string;
+  iterations?: number;
+  error?: string;
+  timestamp: number;
+}
+
 interface ToolCallLog {
   id: string;
   toolName: string;
@@ -78,6 +94,7 @@ interface ToolCallLog {
   args: any;
   result?: string;
   timestamp: number;
+  subAgentEvents?: SubAgentEvent[];
 }
 
 interface Message {
@@ -2058,6 +2075,25 @@ export function App() {
                   : m
               )
             );
+          } else if (event === "subagent_event") {
+            const subEvt = data as SubAgentEvent;
+            // Append this subagent event to the most recent delegate_task tool call
+            const targetIdx = [...activeTools].reverse().findIndex((t) => t.toolName === "delegate_task" && !t.result);
+            if (targetIdx !== -1) {
+              const actualIdx = activeTools.length - 1 - targetIdx;
+              const currentEvents = activeTools[actualIdx].subAgentEvents || [];
+              activeTools[actualIdx] = {
+                ...activeTools[actualIdx],
+                subAgentEvents: [...currentEvents, subEvt],
+              };
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, toolCalls: [...activeTools] }
+                    : m
+                )
+              );
+            }
           } else if (event === "tool_installed") {
             console.log("[SSE] 🛠️ Tool dynamically installed by agent:", data);
             fetchTools();
@@ -5050,12 +5086,38 @@ export function App() {
                                   borderBottom: isExpanded ? "1px solid var(--border-color)" : "none",
                                 }}
                               >
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  <Search size={15} color="var(--accent-amber)" />
-                                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--accent-amber)" }}>
-                                    Tool Call: {t.toolName}
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                  {t.toolName === "delegate_task" ? (
+                                    <Bot size={15} color="#8b5cf6" />
+                                  ) : (
+                                    <Search size={15} color="var(--accent-amber)" />
+                                  )}
+                                  <span
+                                    style={{
+                                      fontSize: 13,
+                                      fontWeight: 600,
+                                      color: t.toolName === "delegate_task" ? "#8b5cf6" : "var(--accent-amber)",
+                                    }}
+                                  >
+                                    {t.toolName === "delegate_task" ? "🤖 Sub-Agent Delegation" : `Tool Call: ${t.toolName}`}
                                   </span>
-                                  {t.serverName && (
+                                  {t.toolName === "delegate_task" && t.args?.role && (
+                                    <span
+                                      style={{
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        textTransform: "uppercase",
+                                        padding: "1px 8px",
+                                        borderRadius: 12,
+                                        background: "rgba(139, 92, 246, 0.15)",
+                                        color: "#8b5cf6",
+                                        border: "1px solid rgba(139, 92, 246, 0.3)",
+                                      }}
+                                    >
+                                      {t.args.role}
+                                    </span>
+                                  )}
+                                  {t.serverName && t.toolName !== "delegate_task" && (
                                     <span
                                       style={{
                                         fontSize: 10,
@@ -5074,7 +5136,7 @@ export function App() {
                                     </span>
                                   )}
                                   <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                                    args: {JSON.stringify(t.args)}
+                                    {t.toolName === "delegate_task" ? `Goal: ${t.args?.taskInstruction?.slice(0, 75)}...` : `args: ${JSON.stringify(t.args)}`}
                                   </span>
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -5083,8 +5145,8 @@ export function App() {
                                       <CheckCircle2 size={13} /> Completed
                                     </span>
                                   ) : (
-                                    <span style={{ fontSize: 11, color: "var(--accent)", display: "flex", alignItems: "center", gap: 4 }}>
-                                      <RefreshCw size={12} className="spin" /> Executing...
+                                    <span style={{ fontSize: 11, color: t.toolName === "delegate_task" ? "#8b5cf6" : "var(--accent)", display: "flex", alignItems: "center", gap: 4 }}>
+                                      <RefreshCw size={12} className="spin" /> {t.toolName === "delegate_task" ? "Sub-Agent Working..." : "Executing..."}
                                     </span>
                                   )}
                                   {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -5093,16 +5155,42 @@ export function App() {
 
                               {isExpanded && (
                                 <div style={{ padding: "12px 14px", background: "var(--bg-card)" }}>
-                                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>PARAMETERS:</div>
-                                  <pre style={{ fontSize: 12, color: "var(--accent)", marginBottom: 10, overflowX: "auto", background: "var(--bg-primary)", padding: 8, borderRadius: 6, border: "1px solid var(--border-color)" }}>
+                                  {/* Render Real-Time Sub-Agent Activity Timeline if available */}
+                                  {t.subAgentEvents && t.subAgentEvents.length > 0 && (
+                                    <div style={{ marginBottom: 12 }}>
+                                      <div style={{ fontSize: 11, fontWeight: 600, color: "#8b5cf6", marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
+                                        <Activity size={12} /> SUB-AGENT EXECUTION TRACE:
+                                      </div>
+                                      <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--bg-primary)", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-color)" }}>
+                                        {t.subAgentEvents.map((evt, eIdx) => (
+                                          <div key={eIdx} style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 6, color: "var(--text-main)" }}>
+                                            <span style={{ color: "#8b5cf6", fontWeight: 600 }}>[{evt.role.toUpperCase()}]</span>
+                                            {evt.type === "subagent_start" && <span>🚀 Started task: {evt.instruction?.slice(0, 90)}</span>}
+                                            {evt.type === "subagent_step" && <span style={{ color: "var(--text-muted)" }}>🔄 Iteration #{evt.iteration}</span>}
+                                            {evt.type === "subagent_tool_call" && <span>🛠️ Invoked tool <code style={{ color: "var(--accent-amber)" }}>{evt.toolName}</code></span>}
+                                            {evt.type === "subagent_tool_result" && <span style={{ color: "var(--accent-emerald)" }}>✅ Tool completed ({evt.result?.length || 0} chars)</span>}
+                                            {evt.type === "subagent_complete" && <span style={{ color: "var(--accent-emerald)", fontWeight: 600 }}>🎉 Sub-Agent finished ({evt.iterations} steps)</span>}
+                                            {evt.type === "subagent_error" && <span style={{ color: "var(--accent-red)" }}>❌ {evt.error}</span>}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
+                                    {t.toolName === "delegate_task" ? "TASK SPECIFICATION:" : "PARAMETERS:"}
+                                  </div>
+                                  <pre style={{ fontSize: 12, color: t.toolName === "delegate_task" ? "#8b5cf6" : "var(--accent)", marginBottom: 10, overflowX: "auto", background: "var(--bg-primary)", padding: 8, borderRadius: 6, border: "1px solid var(--border-color)" }}>
                                     {JSON.stringify(t.args, null, 2)}
                                   </pre>
-                                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>OBSERVATION (MCP RESPONSE):</div>
+                                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
+                                    {t.toolName === "delegate_task" ? "SUB-AGENT SYNTHESIS REPORT:" : "OBSERVATION (MCP RESPONSE):"}
+                                  </div>
                                   <pre
                                     style={{
                                       fontSize: 12,
                                       color: "var(--text-main)",
-                                      maxHeight: 200,
+                                      maxHeight: 250,
                                       overflowY: "auto",
                                       whiteSpace: "pre-wrap",
                                       wordBreak: "break-word",
@@ -5112,7 +5200,7 @@ export function App() {
                                       border: "1px solid var(--border-color)",
                                     }}
                                   >
-                                    {t.result || "Awaiting MCP response..."}
+                                    {t.result || (t.toolName === "delegate_task" ? "Sub-Agent is executing tasks..." : "Awaiting MCP response...")}
                                   </pre>
                                 </div>
                               )}
