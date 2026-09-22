@@ -1789,7 +1789,10 @@ app.get("/api/workspace/files/:filename", (req, res) => {
       return res.sendFile(targetPath);
     }
 
-    return res.download(targetPath, safeFilename, (err) => {
+    // For binary downloads and files, use res.sendFile with explicit Content-Disposition attachment header
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(safeFilename)}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`);
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    return res.sendFile(targetPath, (err) => {
       if (err && !res.headersSent) {
         console.error(`[Download Error]:`, err.message);
         res.status(500).json({ success: false, error: err.message });
