@@ -5406,8 +5406,6 @@ export function App() {
                                       key={idx}
                                       href={downloadUrl}
                                       download={f.fileName}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
                                       style={{
                                         display: "inline-flex",
                                         alignItems: "center",
