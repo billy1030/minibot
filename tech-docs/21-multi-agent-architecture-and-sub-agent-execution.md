@@ -71,13 +71,13 @@ The chosen multi-agent paradigm encapsulates specialized sub-agents into callabl
 
 ### 3.1 Sub-Agent Roles & Specialized Personas
 
-| Sub-Agent Role | Primary Responsibility | Dedicated Tool White-list | Guardrail (Max Iterations) |
+| Sub-Agent Role | Primary Responsibility | Dedicated Tool White-list | Guardrail (Default Max Iterations) |
 |---|---|---|---|
-| `researcher` | Fact-checking, deep web browsing, document reading, summarization | `web_search`, `fetch_page`, `download_remote_file`, `read_office_document` | 8 |
-| `coder` | Data calculation, script execution, file manipulation, unit testing | `run_python_code`, `create_excel_spreadsheet`, `read_office_document` | 12 |
-| `designer` | Technical architecture posters, SVG vector layout, diagrammatic state machines | Pure generation, no execution tools needed | 4 |
-| `reviewer` | Quality assurance, code review, verification against prompt requirements | Document/file reading tools, web_search | 5 |
-| `general` | General sub-tasks with non-delegation toolset | All MCP tools (except `delegate_task`) | 8 |
+| `researcher` | Fact-checking, deep web browsing, document reading, summarization | `web_search`, `fetch_page`, `download_remote_file`, `read_office_document`, `minimax_search` | 20 |
+| `coder` | Data calculation, script execution, file manipulation, unit testing | `run_python_code`, `create_excel_spreadsheet`, `read_office_document` | 20 |
+| `designer` | Technical architecture posters, SVG vector layout, diagrammatic state machines | Pure vector generation (standalone SVG adhering to Clean Light Theme) | 20 |
+| `reviewer` | Quality assurance, code review, verification against prompt requirements | Document/file reading tools, web_search | 20 |
+| `general` | General sub-tasks with non-delegation toolset | All MCP tools (except `delegate_task`) | 20 |
 
 ### 3.2 Context Isolation & Observation Hygiene
 When a sub-agent executes:
@@ -154,6 +154,24 @@ To provide complete transparency in the Web UI, Server-Sent Events (SSE) are aug
 
 To prevent catastrophic token runaway or recursive agent spawning:
 1. **Depth Restriction**: Maximum recursion depth is strictly capped at `depth = 1`. Sub-agents **cannot** invoke `delegate_task`.
-2. **Per-Agent Iteration Budgets**: Each sub-agent is constrained by strict role-based iteration ceilings (4 to 12 iterations).
+2. **Per-Agent Iteration Budgets**: Each sub-agent is constrained by default iteration ceilings (20 iterations across all roles, configurable via `subAgentMaxIterations`).
 3. **Execution Timeout**: Each sub-agent run has a hard abort timeout (default: 60 seconds).
 4. **Graceful Fallback**: If a sub-agent hits its iteration ceiling or encounters an error, its partial output is preserved and surfaced to the Supervisor with a `[Sub-Agent Warning]` prefix.
+
+---
+
+## 7. Multi-Agent Rules Governance (`AGENTS.md`) & Web GUI Management
+
+To ensure deterministic agent behavior, eliminate hallucinated sub-agent execution, and allow runtime governance, MiniBot implements the **`AGENTS.md` System Contract**:
+
+### 7.1 Mandatory Delegation Directive
+In supervisor mode (`depth === 0`), MiniBot's ReAct engine automatically reads `AGENTS.md` from the project root and appends it to the system prompt. This enforces:
+1. **No Simulated Delegations**: The supervisor agent must never fake sub-agent outputs or pretend work was completed without emitting a `delegate_task` tool call.
+2. **Mandatory `delegate_task` Calls**: When specialized roles (coder, researcher, designer, reviewer) are requested, `delegate_task` must be called.
+3. **Context Hygiene**: Sub-agent observations are encapsulated, returning only a consolidated synthesis back to the supervisor conversation context.
+
+### 7.2 Web GUI Management & REST API
+The Web UI Configuration & AI Skills modal provides a dedicated tab: **"Multi-Agent Rules (`AGENTS.md`)"**.
+- **`GET /api/agents-rules`**: Authenticated endpoint to retrieve the current markdown content of `AGENTS.md`.
+- **`POST /api/agents-rules`**: Authenticated endpoint to update and persist edits to `AGENTS.md` directly from the web interface without touching disk files manually.
+- **Visual Modal Ergonomics**: The Configuration & AI Skills modal has been expanded (+100px) with responsive code-font editor areas and syntax guidance to ensure comfortable reading and editing of agent system rules.
