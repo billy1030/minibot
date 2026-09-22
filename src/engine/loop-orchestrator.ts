@@ -1,4 +1,6 @@
 import OpenAI from "openai";
+import fs from "node:fs";
+import path from "node:path";
 import { LoopConfig } from "../config/schema.js";
 import { LLMClient } from "../llm/client.js";
 import { MCPClientManager } from "../mcp/client-manager.js";
@@ -68,6 +70,19 @@ export class LoopOrchestrator {
       "\n--- Active AI Skills & Instructions ---\n",
       this.config.prompts.skillsPrompt
     );
+
+    // 🤖 In supervisor mode (depth === 0), inject AGENTS.md rules to enforce delegation
+    if (depth === 0) {
+      try {
+        const agentsMdPath = path.resolve(process.cwd(), "AGENTS.md");
+        if (fs.existsSync(agentsMdPath)) {
+          const agentsRules = fs.readFileSync(agentsMdPath, "utf-8");
+          systemPromptParts.push("\n--- Multi-Agent System Rules (`AGENTS.md`) ---\n" + agentsRules.trim());
+        }
+      } catch (err: any) {
+        console.warn("[Loop] Could not load AGENTS.md:", err.message);
+      }
+    }
 
     if (this.config.prompts.svgPrompt && this.config.prompts.svgPrompt.trim().length > 0) {
       systemPromptParts.push(
