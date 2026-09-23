@@ -113,7 +113,7 @@ export class ScopedMCPManager {
     const safeNumber = String(userNumber).padStart(5, "0").replace(/[^\d]/g, "").slice(0, 5) || "00000";
     let manager = this.userManagers.get(safeNumber);
     if (!manager) {
-      manager = new MCPClientManager();
+      manager = new MCPClientManager({ includeBuiltins: false });
       const userServers = this.readUserServers(safeNumber);
       if (Object.keys(userServers).length > 0) {
         await manager.initialize(userServers);
@@ -131,7 +131,7 @@ export class ScopedMCPManager {
     const key = `${safeNumber}:${workspace || "default"}`;
     let manager = this.workspaceManagers.get(key);
     if (!manager) {
-      manager = new MCPClientManager();
+      manager = new MCPClientManager({ includeBuiltins: false });
       const wsServers = this.readWorkspaceServers(workspace, safeNumber);
       if (Object.keys(wsServers).length > 0) {
         await manager.initialize(wsServers);

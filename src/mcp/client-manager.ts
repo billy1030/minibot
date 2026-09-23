@@ -24,6 +24,11 @@ export class MCPClientManager {
   private stdioClients = new Map<string, { client: Client; transport: StdioClientTransport }>();
   private httpClients = new Map<string, BigFixStreamableHttpClient>();
   private tools = new Map<string, DiscoveredTool>();
+  private includeBuiltins: boolean;
+
+  constructor(options?: { includeBuiltins?: boolean }) {
+    this.includeBuiltins = options?.includeBuiltins ?? true;
+  }
 
   /**
    * Initializes and connects to all configured MCP servers
@@ -131,10 +136,12 @@ export class MCPClientManager {
       }
     }
 
-    // Always register all core built-in in-process tools (e.g. run_python_code, install_skill, download_remote_file, etc.)
-    for (const tool of BUILTIN_INPROCESS_TOOLS) {
-      if (!this.tools.has(tool.name)) {
-        this.tools.set(tool.name, tool);
+    // Only register core built-in in-process tools on the system manager (not subordinate user/workspace tiers)
+    if (this.includeBuiltins) {
+      for (const tool of BUILTIN_INPROCESS_TOOLS) {
+        if (!this.tools.has(tool.name)) {
+          this.tools.set(tool.name, tool);
+        }
       }
     }
   }

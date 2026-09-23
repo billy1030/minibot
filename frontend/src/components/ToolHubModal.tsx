@@ -747,7 +747,18 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                         <span style={{ fontWeight: 700, fontSize: 15, color: "var(--text-main, #0f172a)" }}>{sName}</span>
                         {/* Interactive Scope Dropdown */}
                         {(() => {
-                          const currentScope = sTools[0]?.scope || "system";
+                          // Check authoritative configuredServers first, falling back to discovered tool scope
+                          let resolvedScope: "system" | "user" | "workspace" | "disabled" = "system";
+                          if (configuredServers.workspace?.[sName]) {
+                            resolvedScope = configuredServers.workspace[sName].enabled === false ? "disabled" : "workspace";
+                          } else if (configuredServers.user?.[sName]) {
+                            resolvedScope = configuredServers.user[sName].enabled === false ? "disabled" : "user";
+                          } else if (configuredServers.system?.[sName]) {
+                            resolvedScope = configuredServers.system[sName].enabled === false ? "disabled" : "system";
+                          } else if (sTools[0]?.scope) {
+                            resolvedScope = sTools[0].scope;
+                          }
+                          const currentScope = resolvedScope;
                           const isDisabled = currentScope === "disabled";
                           return (
                             <div style={{ display: "inline-flex", alignItems: "center" }}>
