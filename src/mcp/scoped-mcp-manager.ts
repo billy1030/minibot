@@ -4,7 +4,7 @@ import { MCPServerDef } from "../config/schema.js";
 import { MCPClientManager, DiscoveredTool, OpenAIToolDefinition } from "./client-manager.js";
 import { getUserLogsRoot, getWorkspaceDir } from "../logger/conversation-logger.js";
 
-export type MCPScope = "system" | "user" | "workspace";
+export type MCPScope = "system" | "user" | "workspace" | "disabled";
 
 export interface ScopedMCPServerDef extends MCPServerDef {
   scope?: MCPScope;
@@ -16,6 +16,7 @@ export interface ScopedDiscoveredTool extends DiscoveredTool {
   scope: MCPScope;
   workspace?: string;
   userNumber?: string;
+  disabled?: boolean;
 }
 
 export class ScopedMCPManager {

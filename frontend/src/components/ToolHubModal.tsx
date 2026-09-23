@@ -6,7 +6,7 @@ export interface ToolItem {
   name: string;
   description?: string;
   inputSchema?: any;
-  scope?: "system" | "user" | "workspace";
+  scope?: "system" | "user" | "workspace" | "disabled";
   workspace?: string;
   userNumber?: string;
 }
@@ -158,6 +158,26 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     }
   };
 
+  const [configuredServers, setConfiguredServers] = useState<{
+    system: Record<string, any>;
+    user: Record<string, any>;
+    workspace: Record<string, any>;
+  }>({ system: {}, user: {}, workspace: {} });
+
+  const fetchConfiguredServers = async () => {
+    try {
+      const res = await fetch(`/api/mcp/servers?workspace=${encodeURIComponent(currentWorkspace)}`, {
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (data?.success && data?.servers) {
+        setConfiguredServers(data.servers);
+      }
+    } catch (e) {
+      console.warn("Could not fetch configured servers:", e);
+    }
+  };
+
   const fetchCurrentMcpConfig = async () => {
     try {
       const res = await fetch("/api/config", { credentials: "include" });
@@ -178,6 +198,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
       }
       fetchSkills();
       fetchCurrentMcpConfig();
+      fetchConfiguredServers();
     }
   }, [isOpen, currentWorkspace, initialTab]);
 
@@ -194,15 +215,47 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     );
   }, [tools, searchQuery]);
 
-  // Group filtered tools by serverName
+  // Group filtered tools by serverName and include disabled servers
   const groupedTools = useMemo(() => {
-    return filteredTools.reduce((acc, tool) => {
+    const acc = filteredTools.reduce((res, tool) => {
       const sName = tool.serverName || "built-in";
-      if (!acc[sName]) acc[sName] = [];
-      acc[sName].push(tool);
-      return acc;
+      if (!res[sName]) res[sName] = [];
+      res[sName].push(tool);
+      return res;
     }, {} as Record<string, ToolItem[]>);
-  }, [filteredTools]);
+
+    let q = searchQuery.trim().toLowerCase();
+    if (q.startsWith("/")) q = q.slice(1).trim();
+
+    // Check configured servers for disabled ones (enabled === false)
+    const allScopes: Array<{ scope: "system" | "user" | "workspace"; map: Record<string, any> }> = [
+      { scope: "workspace", map: configuredServers.workspace || {} },
+      { scope: "user", map: configuredServers.user || {} },
+      { scope: "system", map: configuredServers.system || {} },
+    ];
+
+    for (const { scope, map } of allScopes) {
+      for (const [sName, def] of Object.entries(map)) {
+        if (def && def.enabled === false) {
+          if (!acc[sName]) {
+            if (!q || sName.toLowerCase().includes(q) || (def.description && def.description.toLowerCase().includes(q))) {
+              acc[sName] = [
+                {
+                  serverName: sName,
+                  name: `(Server Disabled)`,
+                  description: def.description || `Configured in ${scope.toUpperCase()} scope but currently deactivated.`,
+                  scope: "disabled",
+                  workspace: scope === "workspace" ? currentWorkspace : undefined,
+                },
+              ];
+            }
+          }
+        }
+      }
+    }
+
+    return acc;
+  }, [filteredTools, configuredServers, searchQuery, currentWorkspace]);
 
   // Filter skills based on search query (matches skill name, description, or triggers; supports leading '/')
   const filteredSkills = useMemo(() => {
@@ -221,7 +274,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     setIsRefreshing(true);
     setMessage(null);
     try {
-      await Promise.all([onRefreshTools(), fetchSkills(), fetchCurrentMcpConfig()]);
+      await Promise.all([onRefreshTools(), fetchSkills(), fetchCurrentMcpConfig(), fetchConfiguredServers()]);
       setMessage({ text: "Tools and Skills refreshed successfully!", isError: false });
     } catch (err: any) {
       setMessage({ text: err.message || "Failed to refresh", isError: true });
@@ -347,8 +400,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
           text: `Moved "${serverName}" from ${fromScope.toUpperCase()} to ${toScope.toUpperCase()} successfully!`,
           isError: false,
         });
-        await onRefreshTools();
-        await fetchCurrentMcpConfig();
+        await Promise.all([onRefreshTools(), fetchCurrentMcpConfig(), fetchConfiguredServers()]);
       } else {
         setMessage({ text: data.error || "Failed to change scope", isError: true });
       }
@@ -696,31 +748,38 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                         {/* Interactive Scope Dropdown */}
                         {(() => {
                           const currentScope = sTools[0]?.scope || "system";
+                          const isDisabled = currentScope === "disabled";
                           return (
                             <div style={{ display: "inline-flex", alignItems: "center" }}>
                               <select
                                 value={currentScope}
                                 onChange={(e) => handleChangeScope(sName, currentScope, e.target.value)}
-                                title="Change deployment scope of this MCP server"
+                                title="Change deployment scope or enable/disable this MCP server"
                                 style={{
                                   fontSize: 11,
                                   fontWeight: 700,
                                   padding: "3px 8px",
                                   borderRadius: 6,
                                   background:
-                                    currentScope === "workspace"
+                                    isDisabled
+                                      ? "rgba(100, 116, 139, 0.15)"
+                                      : currentScope === "workspace"
                                       ? "rgba(2, 132, 199, 0.12)"
                                       : currentScope === "user"
                                       ? "rgba(124, 58, 237, 0.12)"
                                       : "rgba(22, 163, 74, 0.12)",
                                   color:
-                                    currentScope === "workspace"
+                                    isDisabled
+                                      ? "#64748b"
+                                      : currentScope === "workspace"
                                       ? "#0284c7"
                                       : currentScope === "user"
                                       ? "#7c3aed"
                                       : "#15803d",
                                   border: `1px solid ${
-                                    currentScope === "workspace"
+                                    isDisabled
+                                      ? "rgba(100, 116, 139, 0.35)"
+                                      : currentScope === "workspace"
                                       ? "rgba(2, 132, 199, 0.3)"
                                       : currentScope === "user"
                                       ? "rgba(124, 58, 237, 0.3)"
@@ -733,6 +792,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                                 <option value="workspace">📁 Workspace Local ({sTools[0]?.workspace || currentWorkspace})</option>
                                 <option value="user">👤 User Global (All Workspaces)</option>
                                 <option value="system">🌐 System Global (Instance-wide)</option>
+                                <option value="disabled">🚫 Disabled (Deactivated)</option>
                               </select>
                             </div>
                           );
@@ -742,13 +802,13 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                             fontSize: 11,
                             padding: "2px 8px",
                             borderRadius: 6,
-                            background: "rgba(100, 116, 139, 0.12)",
-                            color: "var(--text-muted, #64748b)",
-                            border: "1px solid rgba(100, 116, 139, 0.25)",
-                            fontWeight: 600,
+                            background: sTools[0]?.scope === "disabled" ? "rgba(239, 68, 68, 0.12)" : "rgba(100, 116, 139, 0.12)",
+                            color: sTools[0]?.scope === "disabled" ? "#ef4444" : "var(--text-muted, #64748b)",
+                            border: `1px solid ${sTools[0]?.scope === "disabled" ? "rgba(239, 68, 68, 0.25)" : "rgba(100, 116, 139, 0.25)"}`,
+                            fontWeight: 700,
                           }}
                         >
-                          {sTools.length} tools
+                          {sTools[0]?.scope === "disabled" ? "DISABLED" : `${sTools.length} tools`}
                         </span>
                       </div>
 
@@ -789,17 +849,22 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                             <code
                               style={{
                                 fontSize: 13.5,
-                                color: "#0f172a",
+                                color: tool.scope === "disabled" ? "#64748b" : "#0f172a",
                                 fontWeight: 800,
-                                background: "rgba(2, 132, 199, 0.12)",
+                                background: tool.scope === "disabled" ? "rgba(100, 116, 139, 0.12)" : "rgba(2, 132, 199, 0.12)",
                                 padding: "2px 8px",
                                 borderRadius: 5,
-                                border: "1px solid rgba(2, 132, 199, 0.25)",
+                                border: `1px solid ${tool.scope === "disabled" ? "rgba(100, 116, 139, 0.25)" : "rgba(2, 132, 199, 0.25)"}`,
                                 letterSpacing: "0.2px",
                               }}
                             >
                               {tool.name}
                             </code>
+                            {tool.scope === "disabled" && (
+                              <span style={{ fontSize: 11, color: "#64748b", fontStyle: "italic" }}>
+                                (Select a scope above to activate)
+                              </span>
+                            )}
                           </div>
                           {tool.description && (
                             <div

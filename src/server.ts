@@ -978,8 +978,10 @@ app.post("/api/mcp/servers/change-scope", requireAuth, async (req, res) => {
       return res.status(403).json({ success: false, error: "Admin role required to modify System Global MCP servers." });
     }
 
-    // 1. Extract and remove from fromScope
+    // 1. Extract and remove from fromScope (or find across scopes if fromScope is "disabled")
     let targetDef: MCPServerDef | null = null;
+    let actualFromScope = fromScope;
+
     if (fromScope === "workspace") {
       const current = scopedMcpManager.readWorkspaceServers(workspace, userNumber);
       targetDef = current[serverName] || null;
@@ -1005,24 +1007,79 @@ app.post("/api/mcp/servers/change-scope", requireAuth, async (req, res) => {
         } catch {}
         await mcpManager.unregisterServer(serverName);
       }
+    } else if (fromScope === "disabled") {
+      // Find server in workspace, user, or system scopes
+      const wsServers = scopedMcpManager.readWorkspaceServers(workspace, userNumber);
+      if (wsServers[serverName]) {
+        targetDef = wsServers[serverName];
+        actualFromScope = "workspace";
+        delete wsServers[serverName];
+        scopedMcpManager.saveWorkspaceServers(wsServers, workspace, userNumber);
+        await scopedMcpManager.reloadScope("workspace", workspace, userNumber);
+      } else {
+        const uServers = scopedMcpManager.readUserServers(userNumber);
+        if (uServers[serverName]) {
+          targetDef = uServers[serverName];
+          actualFromScope = "user";
+          delete uServers[serverName];
+          scopedMcpManager.saveUserServers(uServers, userNumber);
+          await scopedMcpManager.reloadScope("user", workspace, userNumber);
+        } else if (config.mcpServers[serverName]) {
+          targetDef = config.mcpServers[serverName];
+          actualFromScope = "system";
+          delete config.mcpServers[serverName];
+          try {
+            saveConfigToDisk(config);
+          } catch {}
+          await mcpManager.unregisterServer(serverName);
+        }
+      }
     }
 
     if (!targetDef) {
-      return res.status(404).json({ success: false, error: `Server "${serverName}" not found in scope "${fromScope}".` });
+      return res.status(404).json({ success: false, error: `Server "${serverName}" not found.` });
     }
 
-    // 2. Insert into toScope
-    if (toScope === "workspace") {
+    // Role check for System Global scope if moving to or from system
+    if ((actualFromScope === "system" || toScope === "system") && user && user.role !== "admin" && userNumber !== "00000") {
+      return res.status(403).json({ success: false, error: "Admin role required to modify System Global MCP servers." });
+    }
+
+    // 2. Insert into toScope or handle disabled
+    if (toScope === "disabled") {
+      targetDef.enabled = false;
+      const saveScope = actualFromScope === "disabled" ? "workspace" : actualFromScope;
+      if (saveScope === "workspace") {
+        const current = scopedMcpManager.readWorkspaceServers(workspace, userNumber);
+        current[serverName] = targetDef;
+        scopedMcpManager.saveWorkspaceServers(current, workspace, userNumber);
+        await scopedMcpManager.reloadScope("workspace", workspace, userNumber);
+      } else if (saveScope === "user") {
+        const current = scopedMcpManager.readUserServers(userNumber);
+        current[serverName] = targetDef;
+        scopedMcpManager.saveUserServers(current, userNumber);
+        await scopedMcpManager.reloadScope("user", workspace, userNumber);
+      } else {
+        config.mcpServers[serverName] = targetDef;
+        try {
+          saveConfigToDisk(config);
+        } catch {}
+        await mcpManager.unregisterServer(serverName);
+      }
+    } else if (toScope === "workspace") {
+      targetDef.enabled = true;
       const current = scopedMcpManager.readWorkspaceServers(workspace, userNumber);
       current[serverName] = targetDef;
       scopedMcpManager.saveWorkspaceServers(current, workspace, userNumber);
       await scopedMcpManager.reloadScope("workspace", workspace, userNumber);
     } else if (toScope === "user") {
+      targetDef.enabled = true;
       const current = scopedMcpManager.readUserServers(userNumber);
       current[serverName] = targetDef;
       scopedMcpManager.saveUserServers(current, userNumber);
       await scopedMcpManager.reloadScope("user", workspace, userNumber);
     } else if (toScope === "system") {
+      targetDef.enabled = true;
       config.mcpServers[serverName] = targetDef;
       try {
         saveConfigToDisk(config);
