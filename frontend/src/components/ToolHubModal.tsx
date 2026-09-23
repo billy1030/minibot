@@ -325,9 +325,43 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     }
   };
 
-  const handleDelete = async (sName: string) => {
+  const handleChangeScope = async (serverName: string, fromScope: string, toScope: string) => {
+    if (fromScope === toScope) return;
+    setIsSubmitting(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/mcp/servers/change-scope", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          serverName,
+          fromScope,
+          toScope,
+          workspace: currentWorkspace,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({
+          text: `Moved "${serverName}" from ${fromScope.toUpperCase()} to ${toScope.toUpperCase()} successfully!`,
+          isError: false,
+        });
+        await onRefreshTools();
+        await fetchCurrentMcpConfig();
+      } else {
+        setMessage({ text: data.error || "Failed to change scope", isError: true });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Network error", isError: true });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (sName: string, scope?: "system" | "user" | "workspace") => {
     if (confirm(`Are you sure you want to unregister server "${sName}"?`)) {
-      const res = await onDeleteServer(sName);
+      const res = await onDeleteServer(sName, scope);
       if (res.success) {
         await onRefreshTools();
       } else {
@@ -659,29 +693,48 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                         <Box size={18} color="#1d4ed8" />
                         <span style={{ fontWeight: 700, fontSize: 15, color: "var(--text-main, #0f172a)" }}>{sName}</span>
-                        {/* Scope Badge */}
+                        {/* Interactive Scope Dropdown */}
                         {(() => {
-                          const toolScope = sTools[0]?.scope || "system";
-                          const isWs = toolScope === "workspace";
-                          const isUser = toolScope === "user";
+                          const currentScope = sTools[0]?.scope || "system";
                           return (
-                            <span
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                padding: "2px 8px",
-                                borderRadius: 5,
-                                background: isWs ? "rgba(2, 132, 199, 0.12)" : isUser ? "rgba(124, 58, 237, 0.12)" : "rgba(22, 163, 74, 0.12)",
-                                color: isWs ? "#0284c7" : isUser ? "#7c3aed" : "#15803d",
-                                border: `1px solid ${isWs ? "rgba(2, 132, 199, 0.25)" : isUser ? "rgba(124, 58, 237, 0.25)" : "rgba(22, 163, 74, 0.25)"}`,
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 4,
-                              }}
-                            >
-                              {isWs ? <Folder size={11} /> : isUser ? <Folder size={11} /> : <Globe size={11} />}
-                              {isWs ? `WORKSPACE (${sTools[0]?.workspace || currentWorkspace})` : isUser ? "USER GLOBAL" : "SYSTEM GLOBAL"}
-                            </span>
+                            <div style={{ display: "inline-flex", alignItems: "center" }}>
+                              <select
+                                value={currentScope}
+                                onChange={(e) => handleChangeScope(sName, currentScope, e.target.value)}
+                                title="Change deployment scope of this MCP server"
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  padding: "3px 8px",
+                                  borderRadius: 6,
+                                  background:
+                                    currentScope === "workspace"
+                                      ? "rgba(2, 132, 199, 0.12)"
+                                      : currentScope === "user"
+                                      ? "rgba(124, 58, 237, 0.12)"
+                                      : "rgba(22, 163, 74, 0.12)",
+                                  color:
+                                    currentScope === "workspace"
+                                      ? "#0284c7"
+                                      : currentScope === "user"
+                                      ? "#7c3aed"
+                                      : "#15803d",
+                                  border: `1px solid ${
+                                    currentScope === "workspace"
+                                      ? "rgba(2, 132, 199, 0.3)"
+                                      : currentScope === "user"
+                                      ? "rgba(124, 58, 237, 0.3)"
+                                      : "rgba(22, 163, 74, 0.3)"
+                                  }`,
+                                  outline: "none",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <option value="workspace">📁 Workspace Local ({sTools[0]?.workspace || currentWorkspace})</option>
+                                <option value="user">👤 User Global (All Workspaces)</option>
+                                <option value="system">🌐 System Global (Instance-wide)</option>
+                              </select>
+                            </div>
                           );
                         })()}
                         <span

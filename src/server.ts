@@ -959,6 +959,92 @@ app.delete("/api/tools/:serverName", requireAuth, async (req, res) => {
   }
 });
 
+// 3c. Change / Migrate MCP Server Scope (Workspace <-> User <-> System)
+app.post("/api/mcp/servers/change-scope", requireAuth, async (req, res) => {
+  try {
+    const { user, userNumber } = getAuthContext(req);
+    const { serverName, fromScope, toScope, workspace = "default" } = req.body;
+
+    if (!serverName || !fromScope || !toScope) {
+      return res.status(400).json({ success: false, error: "serverName, fromScope, and toScope are required." });
+    }
+
+    if (fromScope === toScope) {
+      return res.json({ success: true, message: "Server is already in target scope." });
+    }
+
+    // Role check for System Global scope
+    if ((fromScope === "system" || toScope === "system") && user && user.role !== "admin" && userNumber !== "00000") {
+      return res.status(403).json({ success: false, error: "Admin role required to modify System Global MCP servers." });
+    }
+
+    // 1. Extract and remove from fromScope
+    let targetDef: MCPServerDef | null = null;
+    if (fromScope === "workspace") {
+      const current = scopedMcpManager.readWorkspaceServers(workspace, userNumber);
+      targetDef = current[serverName] || null;
+      if (targetDef) {
+        delete current[serverName];
+        scopedMcpManager.saveWorkspaceServers(current, workspace, userNumber);
+        await scopedMcpManager.reloadScope("workspace", workspace, userNumber);
+      }
+    } else if (fromScope === "user") {
+      const current = scopedMcpManager.readUserServers(userNumber);
+      targetDef = current[serverName] || null;
+      if (targetDef) {
+        delete current[serverName];
+        scopedMcpManager.saveUserServers(current, userNumber);
+        await scopedMcpManager.reloadScope("user", workspace, userNumber);
+      }
+    } else if (fromScope === "system") {
+      targetDef = config.mcpServers[serverName] || null;
+      if (targetDef) {
+        delete config.mcpServers[serverName];
+        try {
+          saveConfigToDisk(config);
+        } catch {}
+        await mcpManager.unregisterServer(serverName);
+      }
+    }
+
+    if (!targetDef) {
+      return res.status(404).json({ success: false, error: `Server "${serverName}" not found in scope "${fromScope}".` });
+    }
+
+    // 2. Insert into toScope
+    if (toScope === "workspace") {
+      const current = scopedMcpManager.readWorkspaceServers(workspace, userNumber);
+      current[serverName] = targetDef;
+      scopedMcpManager.saveWorkspaceServers(current, workspace, userNumber);
+      await scopedMcpManager.reloadScope("workspace", workspace, userNumber);
+    } else if (toScope === "user") {
+      const current = scopedMcpManager.readUserServers(userNumber);
+      current[serverName] = targetDef;
+      scopedMcpManager.saveUserServers(current, userNumber);
+      await scopedMcpManager.reloadScope("user", workspace, userNumber);
+    } else if (toScope === "system") {
+      config.mcpServers[serverName] = targetDef;
+      try {
+        saveConfigToDisk(config);
+      } catch {}
+      await mcpManager.registerServerDynamically(serverName, targetDef);
+    }
+
+    const contextTools = await scopedMcpManager.getDiscoveredToolsForContext(workspace, userNumber);
+
+    res.json({
+      success: true,
+      serverName,
+      fromScope,
+      toScope,
+      workspace,
+      totalTools: contextTools.length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==========================================
 // 3c. Dual-Scope Skills Endpoints (Global & Per-Workspace)
 // ==========================================
