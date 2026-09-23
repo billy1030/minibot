@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Wrench, X, RefreshCw, Plus, Trash2, CheckCircle2, AlertCircle, Box, BookOpen, Globe, Folder, Code, Search } from "lucide-react";
+import { Wrench, X, RefreshCw, Plus, Trash2, CheckCircle2, AlertCircle, Box, BookOpen, Globe, Folder, Code, Search, ChevronDown, ChevronRight } from "lucide-react";
 
 export interface ToolItem {
   serverName: string;
@@ -75,6 +75,28 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
 
   // Search query state for filtering MCP tools and Skills
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Collapsed MCP servers state (keys are serverName: boolean)
+  const [collapsedServers, setCollapsedServers] = useState<Record<string, boolean>>({});
+
+  const toggleServerCollapse = (sName: string) => {
+    setCollapsedServers((prev) => ({
+      ...prev,
+      [sName]: !prev[sName],
+    }));
+  };
+
+  const collapseAllServers = () => {
+    const next: Record<string, boolean> = {};
+    for (const sName of Object.keys(groupedTools)) {
+      next[sName] = true;
+    }
+    setCollapsedServers(next);
+  };
+
+  const expandAllServers = () => {
+    setCollapsedServers({});
+  };
 
   // Form states for installing an MCP server
   const [serverName, setServerName] = useState("");
@@ -716,33 +738,109 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
         <div style={{ padding: 20, overflowY: "auto", flex: 1 }}>
           {activeTab === "installed" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Quick Expand / Collapse All Bar */}
+              {Object.keys(groupedTools).length > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "4px 4px",
+                    fontSize: 12,
+                    color: "var(--text-muted, #64748b)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>
+                      {Object.keys(groupedTools).length} server{Object.keys(groupedTools).length !== 1 ? "s" : ""} mounted
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      onClick={collapseAllServers}
+                      style={{
+                        background: "var(--bg-card, #f8fafc)",
+                        border: "1px solid var(--border-color, #cbd5e1)",
+                        borderRadius: 6,
+                        padding: "4px 9px",
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        color: "var(--text-main, #334155)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Collapse All
+                    </button>
+                    <button
+                      onClick={expandAllServers}
+                      style={{
+                        background: "var(--bg-card, #f8fafc)",
+                        border: "1px solid var(--border-color, #cbd5e1)",
+                        borderRadius: 6,
+                        padding: "4px 9px",
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        color: "var(--text-main, #334155)",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Expand All
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {Object.keys(groupedTools).length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
                   {searchQuery ? `No MCP servers or tools matching "${searchQuery}".` : "No active tools mounted."}
                 </div>
               ) : (
-                Object.entries(groupedTools).map(([sName, sTools]) => (
-                  <div
-                    key={sName}
-                    style={{
-                      borderRadius: 10,
-                      border: "1px solid var(--border-color, #e2e8f0)",
-                      background: "var(--bg-secondary, #ffffff)",
-                      overflow: "hidden",
-                      boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                    }}
-                  >
+                Object.entries(groupedTools).map(([sName, sTools]) => {
+                  const isCollapsed = Boolean(collapsedServers[sName]);
+                  return (
                     <div
+                      key={sName}
                       style={{
-                        padding: "14px 18px",
+                        borderRadius: 10,
+                        border: "1px solid var(--border-color, #e2e8f0)",
+                        background: "var(--bg-secondary, #ffffff)",
+                        overflow: "hidden",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                      }}
+                    >
+                    <div
+                      onClick={() => toggleServerCollapse(sName)}
+                      style={{
+                        padding: "12px 18px",
                         background: "var(--bg-card, #f8fafc)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        borderBottom: "1px solid var(--border-color, #e2e8f0)",
+                        borderBottom: isCollapsed ? "none" : "1px solid var(--border-color, #e2e8f0)",
+                        cursor: "pointer",
+                        userSelect: "none",
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleServerCollapse(sName);
+                          }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            padding: 2,
+                            display: "flex",
+                            alignItems: "center",
+                            cursor: "pointer",
+                            color: "var(--text-muted, #64748b)",
+                          }}
+                          title={isCollapsed ? "Expand server tools" : "Collapse server tools"}
+                        >
+                          {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                        </button>
+
                         <Box size={18} color="#1d4ed8" />
                         <span style={{ fontWeight: 700, fontSize: 15, color: "var(--text-main, #0f172a)" }}>{sName}</span>
                         {/* Interactive Scope Dropdown */}
@@ -761,7 +859,10 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                           const currentScope = resolvedScope;
                           const isDisabled = currentScope === "disabled";
                           return (
-                            <div style={{ display: "inline-flex", alignItems: "center" }}>
+                            <div
+                              style={{ display: "inline-flex", alignItems: "center" }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <select
                                 value={currentScope}
                                 onChange={(e) => handleChangeScope(sName, currentScope, e.target.value)}
@@ -823,79 +924,87 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                         </span>
                       </div>
 
-                      {sName !== "web-search" && sName !== "minimax-multimodal" && (
-                        <button
-                          onClick={() => handleDelete(sName)}
-                          title="Unregister this server"
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "#dc2626",
-                            cursor: "pointer",
-                            padding: 6,
-                            borderRadius: 6,
-                          }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {sName !== "web-search" && sName !== "minimax-multimodal" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(sName);
+                            }}
+                            title="Unregister this server"
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "#dc2626",
+                              cursor: "pointer",
+                              padding: 6,
+                              borderRadius: 6,
+                            }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-                      {sTools.map((tool) => (
-                        <div
-                          key={tool.name}
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 6,
-                            padding: "12px 16px",
-                            borderRadius: 8,
-                            background: "var(--bg-card, #f8fafc)",
-                            border: "1px solid var(--border-color, #e2e8f0)",
-                            boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <code
-                              style={{
-                                fontSize: 13.5,
-                                color: tool.scope === "disabled" ? "#64748b" : "#0f172a",
-                                fontWeight: 800,
-                                background: tool.scope === "disabled" ? "rgba(100, 116, 139, 0.12)" : "rgba(2, 132, 199, 0.12)",
-                                padding: "2px 8px",
-                                borderRadius: 5,
-                                border: `1px solid ${tool.scope === "disabled" ? "rgba(100, 116, 139, 0.25)" : "rgba(2, 132, 199, 0.25)"}`,
-                                letterSpacing: "0.2px",
-                              }}
-                            >
-                              {tool.name}
-                            </code>
-                            {tool.scope === "disabled" && (
-                              <span style={{ fontSize: 11, color: "#64748b", fontStyle: "italic" }}>
-                                (Select a scope above to activate)
-                              </span>
+                    {!isCollapsed && (
+                      <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+                        {sTools.map((tool) => (
+                          <div
+                            key={tool.name}
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 6,
+                              padding: "12px 16px",
+                              borderRadius: 8,
+                              background: "var(--bg-card, #f8fafc)",
+                              border: "1px solid var(--border-color, #e2e8f0)",
+                              boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <code
+                                style={{
+                                  fontSize: 13.5,
+                                  color: tool.scope === "disabled" ? "#64748b" : "#0f172a",
+                                  fontWeight: 800,
+                                  background: tool.scope === "disabled" ? "rgba(100, 116, 139, 0.12)" : "rgba(2, 132, 199, 0.12)",
+                                  padding: "2px 8px",
+                                  borderRadius: 5,
+                                  border: `1px solid ${tool.scope === "disabled" ? "rgba(100, 116, 139, 0.25)" : "rgba(2, 132, 199, 0.25)"}`,
+                                  letterSpacing: "0.2px",
+                                }}
+                              >
+                                {tool.name}
+                              </code>
+                              {tool.scope === "disabled" && (
+                                <span style={{ fontSize: 11, color: "#64748b", fontStyle: "italic" }}>
+                                  (Select a scope above to activate)
+                                </span>
+                              )}
+                            </div>
+                            {tool.description && (
+                              <div
+                                style={{
+                                  fontSize: 13,
+                                  color: "var(--text-main, #1e293b)",
+                                  lineHeight: 1.6,
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word",
+                                  marginTop: 2,
+                                }}
+                              >
+                                {tool.description}
+                              </div>
                             )}
                           </div>
-                          {tool.description && (
-                            <div
-                              style={{
-                                fontSize: 13,
-                                color: "var(--text-main, #1e293b)",
-                                lineHeight: 1.6,
-                                whiteSpace: "pre-wrap",
-                                wordBreak: "break-word",
-                                marginTop: 2,
-                              }}
-                            >
-                              {tool.description}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))
+                );
+              })
               )}
             </div>
           )}
