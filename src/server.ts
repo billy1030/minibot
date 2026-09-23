@@ -148,7 +148,7 @@ getUsers();
 async function initMCP() {
   const servers: Record<string, MCPServerDef> = {};
   for (const [key, def] of Object.entries(config.mcpServers)) {
-    if (def.args?.[0]?.endsWith(".js")) {
+    if (def.args?.[0]?.startsWith("dist/") && def.args[0].endsWith(".js")) {
       const jsPath = path.resolve(process.cwd(), def.args[0]);
       const tsPath = def.args[0].replace(/^dist\//, "src/").replace(/\.js$/, ".ts");
       const fullTsPath = path.resolve(process.cwd(), tsPath);
@@ -158,14 +158,14 @@ async function initMCP() {
         servers[key] = {
           ...def,
           command: "node",
-          args: [jsPath],
+          args: [jsPath, ...(def.args.slice(1) || [])],
         };
       } else if (fs.existsSync(fullTsPath)) {
         // Fall back to tsx in development mode
         servers[key] = {
           ...def,
           command: "npx",
-          args: ["tsx", tsPath],
+          args: ["tsx", tsPath, ...(def.args.slice(1) || [])],
         };
       } else {
         // Standalone mode without dist/ folder: omit command so it activates in-process tools directly

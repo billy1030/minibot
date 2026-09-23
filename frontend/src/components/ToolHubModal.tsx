@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Wrench, X, RefreshCw, Plus, Trash2, CheckCircle2, AlertCircle, Box, BookOpen, Globe, Folder, Code } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Wrench, X, RefreshCw, Plus, Trash2, CheckCircle2, AlertCircle, Box, BookOpen, Globe, Folder, Code, Search } from "lucide-react";
 
 export interface ToolItem {
   serverName: string;
@@ -61,6 +61,9 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
   const [connectMode, setConnectMode] = useState<"form" | "json">("form");
   const [rawJsonText, setRawJsonText] = useState("");
   const [rawJsonError, setRawJsonError] = useState<string | null>(null);
+
+  // Search query state for filtering MCP tools and Skills
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Form states for installing an MCP server
   const [serverName, setServerName] = useState("");
@@ -166,15 +169,41 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     }
   }, [isOpen, currentWorkspace, initialTab]);
 
-  if (!isOpen) return null;
+  // Filter tools based on search query (matches tool name, description, or serverName; supports leading '/')
+  const filteredTools = useMemo(() => {
+    let q = searchQuery.trim().toLowerCase();
+    if (q.startsWith("/")) q = q.slice(1).trim();
+    if (!q) return tools;
+    return tools.filter(
+      (tool) =>
+        tool.name.toLowerCase().includes(q) ||
+        (tool.description && tool.description.toLowerCase().includes(q)) ||
+        (tool.serverName && tool.serverName.toLowerCase().includes(q))
+    );
+  }, [tools, searchQuery]);
 
-  // Group tools by serverName
-  const groupedTools = tools.reduce((acc, tool) => {
-    const sName = tool.serverName || "built-in";
-    if (!acc[sName]) acc[sName] = [];
-    acc[sName].push(tool);
-    return acc;
-  }, {} as Record<string, ToolItem[]>);
+  // Group filtered tools by serverName
+  const groupedTools = useMemo(() => {
+    return filteredTools.reduce((acc, tool) => {
+      const sName = tool.serverName || "built-in";
+      if (!acc[sName]) acc[sName] = [];
+      acc[sName].push(tool);
+      return acc;
+    }, {} as Record<string, ToolItem[]>);
+  }, [filteredTools]);
+
+  // Filter skills based on search query (matches skill name, description, or triggers; supports leading '/')
+  const filteredSkills = useMemo(() => {
+    let q = searchQuery.trim().toLowerCase();
+    if (q.startsWith("/")) q = q.slice(1).trim();
+    if (!q) return skills;
+    return skills.filter(
+      (skill) =>
+        skill.name.toLowerCase().includes(q) ||
+        (skill.description && skill.description.toLowerCase().includes(q)) ||
+        (skill.triggers && skill.triggers.some((t) => t.toLowerCase().includes(q)))
+    );
+  }, [skills, searchQuery]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -322,6 +351,8 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div
       style={{
@@ -443,67 +474,121 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
           </div>
         </div>
 
-        {/* Tab switcher */}
+        {/* Tab switcher & Search Bar */}
         <div
           style={{
             display: "flex",
-            gap: 8,
-            padding: "8px 24px 0 24px",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "4px 24px 0 24px",
             borderBottom: "1px solid var(--border-color, #e2e8f0)",
             background: "var(--bg-secondary, #ffffff)",
+            gap: 12,
           }}
         >
-          <button
-            onClick={() => setActiveTab("installed")}
-            style={{
-              background: "none",
-              border: "none",
-              borderBottom: activeTab === "installed" ? "2px solid var(--accent, #0284c7)" : "2px solid transparent",
-              color: activeTab === "installed" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
-              padding: "10px 14px",
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            Active MCP Servers ({Object.keys(groupedTools).length})
-          </button>
-          <button
-            onClick={() => setActiveTab("skills")}
-            style={{
-              background: "none",
-              border: "none",
-              borderBottom: activeTab === "skills" ? "2px solid var(--accent, #0284c7)" : "2px solid transparent",
-              color: activeTab === "skills" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
-              padding: "10px 14px",
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <BookOpen size={15} /> Skills Library ({skills.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("install")}
-            style={{
-              background: "none",
-              border: "none",
-              borderBottom: activeTab === "install" ? "2px solid var(--accent, #0284c7)" : "2px solid transparent",
-              color: activeTab === "install" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
-              padding: "10px 14px",
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <Plus size={15} /> Connect MCP Server
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setActiveTab("installed")}
+              style={{
+                background: "none",
+                border: "none",
+                borderBottom: activeTab === "installed" ? "2px solid var(--accent, #0284c7)" : "2px solid transparent",
+                color: activeTab === "installed" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
+                padding: "10px 14px",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Active MCP Servers ({Object.keys(groupedTools).length})
+            </button>
+            <button
+              onClick={() => setActiveTab("skills")}
+              style={{
+                background: "none",
+                border: "none",
+                borderBottom: activeTab === "skills" ? "2px solid var(--accent, #0284c7)" : "2px solid transparent",
+                color: activeTab === "skills" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
+                padding: "10px 14px",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <BookOpen size={15} /> Skills Library ({filteredSkills.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("install")}
+              style={{
+                background: "none",
+                border: "none",
+                borderBottom: activeTab === "install" ? "2px solid var(--accent, #0284c7)" : "2px solid transparent",
+                color: activeTab === "install" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
+                padding: "10px 14px",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <Plus size={15} /> Connect MCP Server
+            </button>
+          </div>
+
+          {/* 🔍 Search Bar for MCP Tools & Skills */}
+          {activeTab !== "install" && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background: "var(--bg-card, #f8fafc)",
+                border: "1px solid var(--border-color, #cbd5e1)",
+                borderRadius: 8,
+                padding: "5px 10px",
+                width: "min(320px, 35vw)",
+                marginBottom: 4,
+              }}
+            >
+              <Search size={14} color="var(--text-muted, #64748b)" />
+              <input
+                type="text"
+                placeholder={activeTab === "skills" ? "Search skills or triggers..." : "Search MCP servers or tools..."}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  fontSize: 12.5,
+                  color: "var(--text-main, #0f172a)",
+                  width: "100%",
+                }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  title="Clear search"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    color: "var(--text-muted, #64748b)",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Notification / Feedback Bar */}
@@ -533,7 +618,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {Object.keys(groupedTools).length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
-                  No active tools mounted.
+                  {searchQuery ? `No MCP servers or tools matching "${searchQuery}".` : "No active tools mounted."}
                 </div>
               ) : (
                 Object.entries(groupedTools).map(([sName, sTools]) => (
@@ -802,9 +887,13 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                 <div style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>Loading skills...</div>
               ) : skills.length === 0 ? (
                 <div style={{ textAlign: "center", padding: 30, color: "var(--text-muted)" }}>No skills discovered.</div>
+              ) : filteredSkills.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "36px 0", color: "var(--text-muted)" }}>
+                  No skills found matching "{searchQuery}".
+                </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {skills.map((skill) => {
+                  {filteredSkills.map((skill) => {
                     const isExpanded = selectedSkillContent?.name === skill.name;
                     return (
                       <div

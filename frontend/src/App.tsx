@@ -475,14 +475,23 @@ export function App() {
     }
   }, [showSlashMenu]);
 
-  const handleSelectSkillSlash = (skill: SkillItem) => {
-    setSelectedSkillBadge(skill);
+  const handleSelectSkillSlash = (item: { type: "skill"; item: SkillItem } | { type: "tool"; item: ToolItem }) => {
     setShowSlashMenu(false);
-    // Remove the leading "/" or "/keyword" from input
-    setInputPrompt((prev) => {
-      const clean = prev.replace(/^\/\S*\s*/, "");
-      return clean;
-    });
+    if (item.type === "skill") {
+      setSelectedSkillBadge(item.item);
+      // Remove the leading "/" or "/keyword" from input
+      setInputPrompt((prev) => {
+        const clean = prev.replace(/^\/\S*\s*/, "");
+        return clean;
+      });
+    } else {
+      // MCP Tool: insert tool call intent tag or slash command into the prompt
+      setInputPrompt((prev) => {
+        const clean = prev.replace(/^\/\S*\s*/, "");
+        const prefix = `[Use MCP Tool: ${item.item.serverName}/${item.item.name}] `;
+        return clean ? `${prefix}${clean}` : prefix;
+      });
+    }
     setTimeout(() => chatInputRef.current?.focus(), 50);
   };
 
@@ -6862,16 +6871,52 @@ export function App() {
               </div>
             )}
 
-            {/* 🪄 Slash Command ("/") Dropdown Menu for Skills */}
+            {/* 🪄 Slash Command ("/") Dropdown Menu for Skills and MCP Tools */}
             {showSlashMenu && (() => {
-              const filteredSkills = activeSkillsList.filter((s) => {
-                const query = slashFilter.toLowerCase();
-                return (
-                  s.name.toLowerCase().includes(query) ||
-                  (s.description && s.description.toLowerCase().includes(query)) ||
-                  (s.triggers && s.triggers.some((t) => t.toLowerCase().includes(query)))
-                );
-              });
+              type SlashEntry =
+                | { type: "skill"; key: string; item: SkillItem; name: string; desc: string; badge: string; isWorkspace: boolean }
+                | { type: "tool"; key: string; item: ToolItem; name: string; desc: string; badge: string; isWorkspace: boolean };
+
+              const query = slashFilter.toLowerCase();
+
+              const skillEntries: SlashEntry[] = activeSkillsList
+                .filter((s) => {
+                  if (!query) return true;
+                  const nameMatch = s.name.toLowerCase().includes(query);
+                  const descMatch = s.description && s.description.toLowerCase().includes(query);
+                  const triggerMatch = s.triggers && s.triggers.some((t) => t.toLowerCase().includes(query));
+                  const archifyAlias = (query.includes("arch") || query.includes("diagram")) && (s.name.includes("diagram") || s.name.includes("arch"));
+                  return nameMatch || descMatch || triggerMatch || archifyAlias;
+                })
+                .map((s) => ({
+                  type: "skill" as const,
+                  key: `skill-${s.name}`,
+                  item: s,
+                  name: s.name,
+                  desc: s.description || "",
+                  badge: s.scope.toUpperCase(),
+                  isWorkspace: s.scope === "workspace",
+                }));
+
+              const toolEntries: SlashEntry[] = activeToolsList
+                .filter((t) => {
+                  if (!query) return true;
+                  const nameMatch = t.name.toLowerCase().includes(query);
+                  const serverMatch = t.serverName.toLowerCase().includes(query);
+                  const descMatch = t.description && t.description.toLowerCase().includes(query);
+                  return nameMatch || serverMatch || descMatch;
+                })
+                .map((t) => ({
+                  type: "tool" as const,
+                  key: `tool-${t.serverName}-${t.name}`,
+                  item: t,
+                  name: `${t.serverName}/${t.name}`,
+                  desc: t.description || "",
+                  badge: "MCP TOOL",
+                  isWorkspace: false,
+                }));
+
+              const allEntries: SlashEntry[] = [...skillEntries, ...toolEntries];
 
               return (
                 <div
@@ -6880,13 +6925,13 @@ export function App() {
                     position: "absolute",
                     bottom: "calc(100% + 8px)",
                     left: 0,
-                    width: "min(460px, 90vw)",
-                    maxHeight: 280,
+                    width: "min(490px, 92vw)",
+                    maxHeight: 300,
                     overflowY: "auto",
                     background: "var(--bg-secondary, #1e293b)",
                     border: "1px solid var(--border-color, #334155)",
                     borderRadius: 10,
-                    boxShadow: "0 12px 30px rgba(0,0,0,0.35)",
+                    boxShadow: "0 12px 30px rgba(0,0,0,0.4)",
                     zIndex: 100,
                     display: "flex",
                     flexDirection: "column",
@@ -6896,22 +6941,22 @@ export function App() {
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderBottom: "1px solid var(--border-color)", marginBottom: 4 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color: "var(--accent, #0284c7)" }}>
                       <Sparkles size={14} />
-                      <span>SELECT AI SKILL ({filteredSkills.length})</span>
+                      <span>COMMANDS & SKILLS ({allEntries.length})</span>
                     </div>
                     <span style={{ fontSize: 10, color: "var(--text-muted)" }}>↑↓ Navigate • Enter Select • Esc Close</span>
                   </div>
 
-                  {filteredSkills.length === 0 ? (
-                    <div style={{ padding: "14px", textAlign: "center", fontSize: 12, color: "var(--text-muted)" }}>
-                      No skills matching "<strong>{slashFilter}</strong>"
+                  {allEntries.length === 0 ? (
+                    <div style={{ padding: "16px", textAlign: "center", fontSize: 12, color: "var(--text-muted)" }}>
+                      No skills or tools matching "<strong>{slashFilter}</strong>"
                     </div>
                   ) : (
-                    filteredSkills.map((skill, idx) => {
+                    allEntries.map((entry, idx) => {
                       const isSelected = idx === slashSelectedIndex;
                       return (
                         <div
-                          key={skill.name}
-                          onClick={() => handleSelectSkillSlash(skill)}
+                          key={entry.key}
+                          onClick={() => handleSelectSkillSlash(entry)}
                           onMouseEnter={() => setSlashSelectedIndex(idx)}
                           style={{
                             display: "flex",
@@ -6926,8 +6971,9 @@ export function App() {
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: isSelected ? "var(--accent, #0284c7)" : "var(--text-main)" }}>
-                              /{skill.name}
+                            <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: isSelected ? "var(--accent, #0284c7)" : "var(--text-main)" }}>
+                              {entry.type === "tool" ? <Wrench size={12} style={{ opacity: 0.8 }} /> : <Sparkles size={12} style={{ opacity: 0.8 }} />}
+                              /{entry.name}
                             </span>
                             <span
                               style={{
@@ -6935,16 +6981,24 @@ export function App() {
                                 fontWeight: 700,
                                 padding: "1px 5px",
                                 borderRadius: 4,
-                                background: skill.scope === "workspace" ? "rgba(16, 185, 129, 0.15)" : "rgba(100, 116, 139, 0.15)",
-                                color: skill.scope === "workspace" ? "#10b981" : "var(--text-muted)",
+                                background: entry.type === "tool"
+                                  ? "rgba(168, 85, 247, 0.15)"
+                                  : entry.isWorkspace
+                                  ? "rgba(16, 185, 129, 0.15)"
+                                  : "rgba(100, 116, 139, 0.15)",
+                                color: entry.type === "tool"
+                                  ? "#a855f7"
+                                  : entry.isWorkspace
+                                  ? "#10b981"
+                                  : "var(--text-muted)",
                               }}
                             >
-                              {skill.scope.toUpperCase()}
+                              {entry.badge}
                             </span>
                           </div>
-                          {skill.description && (
+                          {entry.desc && (
                             <div style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {skill.description}
+                              {entry.desc}
                             </div>
                           )}
                         </div>
@@ -6973,27 +7027,40 @@ export function App() {
               }}
               onKeyDown={(e) => {
                 if (showSlashMenu) {
-                  const filteredSkills = activeSkillsList.filter((s) => {
-                    const query = slashFilter.toLowerCase();
+                  const query = slashFilter.toLowerCase();
+                  const skillEntries = activeSkillsList.filter((s) => {
+                    if (!query) return true;
                     return (
                       s.name.toLowerCase().includes(query) ||
                       (s.description && s.description.toLowerCase().includes(query)) ||
-                      (s.triggers && s.triggers.some((t) => t.toLowerCase().includes(query)))
+                      (s.triggers && s.triggers.some((t) => t.toLowerCase().includes(query))) ||
+                      ((query.includes("arch") || query.includes("diagram")) && (s.name.includes("diagram") || s.name.includes("arch")))
                     );
-                  });
+                  }).map((s) => ({ type: "skill" as const, item: s }));
+
+                  const toolEntries = activeToolsList.filter((t) => {
+                    if (!query) return true;
+                    return (
+                      t.name.toLowerCase().includes(query) ||
+                      t.serverName.toLowerCase().includes(query) ||
+                      (t.description && t.description.toLowerCase().includes(query))
+                    );
+                  }).map((t) => ({ type: "tool" as const, item: t }));
+
+                  const allEntries = [...skillEntries, ...toolEntries];
 
                   if (e.key === "ArrowDown") {
                     e.preventDefault();
-                    setSlashSelectedIndex((prev) => (prev + 1) % Math.max(1, filteredSkills.length));
+                    setSlashSelectedIndex((prev) => (prev + 1) % Math.max(1, allEntries.length));
                     return;
                   } else if (e.key === "ArrowUp") {
                     e.preventDefault();
-                    setSlashSelectedIndex((prev) => (prev - 1 + filteredSkills.length) % Math.max(1, filteredSkills.length));
+                    setSlashSelectedIndex((prev) => (prev - 1 + allEntries.length) % Math.max(1, allEntries.length));
                     return;
                   } else if (e.key === "Enter" || e.key === "Tab") {
-                    if (filteredSkills.length > 0 && filteredSkills[slashSelectedIndex]) {
+                    if (allEntries.length > 0 && allEntries[slashSelectedIndex]) {
                       e.preventDefault();
-                      handleSelectSkillSlash(filteredSkills[slashSelectedIndex]);
+                      handleSelectSkillSlash(allEntries[slashSelectedIndex]);
                       return;
                     }
                   } else if (e.key === "Escape") {
