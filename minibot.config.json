@@ -73,12 +73,16 @@
         "--mcp-only"
       ],
       "strictSSL": false,
-      "env": {
-        "DATABASE_URL": "postgresql://postgres:postgrespassword@localhost:5232/mini_news",
-        "NODE_ENV": "production"
-      },
       "enabled": true,
       "description": "7x24 Real-time Financial Flash News with PostgreSQL, pgvector, and Safe Dynamic SQL Query Engine"
+    },
+    "bigfix": {
+      "type": "streamable-http",
+      "args": [],
+      "url": "https://172.22.29.51:9494/mcp",
+      "description": "Enterprise BigFix Platform Endpoint Management MCP Server (Computers, Fixlets, Actions, Relevance Query)",
+      "enabled": true,
+      "strictSSL": false
     }
   },
   "maxLoopIterations": 50

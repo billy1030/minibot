@@ -4,6 +4,7 @@ import path from "node:path";
 import { LoopConfig } from "../config/schema.js";
 import { LLMClient } from "../llm/client.js";
 import { MCPClientManager } from "../mcp/client-manager.js";
+import { ScopedMCPManager } from "../mcp/scoped-mcp-manager.js";
 import { globalSkillManager } from "../skills/skill-manager.js";
 
 export interface LoopEventCallbacks {
@@ -33,9 +34,9 @@ export interface LoopEventCallbacks {
 export class LoopOrchestrator {
   private config: LoopConfig;
   private llmClient: LLMClient;
-  private mcpManager: MCPClientManager;
+  private mcpManager: MCPClientManager | ScopedMCPManager;
 
-  constructor(config: LoopConfig, mcpManager: MCPClientManager) {
+  constructor(config: LoopConfig, mcpManager: MCPClientManager | ScopedMCPManager) {
     this.config = config;
     this.mcpManager = mcpManager;
     this.llmClient = new LLMClient(config.llm);
@@ -153,7 +154,12 @@ export class LoopOrchestrator {
       callbacks?.onStepStart?.(iteration);
 
       // Dynamically fetch tools each iteration so newly installed tools are immediately visible to LLM
-      const tools = this.mcpManager.getOpenAITools() as OpenAI.Chat.Completions.ChatCompletionTool[];
+      let tools: OpenAI.Chat.Completions.ChatCompletionTool[];
+      if ("getOpenAIToolsForContext" in this.mcpManager) {
+        tools = (await this.mcpManager.getOpenAIToolsForContext(workspace, userNumber)) as OpenAI.Chat.Completions.ChatCompletionTool[];
+      } else {
+        tools = this.mcpManager.getOpenAITools() as OpenAI.Chat.Completions.ChatCompletionTool[];
+      }
 
       try {
         const completion = await this.llmClient.createChatCompletion(messages, tools);
@@ -174,7 +180,13 @@ export class LoopOrchestrator {
             if (toolCall.type !== "function") continue;
 
             const toolName = toolCall.function.name;
-            const serverName = this.mcpManager.getToolServerName(toolName) || "unknown";
+            let serverName = "unknown";
+            if ("getToolOrigin" in this.mcpManager) {
+              const origin = await this.mcpManager.getToolOrigin(toolName, workspace, userNumber);
+              serverName = origin ? `${origin.serverName} (${origin.scope})` : "unknown";
+            } else {
+              serverName = this.mcpManager.getToolServerName(toolName) || "unknown";
+            }
 
             let parsedArgs: any = {};
             try {

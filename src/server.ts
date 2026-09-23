@@ -20,6 +20,7 @@ process.on("unhandledRejection", (reason: any) => {
 import { loadConfig, saveConfigToDisk } from "./config/index.js";
 import { LoopConfig, MCPServerDef } from "./config/schema.js";
 import { MCPClientManager } from "./mcp/client-manager.js";
+import { ScopedMCPManager, MCPScope } from "./mcp/scoped-mcp-manager.js";
 import { LoopOrchestrator } from "./engine/loop-orchestrator.js";
 import { LLMClient } from "./llm/client.js";
 import { getSandboxDir } from "./mcp/inprocess-tools.js";
@@ -140,6 +141,7 @@ app.use((req, res, next) => {
 
 let config: LoopConfig = loadConfig();
 let mcpManager = new MCPClientManager();
+let scopedMcpManager = new ScopedMCPManager(mcpManager);
 let isInitialized = false;
 
 // Initialize default users and directories
@@ -792,17 +794,62 @@ app.post("/api/config", requireAuth, async (req, res) => {
   }
 });
 
-// 3. List Discovered MCP Tools
-app.get("/api/tools", (req, res) => {
-  const tools = mcpManager.getOpenAITools();
-  const discoveredTools = mcpManager.getDiscoveredTools();
-  res.json({ tools, discoveredTools });
+// 3. List Discovered MCP Tools (Scoped to Current Context)
+app.get("/api/tools", async (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const workspace = (req.query.workspace as string) || "default";
+
+    const tools = await scopedMcpManager.getOpenAIToolsForContext(workspace, userNumber);
+    const discoveredTools = await scopedMcpManager.getDiscoveredToolsForContext(workspace, userNumber);
+
+    res.json({ tools, discoveredTools });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
-// 3a. Dynamically Install / Register an MCP Server at Runtime (No Restart Required)
+// 3.0. List Configured MCP Servers across System, User Global, and User Workspace Local
+app.get("/api/mcp/servers", requireAuth, async (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const workspace = (req.query.workspace as string) || "default";
+
+    const systemServers = config.mcpServers || {};
+    const userServers = scopedMcpManager.readUserServers(userNumber);
+    const workspaceServers = scopedMcpManager.readWorkspaceServers(workspace, userNumber);
+
+    res.json({
+      success: true,
+      workspace,
+      userNumber,
+      servers: {
+        system: systemServers,
+        user: userServers,
+        workspace: workspaceServers,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3a. Dynamically Install / Register an MCP Server at Runtime with Scope (system | user | workspace)
 app.post("/api/tools/install", requireAuth, async (req, res) => {
   try {
-    const { name, command, args = [], url, headers, env, description } = req.body;
+    const { user, userNumber } = getAuthContext(req);
+    const {
+      name,
+      command,
+      args = [],
+      url,
+      headers,
+      env,
+      description,
+      scope = "system",
+      workspace = "default",
+    } = req.body;
+
     if (!name || typeof name !== "string") {
       return res.status(400).json({ success: false, error: "Server name is required." });
     }
@@ -819,48 +866,93 @@ app.post("/api/tools/install", requireAuth, async (req, res) => {
       strictSSL: false,
     };
 
-    const result = await mcpManager.registerServerDynamically(name, serverDef);
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.error || "Failed to register MCP server." });
+    if (scope === "workspace") {
+      // 1. Workspace Local Scope
+      const current = scopedMcpManager.readWorkspaceServers(workspace, userNumber);
+      current[name] = serverDef;
+      scopedMcpManager.saveWorkspaceServers(current, workspace, userNumber);
+      await scopedMcpManager.reloadScope("workspace", workspace, userNumber);
+    } else if (scope === "user") {
+      // 2. User Global Scope
+      const current = scopedMcpManager.readUserServers(userNumber);
+      current[name] = serverDef;
+      scopedMcpManager.saveUserServers(current, userNumber);
+      await scopedMcpManager.reloadScope("user", workspace, userNumber);
+    } else {
+      // 3. System Global Scope (Requires admin or default user)
+      if (user && user.role !== "admin" && user.userNumber !== "00000") {
+        return res.status(403).json({ success: false, error: "Admin role required to configure System Global MCP servers." });
+      }
+
+      const result = await mcpManager.registerServerDynamically(name, serverDef);
+      if (!result.success) {
+        return res.status(500).json({ success: false, error: result.error || "Failed to register MCP server." });
+      }
+
+      config.mcpServers[name] = serverDef;
+      try {
+        saveConfigToDisk(config);
+      } catch (saveErr: any) {
+        console.warn("[Config] Note: Could not persist new server to disk:", saveErr.message);
+      }
     }
 
-    // Persist into config so it survives server reboots
-    config.mcpServers[name] = serverDef;
-    try {
-      saveConfigToDisk(config);
-    } catch (saveErr: any) {
-      console.warn("[Config] Note: Could not persist new server to disk:", saveErr.message);
-    }
+    const contextTools = await scopedMcpManager.getDiscoveredToolsForContext(workspace, userNumber);
 
     res.json({
       success: true,
       serverName: name,
-      toolsAdded: result.toolsAdded,
-      totalTools: mcpManager.getOpenAITools().length,
+      scope,
+      workspace,
+      totalTools: contextTools.length,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// 3b. Dynamically Unregister an MCP Server at Runtime
+// 3b. Dynamically Unregister an MCP Server from a specific Scope
 app.delete("/api/tools/:serverName", requireAuth, async (req, res) => {
   try {
+    const { user, userNumber } = getAuthContext(req);
     const serverName = String(req.params.serverName);
-    const success = await mcpManager.unregisterServer(serverName);
+    const scope = (req.query.scope as MCPScope) || "system";
+    const workspace = (req.query.workspace as string) || "default";
 
-    // Remove from in-memory config & persist
-    if (config.mcpServers[serverName]) {
-      delete config.mcpServers[serverName];
-      try {
-        saveConfigToDisk(config);
-      } catch {}
+    if (scope === "workspace") {
+      const current = scopedMcpManager.readWorkspaceServers(workspace, userNumber);
+      if (current[serverName]) {
+        delete current[serverName];
+        scopedMcpManager.saveWorkspaceServers(current, workspace, userNumber);
+        await scopedMcpManager.reloadScope("workspace", workspace, userNumber);
+      }
+    } else if (scope === "user") {
+      const current = scopedMcpManager.readUserServers(userNumber);
+      if (current[serverName]) {
+        delete current[serverName];
+        scopedMcpManager.saveUserServers(current, userNumber);
+        await scopedMcpManager.reloadScope("user", workspace, userNumber);
+      }
+    } else {
+      if (user && user.role !== "admin" && user.userNumber !== "00000") {
+        return res.status(403).json({ success: false, error: "Admin role required to delete System Global MCP servers." });
+      }
+      await mcpManager.unregisterServer(serverName);
+      if (config.mcpServers[serverName]) {
+        delete config.mcpServers[serverName];
+        try {
+          saveConfigToDisk(config);
+        } catch {}
+      }
     }
 
+    const contextTools = await scopedMcpManager.getDiscoveredToolsForContext(workspace, userNumber);
+
     res.json({
-      success,
+      success: true,
       serverName,
-      totalTools: mcpManager.getOpenAITools().length,
+      scope,
+      totalTools: contextTools.length,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -1189,7 +1281,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
     }
 
     const effectiveModel = currentConfig.llm.model;
-    const orchestrator = new LoopOrchestrator(currentConfig, mcpManager);
+    const orchestrator = new LoopOrchestrator(currentConfig, scopedMcpManager);
     const docManager = getDocManager(req);
 
     // Retrieve preprocessed document context if hashes provided
