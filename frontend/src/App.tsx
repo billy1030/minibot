@@ -1080,9 +1080,10 @@ export function App() {
     }
   };
 
-  const fetchTools = async () => {
+  const fetchTools = async (wsName?: string) => {
     try {
-      const res = await fetch("/api/tools", { credentials: "include" });
+      const ws = wsName || currentWorkspace;
+      const res = await fetch(`/api/tools?workspace=${encodeURIComponent(ws)}`, { credentials: "include" });
       const data = await res.json();
       if (data.discoveredTools) {
         setActiveToolsList(data.discoveredTools);
@@ -1111,17 +1112,22 @@ export function App() {
     args?: string[];
     url?: string;
     description?: string;
+    scope?: "system" | "user" | "workspace";
+    workspace?: string;
   }): Promise<{ success: boolean; error?: string }> => {
     try {
       const res = await fetch("/api/tools/install", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(serverData),
+        body: JSON.stringify({
+          ...serverData,
+          workspace: serverData.workspace || currentWorkspace,
+        }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        await fetchTools();
+        await fetchTools(currentWorkspace);
         await fetchConfig();
         return { success: true };
       }
@@ -1131,15 +1137,15 @@ export function App() {
     }
   };
 
-  const handleDeleteMcpServer = async (serverName: string): Promise<{ success: boolean; error?: string }> => {
+  const handleDeleteMcpServer = async (serverName: string, scope: "system" | "user" | "workspace" = "system"): Promise<{ success: boolean; error?: string }> => {
     try {
-      const res = await fetch(`/api/tools/${encodeURIComponent(serverName)}`, {
+      const res = await fetch(`/api/tools/${encodeURIComponent(serverName)}?scope=${encodeURIComponent(scope)}&workspace=${encodeURIComponent(currentWorkspace)}`, {
         method: "DELETE",
         credentials: "include",
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        await fetchTools();
+        await fetchTools(currentWorkspace);
         await fetchConfig();
         return { success: true };
       }

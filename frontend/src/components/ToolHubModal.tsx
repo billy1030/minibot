@@ -6,6 +6,9 @@ export interface ToolItem {
   name: string;
   description?: string;
   inputSchema?: any;
+  scope?: "system" | "user" | "workspace";
+  workspace?: string;
+  userNumber?: string;
 }
 
 export interface SkillItem {
@@ -23,8 +26,16 @@ interface ToolHubModalProps {
   onClose: () => void;
   tools: ToolItem[];
   onRefreshTools: () => Promise<void>;
-  onInstallServer: (serverData: { name: string; command?: string; args?: string[]; url?: string; description?: string }) => Promise<{ success: boolean; error?: string }>;
-  onDeleteServer: (serverName: string) => Promise<{ success: boolean; error?: string }>;
+  onInstallServer: (serverData: {
+    name: string;
+    command?: string;
+    args?: string[];
+    url?: string;
+    description?: string;
+    scope?: "system" | "user" | "workspace";
+    workspace?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
+  onDeleteServer: (serverName: string, scope?: "system" | "user" | "workspace") => Promise<{ success: boolean; error?: string }>;
   currentWorkspace?: string;
   onDeleteSkill?: (skillName: string) => Promise<{ success: boolean; error?: string }>;
   initialTab?: "installed" | "skills" | "install";
@@ -67,6 +78,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
 
   // Form states for installing an MCP server
   const [serverName, setServerName] = useState("");
+  const [installScope, setInstallScope] = useState<"system" | "user" | "workspace">("workspace");
   const [installType, setInstallType] = useState<"stdio" | "url">("stdio");
   const [command, setCommand] = useState("npx");
   const [argsText, setArgsText] = useState("");
@@ -238,6 +250,8 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
       args: installType === "stdio" ? parsedArgs : undefined,
       url: installType === "url" ? url.trim() : undefined,
       description: description.trim() || undefined,
+      scope: installScope,
+      workspace: currentWorkspace,
     });
 
     setIsSubmitting(false);
@@ -642,17 +656,42 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                         borderBottom: "1px solid var(--border-color, #e2e8f0)",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                         <Box size={18} color="#1d4ed8" />
                         <span style={{ fontWeight: 700, fontSize: 15, color: "var(--text-main, #0f172a)" }}>{sName}</span>
+                        {/* Scope Badge */}
+                        {(() => {
+                          const toolScope = sTools[0]?.scope || "system";
+                          const isWs = toolScope === "workspace";
+                          const isUser = toolScope === "user";
+                          return (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                padding: "2px 8px",
+                                borderRadius: 5,
+                                background: isWs ? "rgba(2, 132, 199, 0.12)" : isUser ? "rgba(124, 58, 237, 0.12)" : "rgba(22, 163, 74, 0.12)",
+                                color: isWs ? "#0284c7" : isUser ? "#7c3aed" : "#15803d",
+                                border: `1px solid ${isWs ? "rgba(2, 132, 199, 0.25)" : isUser ? "rgba(124, 58, 237, 0.25)" : "rgba(22, 163, 74, 0.25)"}`,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              {isWs ? <Folder size={11} /> : isUser ? <Folder size={11} /> : <Globe size={11} />}
+                              {isWs ? `WORKSPACE (${sTools[0]?.workspace || currentWorkspace})` : isUser ? "USER GLOBAL" : "SYSTEM GLOBAL"}
+                            </span>
+                          );
+                        })()}
                         <span
                           style={{
                             fontSize: 11,
                             padding: "2px 8px",
                             borderRadius: 6,
-                            background: "rgba(22, 163, 74, 0.12)",
-                            color: "#15803d",
-                            border: "1px solid rgba(22, 163, 74, 0.3)",
+                            background: "rgba(100, 116, 139, 0.12)",
+                            color: "var(--text-muted, #64748b)",
+                            border: "1px solid rgba(100, 116, 139, 0.25)",
                             fontWeight: 600,
                           }}
                         >
@@ -1230,6 +1269,104 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                 </form>
               ) : (
                 <form onSubmit={handleInstall} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {/* Scope Selector */}
+                  <div>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text-main, #0f172a)", marginBottom: 6 }}>
+                      Deployment Scope:
+                    </label>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          border: installScope === "workspace" ? "1.5px solid var(--accent, #0284c7)" : "1px solid var(--border-color, #cbd5e1)",
+                          background: installScope === "workspace" ? "rgba(2, 132, 199, 0.08)" : "var(--bg-card, #f8fafc)",
+                          color: installScope === "workspace" ? "var(--accent, #0284c7)" : "var(--text-main, #0f172a)",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="installScope"
+                          checked={installScope === "workspace"}
+                          onChange={() => setInstallScope("workspace")}
+                        />
+                        <div>
+                          <div>Workspace Local</div>
+                          <div style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted, #64748b)" }}>
+                            Only in "{currentWorkspace}"
+                          </div>
+                        </div>
+                      </label>
+
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          border: installScope === "user" ? "1.5px solid #7c3aed" : "1px solid var(--border-color, #cbd5e1)",
+                          background: installScope === "user" ? "rgba(124, 58, 237, 0.08)" : "var(--bg-card, #f8fafc)",
+                          color: installScope === "user" ? "#7c3aed" : "var(--text-main, #0f172a)",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="installScope"
+                          checked={installScope === "user"}
+                          onChange={() => setInstallScope("user")}
+                        />
+                        <div>
+                          <div>User Global</div>
+                          <div style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted, #64748b)" }}>
+                            Across all your workspaces
+                          </div>
+                        </div>
+                      </label>
+
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          padding: "8px 12px",
+                          borderRadius: 8,
+                          border: installScope === "system" ? "1.5px solid #16a34a" : "1px solid var(--border-color, #cbd5e1)",
+                          background: installScope === "system" ? "rgba(22, 163, 74, 0.08)" : "var(--bg-card, #f8fafc)",
+                          color: installScope === "system" ? "#16a34a" : "var(--text-main, #0f172a)",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="installScope"
+                          checked={installScope === "system"}
+                          onChange={() => setInstallScope("system")}
+                        />
+                        <div>
+                          <div>System Global</div>
+                          <div style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted, #64748b)" }}>
+                            All users & workspaces
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
                   <div>
                 <label style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text-main, #0f172a)", marginBottom: 6 }}>
                   Server Identifier / Name:
