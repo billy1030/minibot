@@ -1169,6 +1169,19 @@ app.delete("/api/skills/:name", requireAuth, (req, res) => {
   }
 });
 
+app.post("/api/skills/toggle", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const { name, enabled = true, workspace = "default" } = req.body;
+    if (!name) return res.status(400).json({ success: false, error: "Skill name required." });
+
+    const result = globalSkillManager.toggleSkill(String(name), Boolean(enabled), workspace, userNumber);
+    res.json({ success: result.success, name, disabled: result.disabled, workspace });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==========================================
 // 3d. AGENTS.md Multi-Agent Rules Endpoints
 // ==========================================

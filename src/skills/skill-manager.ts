@@ -11,6 +11,7 @@ export interface SkillMetadata {
   filePath: string;
   triggers?: string[];
   content?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -127,17 +128,70 @@ export class SkillManager {
   }
 
   /**
+   * Path to disabled skills configuration for this workspace
+   */
+  public getDisabledSkillsPath(workspace: string = "default", userNumber: string = "00000"): string {
+    const wsDir = getWorkspaceDir(workspace, "logs", userNumber);
+    return path.join(wsDir, ".skills", "disabled.json");
+  }
+
+  /**
+   * Read the list of disabled skill names for this workspace
+   */
+  public getDisabledSkills(workspace: string = "default", userNumber: string = "00000"): string[] {
+    try {
+      const p = this.getDisabledSkillsPath(workspace, userNumber);
+      if (fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, "utf-8");
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) return list.map((s) => String(s).toLowerCase());
+      }
+    } catch {}
+    return [];
+  }
+
+  /**
+   * Toggle a skill between enabled and disabled
+   */
+  public toggleSkill(skillName: string, enabled: boolean, workspace: string = "default", userNumber: string = "00000"): { success: boolean; disabled: boolean } {
+    try {
+      const cleanName = skillName.trim().toLowerCase();
+      const p = this.getDisabledSkillsPath(workspace, userNumber);
+      const dir = path.dirname(p);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      let current = this.getDisabledSkills(workspace, userNumber);
+      if (enabled) {
+        current = current.filter((s) => s !== cleanName);
+      } else {
+        if (!current.includes(cleanName)) {
+          current.push(cleanName);
+        }
+      }
+
+      fs.writeFileSync(p, JSON.stringify(current, null, 2), "utf-8");
+      return { success: true, disabled: !enabled };
+    } catch (err: any) {
+      return { success: false, disabled: !enabled };
+    }
+  }
+
+  /**
    * List all skills available in the current context (Global + Workspace)
    * Workspace skills override global skills with the same name.
    */
   public listAvailableSkills(workspace: string = "default", userNumber: string = "00000"): SkillMetadata[] {
     const skillMap = new Map<string, SkillMetadata>();
+    const disabledList = this.getDisabledSkills(workspace, userNumber);
 
     // 1. Scan Global Skills
     for (const globalDir of this.globalDirs) {
       const globalSkills = this.scanDirectoryForSkills(globalDir, "global");
       for (const skill of globalSkills) {
-        skillMap.set(skill.name.toLowerCase(), skill);
+        const isDis = disabledList.includes(skill.name.toLowerCase());
+        skillMap.set(skill.name.toLowerCase(), { ...skill, disabled: isDis });
       }
     }
 
@@ -148,7 +202,8 @@ export class SkillManager {
       if (fs.existsSync(wsSkillsDir)) {
         const wsSkills = this.scanDirectoryForSkills(wsSkillsDir, "workspace", workspace);
         for (const skill of wsSkills) {
-          skillMap.set(skill.name.toLowerCase(), skill);
+          const isDis = disabledList.includes(skill.name.toLowerCase());
+          skillMap.set(skill.name.toLowerCase(), { ...skill, disabled: isDis });
         }
       }
     } catch {}
@@ -259,6 +314,9 @@ export class SkillManager {
     const activeSkillNames: string[] = [];
 
     for (const skill of allSkills) {
+      // If skill is disabled, skip it entirely
+      if (skill.disabled) continue;
+
       // Check if prompt matches skill name, triggers, or key terms
       const matchesName = lowerPrompt.includes(skill.name.toLowerCase());
       const matchesTrigger = skill.triggers?.some((t) => lowerPrompt.includes(t.toLowerCase()));

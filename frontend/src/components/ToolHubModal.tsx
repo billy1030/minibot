@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Wrench, X, RefreshCw, Plus, Trash2, CheckCircle2, AlertCircle, Box, BookOpen, Globe, Folder, Code, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { Wrench, X, RefreshCw, Plus, Trash2, CheckCircle2, AlertCircle, Box, BookOpen, Globe, Folder, Code, Search, ChevronDown, ChevronRight, ToggleLeft, ToggleRight } from "lucide-react";
 
 export interface ToolItem {
   serverName: string;
@@ -19,6 +19,7 @@ export interface SkillItem {
   dirPath: string;
   filePath: string;
   triggers?: string[];
+  disabled?: boolean;
 }
 
 interface ToolHubModalProps {
@@ -38,7 +39,7 @@ interface ToolHubModalProps {
   onDeleteServer: (serverName: string, scope?: "system" | "user" | "workspace") => Promise<{ success: boolean; error?: string }>;
   currentWorkspace?: string;
   onDeleteSkill?: (skillName: string) => Promise<{ success: boolean; error?: string }>;
-  initialTab?: "installed" | "skills" | "install";
+  initialTab?: "installed" | "disabled_mcp" | "skills" | "install";
   onSkillsLoaded?: (skills: SkillItem[]) => void;
 }
 
@@ -54,7 +55,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
   initialTab = "installed",
   onSkillsLoaded,
 }) => {
-  const [activeTab, setActiveTab] = useState<"installed" | "skills" | "install">(initialTab);
+  const [activeTab, setActiveTab] = useState<"installed" | "disabled_mcp" | "skills" | "install">(initialTab);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
@@ -249,7 +250,9 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     let q = searchQuery.trim().toLowerCase();
     if (q.startsWith("/")) q = q.slice(1).trim();
 
-    // Check configured servers for disabled ones (enabled === false)
+    // Check configured servers for:
+    // 1. disabled ones (enabled === false)
+    // 2. connecting/active ones that have not returned tools yet (enabled === true but not in acc)
     const allScopes: Array<{ scope: "system" | "user" | "workspace"; map: Record<string, any> }> = [
       { scope: "workspace", map: configuredServers.workspace || {} },
       { scope: "user", map: configuredServers.user || {} },
@@ -258,15 +261,26 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
 
     for (const { scope, map } of allScopes) {
       for (const [sName, def] of Object.entries(map)) {
-        if (def && def.enabled === false) {
-          if (!acc[sName]) {
-            if (!q || sName.toLowerCase().includes(q) || (def.description && def.description.toLowerCase().includes(q))) {
+        if (!acc[sName]) {
+          if (!q || sName.toLowerCase().includes(q) || (def?.description && def.description.toLowerCase().includes(q))) {
+            if (def && def.enabled === false) {
               acc[sName] = [
                 {
                   serverName: sName,
                   name: `(Server Disabled)`,
                   description: def.description || `Configured in ${scope.toUpperCase()} scope but currently deactivated.`,
                   scope: "disabled",
+                  workspace: scope === "workspace" ? currentWorkspace : undefined,
+                },
+              ];
+            } else if (def && def.enabled !== false) {
+              // Server is enabled but 0 tools returned yet (connecting / initializing)
+              acc[sName] = [
+                {
+                  serverName: sName,
+                  name: `(Connecting / 0 tools)`,
+                  description: def.description || `Starting up ${scope.toUpperCase()} scope MCP server...`,
+                  scope: scope,
                   workspace: scope === "workspace" ? currentWorkspace : undefined,
                 },
               ];
@@ -278,6 +292,28 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
 
     return acc;
   }, [filteredTools, configuredServers, searchQuery, currentWorkspace]);
+
+  // Separate active vs disabled MCP servers
+  const { activeGroupedTools, disabledGroupedTools } = useMemo(() => {
+    const active: Record<string, ToolItem[]> = {};
+    const disabled: Record<string, ToolItem[]> = {};
+
+    for (const [sName, sTools] of Object.entries(groupedTools)) {
+      // If server is marked disabled in configuredServers or its first tool has scope "disabled"
+      const isConfDisabled =
+        configuredServers.workspace?.[sName]?.enabled === false ||
+        configuredServers.user?.[sName]?.enabled === false ||
+        configuredServers.system?.[sName]?.enabled === false;
+      const isToolDisabled = sTools[0]?.scope === "disabled";
+
+      if (isConfDisabled || isToolDisabled) {
+        disabled[sName] = sTools;
+      } else {
+        active[sName] = sTools;
+      }
+    }
+    return { activeGroupedTools: active, disabledGroupedTools: disabled };
+  }, [groupedTools, configuredServers]);
 
   // Filter skills based on search query (matches skill name, description, or triggers; supports leading '/')
   const filteredSkills = useMemo(() => {
@@ -291,6 +327,20 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
         (skill.triggers && skill.triggers.some((t) => t.toLowerCase().includes(q)))
     );
   }, [skills, searchQuery]);
+
+  // Separate active vs disabled skills
+  const { activeSkills, disabledSkills } = useMemo(() => {
+    const active: SkillItem[] = [];
+    const disabled: SkillItem[] = [];
+    for (const skill of filteredSkills) {
+      if (skill.disabled) {
+        disabled.push(skill);
+      } else {
+        active.push(skill);
+      }
+    }
+    return { activeSkills: active, disabledSkills: disabled };
+  }, [filteredSkills]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -473,6 +523,34 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
     }
   };
 
+  const handleToggleSkill = async (skillName: string, currentlyDisabled: boolean) => {
+    try {
+      const nextEnabled = currentlyDisabled; // If currently disabled, enable it
+      const res = await fetch("/api/skills/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          name: skillName,
+          enabled: nextEnabled,
+          workspace: currentWorkspace,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({
+          text: `Skill "${skillName}" ${nextEnabled ? "activated" : "deactivated"} successfully!`,
+          isError: false,
+        });
+        await fetchSkills();
+      } else {
+        setMessage({ text: data.error || "Failed to toggle skill state", isError: true });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Network error", isError: true });
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -551,7 +629,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                     fontWeight: 700,
                   }}
                 >
-                  {tools.length} Tools Active • {skills.length} Skills
+                  {tools.length} Tools Active • {activeSkills.length} Active / {disabledSkills.length} Disabled Skills
                 </span>
               </div>
               <div style={{ fontSize: 11, color: "var(--text-muted, #64748b)", marginTop: 2 }}>
@@ -614,15 +692,38 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
               style={{
                 background: "none",
                 border: "none",
-                borderBottom: activeTab === "installed" ? "2px solid var(--accent, #0284c7)" : "2px solid transparent",
-                color: activeTab === "installed" ? "var(--accent, #0284c7)" : "var(--text-muted, #64748b)",
+                borderBottom: activeTab === "installed" ? "2px solid #16a34a" : "2px solid transparent",
+                color: activeTab === "installed" ? "#16a34a" : "var(--text-muted, #64748b)",
                 padding: "10px 14px",
                 fontSize: 13,
                 fontWeight: 700,
                 cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
               }}
             >
-              Active MCP Servers ({Object.keys(groupedTools).length})
+              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
+              Active MCP ({Object.keys(activeGroupedTools).length})
+            </button>
+            <button
+              onClick={() => setActiveTab("disabled_mcp")}
+              style={{
+                background: "none",
+                border: "none",
+                borderBottom: activeTab === "disabled_mcp" ? "2px solid #ef4444" : "2px solid transparent",
+                color: activeTab === "disabled_mcp" ? "#ef4444" : "var(--text-muted, #64748b)",
+                padding: "10px 14px",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#ef4444" }} />
+              Disabled MCP ({Object.keys(disabledGroupedTools).length})
             </button>
             <button
               onClick={() => setActiveTab("skills")}
@@ -736,10 +837,11 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
 
         {/* Modal Body */}
         <div style={{ padding: 20, overflowY: "auto", flex: 1 }}>
+          {/* Active MCP Tab */}
           {activeTab === "installed" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {/* Quick Expand / Collapse All Bar */}
-              {Object.keys(groupedTools).length > 0 && (
+              {Object.keys(activeGroupedTools).length > 0 && (
                 <div
                   style={{
                     display: "flex",
@@ -751,9 +853,11 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span>
-                      {Object.keys(groupedTools).length} server{Object.keys(groupedTools).length !== 1 ? "s" : ""} mounted
+                    <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
+                    <span style={{ fontWeight: 600, color: "#16a34a" }}>
+                      {Object.keys(activeGroupedTools).length} Active MCP Server{Object.keys(activeGroupedTools).length !== 1 ? "s" : ""}
                     </span>
+                    <span>({Object.values(activeGroupedTools).reduce((acc, curr) => acc + curr.length, 0)} Active Tools)</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <button
@@ -790,12 +894,12 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                 </div>
               )}
 
-              {Object.keys(groupedTools).length === 0 ? (
+              {Object.keys(activeGroupedTools).length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
-                  {searchQuery ? `No MCP servers or tools matching "${searchQuery}".` : "No active tools mounted."}
+                  {searchQuery ? `No active MCP servers matching "${searchQuery}".` : "No active MCP servers mounted."}
                 </div>
               ) : (
-                Object.entries(groupedTools).map(([sName, sTools]) => {
+                Object.entries(activeGroupedTools).map(([sName, sTools]) => {
                   const isCollapsed = Boolean(collapsedServers[sName]);
                   return (
                     <div
@@ -845,7 +949,6 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                         <span style={{ fontWeight: 700, fontSize: 15, color: "var(--text-main, #0f172a)" }}>{sName}</span>
                         {/* Interactive Scope Dropdown */}
                         {(() => {
-                          // Check authoritative configuredServers first, falling back to discovered tool scope
                           let resolvedScope: "system" | "user" | "workspace" | "disabled" = "system";
                           if (configuredServers.workspace?.[sName]) {
                             resolvedScope = configuredServers.workspace[sName].enabled === false ? "disabled" : "workspace";
@@ -914,13 +1017,13 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                             fontSize: 11,
                             padding: "2px 8px",
                             borderRadius: 6,
-                            background: sTools[0]?.scope === "disabled" ? "rgba(239, 68, 68, 0.12)" : "rgba(100, 116, 139, 0.12)",
-                            color: sTools[0]?.scope === "disabled" ? "#ef4444" : "var(--text-muted, #64748b)",
-                            border: `1px solid ${sTools[0]?.scope === "disabled" ? "rgba(239, 68, 68, 0.25)" : "rgba(100, 116, 139, 0.25)"}`,
+                            background: "rgba(34, 197, 94, 0.12)",
+                            color: "#16a34a",
+                            border: "1px solid rgba(34, 197, 94, 0.25)",
                             fontWeight: 700,
                           }}
                         >
-                          {sTools[0]?.scope === "disabled" ? "DISABLED" : `${sTools.length} tools`}
+                          {sTools.length} active tools
                         </span>
                       </div>
 
@@ -967,22 +1070,17 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                               <code
                                 style={{
                                   fontSize: 13.5,
-                                  color: tool.scope === "disabled" ? "#64748b" : "#0f172a",
+                                  color: "#0f172a",
                                   fontWeight: 800,
-                                  background: tool.scope === "disabled" ? "rgba(100, 116, 139, 0.12)" : "rgba(2, 132, 199, 0.12)",
+                                  background: "rgba(2, 132, 199, 0.12)",
                                   padding: "2px 8px",
                                   borderRadius: 5,
-                                  border: `1px solid ${tool.scope === "disabled" ? "rgba(100, 116, 139, 0.25)" : "rgba(2, 132, 199, 0.25)"}`,
+                                  border: "1px solid rgba(2, 132, 199, 0.25)",
                                   letterSpacing: "0.2px",
                                 }}
                               >
                                 {tool.name}
                               </code>
-                              {tool.scope === "disabled" && (
-                                <span style={{ fontSize: 11, color: "#64748b", fontStyle: "italic" }}>
-                                  (Select a scope above to activate)
-                                </span>
-                              )}
                             </div>
                             {tool.description && (
                               <div
@@ -1009,11 +1107,138 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
             </div>
           )}
 
+          {/* Disabled MCP Tab */}
+          {activeTab === "disabled_mcp" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "4px 4px",
+                  fontSize: 12,
+                  color: "var(--text-muted, #64748b)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#ef4444" }} />
+                  <span style={{ fontWeight: 600, color: "#dc2626" }}>
+                    {Object.keys(disabledGroupedTools).length} Deactivated MCP Server{Object.keys(disabledGroupedTools).length !== 1 ? "s" : ""}
+                  </span>
+                  <span>(Servers in this list do not consume system resources on boot)</span>
+                </div>
+              </div>
+
+              {Object.keys(disabledGroupedTools).length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+                  No deactivated MCP servers. All configured servers are currently active!
+                </div>
+              ) : (
+                Object.entries(disabledGroupedTools).map(([sName, sTools]) => {
+                  return (
+                    <div
+                      key={sName}
+                      style={{
+                        borderRadius: 10,
+                        border: "1px solid rgba(239, 68, 68, 0.25)",
+                        background: "var(--bg-secondary, #ffffff)",
+                        overflow: "hidden",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: "14px 18px",
+                          background: "rgba(239, 68, 68, 0.04)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          borderBottom: "1px solid rgba(239, 68, 68, 0.15)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                          <Box size={18} color="#94a3b8" />
+                          <span style={{ fontWeight: 700, fontSize: 15, color: "#475569" }}>{sName}</span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                              background: "rgba(239, 68, 68, 0.12)",
+                              color: "#ef4444",
+                              border: "1px solid rgba(239, 68, 68, 0.25)",
+                              fontWeight: 700,
+                            }}
+                          >
+                            DISABLED
+                          </span>
+                          <span style={{ fontSize: 12, color: "#64748b" }}>
+                            Reactivate to:
+                          </span>
+                          <div style={{ display: "inline-flex", alignItems: "center" }}>
+                            <select
+                              value="disabled"
+                              onChange={(e) => handleChangeScope(sName, "disabled", e.target.value)}
+                              title="Reactivate this MCP server into a target scope"
+                              style={{
+                                fontSize: 11.5,
+                                fontWeight: 700,
+                                padding: "4px 10px",
+                                borderRadius: 6,
+                                background: "#ffffff",
+                                color: "#0284c7",
+                                border: "1px solid #0284c7",
+                                outline: "none",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <option value="disabled" disabled>Select Scope to Activate...</option>
+                              <option value="workspace">📁 Workspace Local ({currentWorkspace})</option>
+                              <option value="user">👤 User Global (All Workspaces)</option>
+                              <option value="system">🌐 System Global (Instance-wide)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <button
+                            onClick={() => handleDelete(sName)}
+                            title="Unregister this server completely"
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "#dc2626",
+                              cursor: "pointer",
+                              padding: 6,
+                              borderRadius: 6,
+                            }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ padding: "14px 18px", color: "var(--text-muted, #64748b)", fontSize: 12.5 }}>
+                        {sTools[0]?.description || "Currently disabled in configuration. Does not initialize process or Docker on startup."}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
           {activeTab === "skills" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: 12.5, color: "var(--text-muted)" }}>
-                  Skills are automatically resolved and injected when relevant prompts or triggers are detected.
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#16a34a" }}>
+                    {activeSkills.length} Active Skills
+                  </span>
+                  <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>
+                    • {disabledSkills.length} Deactivated Skills • Injected dynamically when relevant user prompts match
+                  </span>
                 </div>
                 <button
                   onClick={() => setIsCreatingSkill(!isCreatingSkill)}
@@ -1041,8 +1266,8 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                   style={{
                     padding: 18,
                     borderRadius: 10,
-                    background: "#fff1f2", // 非常淺的粉紅色 (Very light pink)
-                    border: "1px solid #fecdd3", // 淺粉紅邊框
+                    background: "#fff1f2",
+                    border: "1px solid #fecdd3",
                     boxShadow: "0 2px 6px rgba(244, 63, 94, 0.06)",
                     display: "flex",
                     flexDirection: "column",
@@ -1169,206 +1394,320 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                   No skills found matching "{searchQuery}".
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {filteredSkills.map((skill) => {
-                    const isExpanded = selectedSkillContent?.name === skill.name;
-                    return (
-                      <div
-                        key={skill.name}
-                        style={{
-                          borderRadius: 10,
-                          background: "var(--bg-card, #f8fafc)",
-                          border: isExpanded ? "1px solid #16a34a" : "1px solid var(--border-color, #e2e8f0)",
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                          overflow: "hidden",
-                          transition: "border-color 0.2s ease",
-                        }}
-                      >
-                        <div
-                          style={{
-                            padding: "16px 20px",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "flex-start",
-                            gap: 16,
-                          }}
-                        >
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                              <span
-                                style={{
-                                  fontSize: 14,
-                                  fontWeight: 800,
-                                  color: "#0f172a",
-                                  background: "rgba(2, 132, 199, 0.12)",
-                                  padding: "2px 8px",
-                                  borderRadius: 5,
-                                  border: "1px solid rgba(2, 132, 199, 0.25)",
-                                }}
-                              >
-                                {skill.name}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  padding: "2px 7px",
-                                  borderRadius: 4,
-                                  background: skill.scope === "global" ? "rgba(37, 99, 235, 0.12)" : "rgba(124, 58, 237, 0.12)",
-                                  color: skill.scope === "global" ? "#1d4ed8" : "#6d28d9",
-                                  border: `1px solid ${skill.scope === "global" ? "rgba(37, 99, 235, 0.25)" : "rgba(124, 58, 237, 0.25)"}`,
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                }}
-                              >
-                                {skill.scope === "global" ? <Globe size={11} /> : <Folder size={11} />}
-                                {skill.scope.toUpperCase()}{skill.workspace ? ` (${skill.workspace})` : ""}
-                              </span>
-                            </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  {/* Active Skills List */}
+                  {filteredSkills.filter((s) => !s.disabled).length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#16a34a", display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#22c55e" }} />
+                        Active Skills ({filteredSkills.filter((s) => !s.disabled).length})
+                      </div>
+                      {filteredSkills
+                        .filter((s) => !s.disabled)
+                        .map((skill) => {
+                          const isExpanded = selectedSkillContent?.name === skill.name;
+                          return (
                             <div
+                              key={skill.name}
                               style={{
-                                fontSize: 13,
-                                color: "var(--text-main, #1e293b)",
-                                marginTop: 8,
-                                lineHeight: 1.6,
-                                whiteSpace: "pre-wrap",
-                                wordBreak: "break-word",
+                                borderRadius: 10,
+                                background: "var(--bg-card, #f8fafc)",
+                                border: isExpanded ? "1px solid #16a34a" : "1px solid var(--border-color, #e2e8f0)",
+                                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                                overflow: "hidden",
+                                transition: "border-color 0.2s ease",
                               }}
                             >
-                              {skill.description || "No description provided."}
-                            </div>
-                            {skill.triggers && skill.triggers.length > 0 && (
-                              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                                {skill.triggers.map((trig) => (
-                                  <span
-                                    key={trig}
+                              <div
+                                style={{
+                                  padding: "16px 20px",
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "flex-start",
+                                  gap: 16,
+                                }}
+                              >
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                    <span
+                                      style={{
+                                        fontSize: 14,
+                                        fontWeight: 800,
+                                        color: "#0f172a",
+                                        background: "rgba(2, 132, 199, 0.12)",
+                                        padding: "2px 8px",
+                                        borderRadius: 5,
+                                        border: "1px solid rgba(2, 132, 199, 0.25)",
+                                      }}
+                                    >
+                                      {skill.name}
+                                    </span>
+                                    <span
+                                      style={{
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        padding: "2px 7px",
+                                        borderRadius: 4,
+                                        background: skill.scope === "global" ? "rgba(37, 99, 235, 0.12)" : "rgba(124, 58, 237, 0.12)",
+                                        color: skill.scope === "global" ? "#1d4ed8" : "#6d28d9",
+                                        border: `1px solid ${skill.scope === "global" ? "rgba(37, 99, 235, 0.25)" : "rgba(124, 58, 237, 0.25)"}`,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: 4,
+                                      }}
+                                    >
+                                      {skill.scope === "global" ? <Globe size={11} /> : <Folder size={11} />}
+                                      {skill.scope.toUpperCase()}{skill.workspace ? ` (${skill.workspace})` : ""}
+                                    </span>
+                                  </div>
+                                  <div
                                     style={{
-                                      fontSize: 11,
-                                      fontWeight: 600,
-                                      padding: "2px 6px",
-                                      borderRadius: 4,
-                                      background: "rgba(0,0,0,0.06)",
-                                      color: "var(--text-main, #334155)",
-                                      border: "1px solid rgba(0,0,0,0.08)",
+                                      fontSize: 13,
+                                      color: "var(--text-main, #1e293b)",
+                                      marginTop: 8,
+                                      lineHeight: 1.6,
+                                      whiteSpace: "pre-wrap",
+                                      wordBreak: "break-word",
                                     }}
                                   >
-                                    #{trig}
-                                  </span>
-                                ))}
+                                    {skill.description || "No description provided."}
+                                  </div>
+                                  {skill.triggers && skill.triggers.length > 0 && (
+                                    <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                                      {skill.triggers.map((trig) => (
+                                        <span
+                                          key={trig}
+                                          style={{
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                            padding: "2px 6px",
+                                            borderRadius: 4,
+                                            background: "rgba(0,0,0,0.06)",
+                                            color: "var(--text-main, #334155)",
+                                            border: "1px solid rgba(0,0,0,0.08)",
+                                          }}
+                                        >
+                                          #{trig}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                  <button
+                                    onClick={() => handleToggleSkill(skill.name, false)}
+                                    title="Deactivate this skill for current workspace"
+                                    style={{
+                                      padding: "7px 12px",
+                                      borderRadius: 7,
+                                      border: "1px solid #cbd5e1",
+                                      background: "#f8fafc",
+                                      color: "#64748b",
+                                      fontSize: 12,
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 5,
+                                    }}
+                                  >
+                                    <ToggleRight size={14} color="#16a34a" /> Deactivate
+                                  </button>
+                                  <button
+                                    onClick={() => loadSkillContent(skill.name)}
+                                    style={{
+                                      padding: "7px 14px",
+                                      borderRadius: 7,
+                                      border: isExpanded ? "1px solid #16a34a" : "1px solid var(--border-color, #cbd5e1)",
+                                      background: isExpanded ? "rgba(22, 163, 74, 0.12)" : "var(--bg-secondary, #ffffff)",
+                                      color: isExpanded ? "#15803d" : "var(--text-main, #0f172a)",
+                                      fontSize: 12.5,
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 6,
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    <Code size={14} /> {isExpanded ? "Hide Recipe" : "View Recipe"}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteSkillItem(skill.name)}
+                                    title={`Delete skill ${skill.name}`}
+                                    style={{
+                                      padding: "7px 10px",
+                                      borderRadius: 7,
+                                      border: "1px solid var(--border-color, #cbd5e1)",
+                                      background: "var(--bg-secondary, #ffffff)",
+                                      color: "#ef4444",
+                                      cursor: "pointer",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
                               </div>
-                            )}
-                          </div>
 
-                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                            <button
-                              onClick={() => loadSkillContent(skill.name)}
-                              style={{
-                                padding: "7px 14px",
-                                borderRadius: 7,
-                                border: isExpanded ? "1px solid #16a34a" : "1px solid var(--border-color, #cbd5e1)",
-                                background: isExpanded ? "rgba(22, 163, 74, 0.12)" : "var(--bg-secondary, #ffffff)",
-                                color: isExpanded ? "#15803d" : "var(--text-main, #0f172a)",
-                                fontSize: 12.5,
-                                fontWeight: 700,
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                flexShrink: 0,
-                                transition: "all 0.15s ease",
-                              }}
-                            >
-                              <Code size={14} /> {isExpanded ? "Hide Recipe" : "View Recipe"}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteSkillItem(skill.name)}
-                              title={`Delete skill ${skill.name}`}
-                              style={{
-                                padding: "7px 10px",
-                                borderRadius: 7,
-                                border: "1px solid var(--border-color, #cbd5e1)",
-                                background: "var(--bg-secondary, #ffffff)",
-                                color: "#ef4444",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                transition: "all 0.15s ease",
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = "#f87171";
-                                e.currentTarget.style.background = "rgba(239, 68, 68, 0.08)";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = "var(--border-color, #cbd5e1)";
-                                e.currentTarget.style.background = "var(--bg-secondary, #ffffff)";
-                              }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
+                              {isExpanded && (
+                                <div
+                                  style={{
+                                    borderTop: "1px solid #bbf7d0",
+                                    background: "#f0fdf4",
+                                    padding: "16px 20px",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      alignItems: "center",
+                                      marginBottom: 10,
+                                    }}
+                                  >
+                                    <span style={{ fontWeight: 800, fontSize: 13, color: "#166534" }}>
+                                      📄 {selectedSkillContent.name} (SKILL.md Recipe Preview)
+                                    </span>
+                                    <button
+                                      onClick={() => setSelectedSkillContent(null)}
+                                      title="Close Recipe"
+                                      style={{
+                                        background: "transparent",
+                                        border: "none",
+                                        color: "#166534",
+                                        cursor: "pointer",
+                                        padding: 4,
+                                        borderRadius: 4,
+                                      }}
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  </div>
+                                  <pre
+                                    style={{
+                                      fontSize: 12.5,
+                                      color: "#09090b",
+                                      background: "#ffffff",
+                                      border: "1px solid #bbf7d0",
+                                      borderRadius: 8,
+                                      padding: 14,
+                                      maxHeight: 280,
+                                      overflowY: "auto",
+                                      whiteSpace: "pre-wrap",
+                                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                                      margin: 0,
+                                      lineHeight: 1.6,
+                                      boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)",
+                                    }}
+                                  >
+                                    {selectedSkillContent.content}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
 
-                        {/* Inline Recipe Preview (Right under this skill card, very light green bg, black text) */}
-                        {isExpanded && (
-                          <div
-                            style={{
-                              borderTop: "1px solid #bbf7d0",
-                              background: "#f0fdf4", // 非常淺的綠色 (Very light green)
-                              padding: "16px 20px",
-                            }}
-                          >
+                  {/* Deactivated Skills List */}
+                  {filteredSkills.filter((s) => s.disabled).length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 10 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#94a3b8" }} />
+                        Deactivated Skills ({filteredSkills.filter((s) => s.disabled).length})
+                      </div>
+                      {filteredSkills
+                        .filter((s) => s.disabled)
+                        .map((skill) => {
+                          return (
                             <div
+                              key={skill.name}
                               style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                marginBottom: 10,
+                                borderRadius: 10,
+                                background: "#f8fafc",
+                                border: "1px dashed #cbd5e1",
+                                opacity: 0.82,
+                                overflow: "hidden",
                               }}
                             >
-                              <span style={{ fontWeight: 800, fontSize: 13, color: "#166534" }}>
-                                📄 {selectedSkillContent.name} (SKILL.md Recipe Preview)
-                              </span>
-                              <button
-                                onClick={() => setSelectedSkillContent(null)}
-                                title="Close Recipe"
+                              <div
                                 style={{
-                                  background: "transparent",
-                                  border: "none",
-                                  color: "#166534",
-                                  cursor: "pointer",
-                                  padding: 4,
-                                  borderRadius: 4,
+                                  padding: "14px 20px",
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  gap: 16,
                                 }}
                               >
-                                <X size={16} />
-                              </button>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <span
+                                      style={{
+                                        fontSize: 13.5,
+                                        fontWeight: 700,
+                                        color: "#475569",
+                                        background: "#e2e8f0",
+                                        padding: "2px 8px",
+                                        borderRadius: 5,
+                                      }}
+                                    >
+                                      {skill.name}
+                                    </span>
+                                    <span style={{ fontSize: 11, color: "#64748b", background: "#f1f5f9", padding: "2px 6px", borderRadius: 4 }}>
+                                      Deactivated
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: 12.5, color: "#64748b", marginTop: 6, whiteSpace: "pre-wrap" }}>
+                                    {skill.description || "No description provided."}
+                                  </div>
+                                </div>
+
+                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                  <button
+                                    onClick={() => handleToggleSkill(skill.name, true)}
+                                    title="Reactivate this skill"
+                                    style={{
+                                      padding: "6px 14px",
+                                      borderRadius: 6,
+                                      border: "1px solid #16a34a",
+                                      background: "#f0fdf4",
+                                      color: "#16a34a",
+                                      fontSize: 12,
+                                      fontWeight: 700,
+                                      cursor: "pointer",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 5,
+                                    }}
+                                  >
+                                    <ToggleLeft size={14} /> Reactivate
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteSkillItem(skill.name)}
+                                    title={`Delete skill ${skill.name}`}
+                                    style={{
+                                      padding: "6px 9px",
+                                      borderRadius: 6,
+                                      border: "1px solid #e2e8f0",
+                                      background: "#fff",
+                                      color: "#ef4444",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                            <pre
-                              style={{
-                                fontSize: 12.5,
-                                color: "#09090b", // 黑色字 (Black text)
-                                background: "#ffffff",
-                                border: "1px solid #bbf7d0",
-                                borderRadius: 8,
-                                padding: 14,
-                                maxHeight: 280,
-                                overflowY: "auto",
-                                whiteSpace: "pre-wrap",
-                                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-                                margin: 0,
-                                lineHeight: 1.6,
-                                boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)",
-                              }}
-                            >
-                              {selectedSkillContent.content}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          );
+                        })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

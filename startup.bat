@@ -16,7 +16,13 @@ if not exist "node_modules\" (
     call npm install
 )
 
-:: 2. Build frontend production bundle
+:: 2. Build frontend production bundle (only if not already built or requested)
+if "%1"=="--rebuild" goto BUILD_FRONTEND
+if not exist "frontend\dist\index.html" goto BUILD_FRONTEND
+echo [Build] Frontend bundle found (skipping rebuild for instant startup).
+goto AFTER_BUILD
+
+:BUILD_FRONTEND
 echo [Build] Building frontend production bundle...
 cd frontend
 if not exist "node_modules\" (
@@ -28,6 +34,8 @@ if exist "node_modules\.bin\vite.cmd" (
     call npm run build
 )
 cd ..
+
+:AFTER_BUILD
 
 :: Ensure PORT is explicitly set to 7009 for MiniBot
 set PORT=7009

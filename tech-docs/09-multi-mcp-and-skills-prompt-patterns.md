@@ -185,3 +185,20 @@ You are an expert Mini Chat Bot Assistant. You have access to external tools via
    若任務跨越不同 MCP，在 Prompt 中引導模型遵循「先檢視、再搜尋、最後統整」的邏輯順序，避免模型在同一輪並行發出互相衝突的工具調用。
 4. **杜絕空憑臆測（Grounding in Actual Code）**：
    「*Always read the actual file content before offering architectural recommendations*」能徹底根除 LLM「憑記憶胡謅代碼」的毛病，強制其先透過 MCP 工具獲取專案真實情況。
+
+
+---
+
+## 4. MCP & Skills Lifecycle: Active vs Disabled Isolation
+
+MiniBot maintains a strict segregation between active operational extensions and deactivated items across both MCP and Skills:
+
+### 1. Metric Hierarchy
+1. **Total Active MCP**: All mounted MCP servers across current workspace scope and inherited global/user scopes that have `enabled !== false` (e.g., `web-search`, `minimax-multimodal`, `bigfix`).
+2. **Total Disabled MCP**: Registered MCP server definitions explicitly configured with `enabled: false` (e.g., `mini-news` to prevent unintended subprocess spawning or port binding).
+3. **Total Active Skills**: Discovered skills from global (`.minibot/skills`, `.agents/skills`) and workspace (`logs/.skills`) directories with valid `SKILL.md` contracts.
+4. **Total Disabled Skills**: Skills explicitly placed in inactive storage or flagged as inactive.
+
+### 2. UI Separation Rules
+- In **ToolHubModal**, Active and Disabled servers/skills must NOT be mixed in a single flattened list.
+- Disabled items are segregated into a dedicated inactive view/accordion with clear status badges, allowing one-click reactivation without polluting active LLM prompt contexts.
