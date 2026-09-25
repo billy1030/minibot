@@ -5,7 +5,7 @@ import { getWorkspaceDir } from "../logger/conversation-logger.js";
 export interface SkillMetadata {
   name: string;
   description: string;
-  scope: "global" | "workspace";
+  scope: "global" | "user" | "workspace";
   workspace?: string;
   dirPath: string;
   filePath: string;
@@ -89,7 +89,7 @@ export class SkillManager {
    */
   private scanDirectoryForSkills(
     dir: string,
-    scope: "global" | "workspace",
+    scope: "global" | "user" | "workspace",
     workspaceName?: string
   ): SkillMetadata[] {
     if (!fs.existsSync(dir)) return [];
@@ -125,6 +125,14 @@ export class SkillManager {
     }
 
     return skills;
+  }
+
+  /**
+   * Path to user-level skills directory (shared across workspaces for this user)
+   */
+  public getUserSkillsDir(userNumber: string = "00000"): string {
+    const safeNumber = String(userNumber).padStart(5, "0").replace(/[^\d]/g, "").slice(0, 5) || "00000";
+    return path.resolve(process.cwd(), "logs", safeNumber, ".skills");
   }
 
   /**
@@ -179,8 +187,8 @@ export class SkillManager {
   }
 
   /**
-   * List all skills available in the current context (Global + Workspace)
-   * Workspace skills override global skills with the same name.
+   * List all skills available in the current context (Global + User + Workspace)
+   * Workspace skills override User skills, which override Global skills.
    */
   public listAvailableSkills(workspace: string = "default", userNumber: string = "00000"): SkillMetadata[] {
     const skillMap = new Map<string, SkillMetadata>();
@@ -195,7 +203,19 @@ export class SkillManager {
       }
     }
 
-    // 2. Scan Workspace Skills (Overrides global if same name)
+    // 2. Scan User Skills (Overrides global)
+    try {
+      const userSkillsDir = this.getUserSkillsDir(userNumber);
+      if (fs.existsSync(userSkillsDir)) {
+        const userSkills = this.scanDirectoryForSkills(userSkillsDir, "user");
+        for (const skill of userSkills) {
+          const isDis = disabledList.includes(skill.name.toLowerCase());
+          skillMap.set(skill.name.toLowerCase(), { ...skill, disabled: isDis });
+        }
+      }
+    } catch {}
+
+    // 3. Scan Workspace Skills (Overrides global & user if same name)
     try {
       const wsDir = getWorkspaceDir(workspace, "logs", userNumber);
       const wsSkillsDir = path.join(wsDir, ".skills");
@@ -227,12 +247,12 @@ export class SkillManager {
   }
 
   /**
-   * Saves or creates a skill in either Global or Workspace scope
+   * Saves or creates a skill in Global, User, or Workspace scope
    */
   public saveSkill(
     skillName: string,
     content: string,
-    scope: "global" | "workspace" = "global",
+    scope: "global" | "user" | "workspace" = "workspace",
     workspace: string = "default",
     userNumber: string = "00000"
   ): { success: boolean; filePath?: string; error?: string } {
@@ -244,6 +264,8 @@ export class SkillManager {
       if (scope === "workspace") {
         const wsDir = getWorkspaceDir(workspace, "logs", userNumber);
         targetDir = path.join(wsDir, ".skills", cleanName);
+      } else if (scope === "user") {
+        targetDir = path.join(this.getUserSkillsDir(userNumber), cleanName);
       } else {
         targetDir = path.join(this.globalDirs[0], cleanName);
       }
@@ -262,7 +284,59 @@ export class SkillManager {
   }
 
   /**
-   * Delete a skill by name from either workspace or global scope
+   * Move or switch an existing skill's scope between global, user, and workspace
+   */
+  public moveSkillScope(
+    skillName: string,
+    targetScope: "global" | "user" | "workspace",
+    workspace: string = "default",
+    userNumber: string = "00000"
+  ): { success: boolean; oldScope?: string; newScope?: string; filePath?: string; error?: string } {
+    try {
+      const cleanName = skillName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+      if (!cleanName) return { success: false, error: "Invalid skill name" };
+
+      const available = this.listAvailableSkills(workspace, userNumber);
+      const existing = available.find((s) => s.name.toLowerCase() === cleanName || s.name.toLowerCase() === skillName.toLowerCase());
+      if (!existing) {
+        return { success: false, error: `Skill "${skillName}" not found.` };
+      }
+
+      if (existing.scope === targetScope) {
+        return { success: true, oldScope: existing.scope, newScope: targetScope, filePath: existing.filePath };
+      }
+
+      // Read content from current location
+      const content = fs.readFileSync(existing.filePath, "utf-8");
+
+      // Save to new scope target
+      const saveRes = this.saveSkill(cleanName, content, targetScope, workspace, userNumber);
+      if (!saveRes.success) {
+        return { success: false, error: saveRes.error };
+      }
+
+      // Remove from old directory
+      try {
+        if (fs.existsSync(existing.dirPath)) {
+          fs.rmSync(existing.dirPath, { recursive: true, force: true });
+        }
+      } catch (rmErr) {
+        console.warn(`[SkillManager] Notice: Could not remove old skill directory at ${existing.dirPath}:`, rmErr);
+      }
+
+      return {
+        success: true,
+        oldScope: existing.scope,
+        newScope: targetScope,
+        filePath: saveRes.filePath,
+      };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Delete a skill by name from workspace, user, or global scope
    */
   public deleteSkill(
     skillName: string,
@@ -281,7 +355,14 @@ export class SkillManager {
         return { success: true };
       }
 
-      // 2. Try global
+      // 2. Try user scope
+      const userSkillDir = path.join(this.getUserSkillsDir(userNumber), cleanName);
+      if (fs.existsSync(userSkillDir)) {
+        fs.rmSync(userSkillDir, { recursive: true, force: true });
+        return { success: true };
+      }
+
+      // 3. Try global
       for (const globalDir of this.globalDirs) {
         const globalSkillDir = path.join(globalDir, cleanName);
         if (fs.existsSync(globalSkillDir)) {

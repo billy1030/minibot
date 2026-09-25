@@ -1182,6 +1182,36 @@ app.post("/api/skills/toggle", requireAuth, (req, res) => {
   }
 });
 
+app.post("/api/skills/scope", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const { name, targetScope, workspace = "default" } = req.body;
+    if (!name || !targetScope) {
+      return res.status(400).json({ success: false, error: "Name and targetScope ('global' | 'user' | 'workspace') are required." });
+    }
+
+    if (!["global", "user", "workspace"].includes(targetScope)) {
+      return res.status(400).json({ success: false, error: `Invalid targetScope "${targetScope}". Must be 'global', 'user', or 'workspace'.` });
+    }
+
+    const result = globalSkillManager.moveSkillScope(String(name), targetScope as any, workspace, userNumber);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    res.json({
+      success: true,
+      name,
+      oldScope: result.oldScope,
+      newScope: result.newScope,
+      filePath: result.filePath,
+      workspace,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ==========================================
 // 3d. AGENTS.md Multi-Agent Rules Endpoints
 // ==========================================

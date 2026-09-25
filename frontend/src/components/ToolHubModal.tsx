@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Wrench, X, RefreshCw, Plus, Trash2, CheckCircle2, AlertCircle, Box, BookOpen, Globe, Folder, Code, Search, ChevronDown, ChevronRight, ToggleLeft, ToggleRight } from "lucide-react";
+import { Wrench, X, RefreshCw, Plus, Trash2, CheckCircle2, AlertCircle, Box, BookOpen, Code, Search, ChevronDown, ChevronRight, ToggleLeft, ToggleRight } from "lucide-react";
 
 export interface ToolItem {
   serverName: string;
@@ -14,7 +14,7 @@ export interface ToolItem {
 export interface SkillItem {
   name: string;
   description: string;
-  scope: "global" | "workspace";
+  scope: "global" | "user" | "workspace";
   workspace?: string;
   dirPath: string;
   filePath: string;
@@ -66,7 +66,7 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
   const [isLoadingSkills, setIsLoadingSkills] = useState<boolean>(false);
   const [isCreatingSkill, setIsCreatingSkill] = useState<boolean>(false);
   const [newSkillName, setNewSkillName] = useState("");
-  const [newSkillScope, setNewSkillScope] = useState<"global" | "workspace">("workspace");
+  const [newSkillScope, setNewSkillScope] = useState<"global" | "user" | "workspace">("workspace");
   const [newSkillContent, setNewSkillContent] = useState("");
 
   // Connect tab: switch between GUI form and Raw JSON paste
@@ -548,6 +548,33 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
       }
     } catch (err: any) {
       setMessage({ text: err.message || "Network error", isError: true });
+    }
+  };
+
+  const handleChangeSkillScope = async (skillName: string, targetScope: "global" | "user" | "workspace") => {
+    try {
+      const res = await fetch("/api/skills/scope", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          name: skillName,
+          targetScope,
+          workspace: currentWorkspace,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({
+          text: `Skill "${skillName}" scope changed to ${targetScope.toUpperCase()}!`,
+          isError: false,
+        });
+        await fetchSkills();
+      } else {
+        alert(data.error || "Failed to change skill scope");
+      }
+    } catch (err: any) {
+      alert("Error changing skill scope: " + err.message);
     }
   };
 
@@ -1316,8 +1343,9 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                           outline: "none",
                         }}
                       >
-                        <option value="workspace">Per-Workspace ({currentWorkspace})</option>
-                        <option value="global">Global (Available Everywhere)</option>
+                        <option value="workspace">📁 Workspace ({currentWorkspace})</option>
+                        <option value="user">👤 User (All My Workspaces)</option>
+                        <option value="global">🌍 Global (System Wide)</option>
                       </select>
                     </div>
                   </div>
@@ -1442,23 +1470,44 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                                     >
                                       {skill.name}
                                     </span>
-                                    <span
-                                      style={{
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        padding: "2px 7px",
-                                        borderRadius: 4,
-                                        background: skill.scope === "global" ? "rgba(37, 99, 235, 0.12)" : "rgba(124, 58, 237, 0.12)",
-                                        color: skill.scope === "global" ? "#1d4ed8" : "#6d28d9",
-                                        border: `1px solid ${skill.scope === "global" ? "rgba(37, 99, 235, 0.25)" : "rgba(124, 58, 237, 0.25)"}`,
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: 4,
-                                      }}
-                                    >
-                                      {skill.scope === "global" ? <Globe size={11} /> : <Folder size={11} />}
-                                      {skill.scope.toUpperCase()}{skill.workspace ? ` (${skill.workspace})` : ""}
-                                    </span>
+                                    <div style={{ display: "inline-flex", alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+                                      <select
+                                        value={skill.scope}
+                                        onChange={(e) => handleChangeSkillScope(skill.name, e.target.value as any)}
+                                        title="Change or revert skill scope"
+                                        style={{
+                                          fontSize: 11,
+                                          fontWeight: 700,
+                                          padding: "2px 7px",
+                                          borderRadius: 4,
+                                          cursor: "pointer",
+                                          outline: "none",
+                                          background:
+                                            skill.scope === "global"
+                                              ? "rgba(37, 99, 235, 0.12)"
+                                              : skill.scope === "user"
+                                              ? "rgba(16, 185, 129, 0.12)"
+                                              : "rgba(124, 58, 237, 0.12)",
+                                          color:
+                                            skill.scope === "global"
+                                              ? "#1d4ed8"
+                                              : skill.scope === "user"
+                                              ? "#059669"
+                                              : "#6d28d9",
+                                          border: `1px solid ${
+                                            skill.scope === "global"
+                                              ? "rgba(37, 99, 235, 0.25)"
+                                              : skill.scope === "user"
+                                              ? "rgba(16, 185, 129, 0.25)"
+                                              : "rgba(124, 58, 237, 0.25)"
+                                          }`,
+                                        }}
+                                      >
+                                        <option value="workspace">📁 Workspace ({skill.workspace || currentWorkspace})</option>
+                                        <option value="user">👤 User Scope</option>
+                                        <option value="global">🌍 Global</option>
+                                      </select>
+                                    </div>
                                   </div>
                                   <div
                                     style={{
@@ -1661,6 +1710,28 @@ export const ToolHubModal: React.FC<ToolHubModalProps> = ({
                                     <span style={{ fontSize: 11, color: "#64748b", background: "#f1f5f9", padding: "2px 6px", borderRadius: 4 }}>
                                       Deactivated
                                     </span>
+                                    <div style={{ display: "inline-flex", alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+                                      <select
+                                        value={skill.scope}
+                                        onChange={(e) => handleChangeSkillScope(skill.name, e.target.value as any)}
+                                        title="Change or revert skill scope"
+                                        style={{
+                                          fontSize: 10.5,
+                                          fontWeight: 700,
+                                          padding: "2px 6px",
+                                          borderRadius: 4,
+                                          cursor: "pointer",
+                                          outline: "none",
+                                          background: "rgba(100, 116, 139, 0.12)",
+                                          color: "#475569",
+                                          border: "1px solid rgba(100, 116, 139, 0.25)",
+                                        }}
+                                      >
+                                        <option value="workspace">📁 Workspace ({skill.workspace || currentWorkspace})</option>
+                                        <option value="user">👤 User Scope</option>
+                                        <option value="global">🌍 Global</option>
+                                      </select>
+                                    </div>
                                   </div>
                                   <div style={{ fontSize: 12.5, color: "#64748b", marginTop: 6, whiteSpace: "pre-wrap" }}>
                                     {skill.description || "No description provided."}

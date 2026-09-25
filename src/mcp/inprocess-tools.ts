@@ -630,21 +630,34 @@ export const BUILTIN_INPROCESS_TOOLS: DiscoveredTool[] = [
   {
     serverName: "web-search",
     name: "install_skill",
-    description: "Save or create a reusable agent workflow skill recipe into Global or Workspace scope. The skill will be automatically activated when relevant tasks or triggers are encountered.",
+    description: "Save or create a reusable agent workflow skill recipe into Workspace, User, or Global scope. CRITICAL: If the user did not specify the scope ('workspace', 'user', or 'global'), ASK THE USER first before calling this tool.",
     inputSchema: {
       type: "object",
       properties: {
         skillName: { type: "string", description: "Identifier name for the skill (e.g. data-analyst, bigfix-patching-sop)" },
-        content: { type: "string", description: "Full Markdown instruction content for the skill (can include frontmatter with name, description, triggers)" },
-        scope: { type: "string", enum: ["global", "workspace"], description: "Storage scope ('global' available everywhere, or 'workspace' for the current workspace only)" },
+        content: { type: "string", description: "Full Markdown instruction content for the skill (must include YAML frontmatter with name, description, triggers)" },
+        scope: { type: "string", enum: ["workspace", "user", "global"], description: "Storage scope: 'workspace' (current workspace only), 'user' (all workspaces for this user), or 'global' (shared system-wide across all users)" },
       },
-      required: ["skillName", "content"],
+      required: ["skillName", "content", "scope"],
+    },
+  },
+  {
+    serverName: "web-search",
+    name: "change_skill_scope",
+    description: "Move or revert an existing skill's scope between 'workspace', 'user', and 'global'. Use when the user asks to move, revert, or change a skill's scope.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        skillName: { type: "string", description: "The name of the existing skill to move/revert" },
+        targetScope: { type: "string", enum: ["workspace", "user", "global"], description: "The destination scope: 'workspace', 'user', or 'global'" },
+      },
+      required: ["skillName", "targetScope"],
     },
   },
   {
     serverName: "web-search",
     name: "list_skills",
-    description: "List all available skills (Global and Workspace-scoped) registered in MiniBot.",
+    description: "List all available skills (Workspace, User, and Global-scoped) registered in MiniBot.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -762,7 +775,16 @@ export async function executeInProcessTool(
       return await installSkillTool(
         String(args?.skillName || ""),
         String(args?.content || ""),
-        (args?.scope as any) || "global",
+        (args?.scope as any) || "workspace",
+        activeWorkspace,
+        activeUserNumber
+      );
+    }
+    case "change_skill_scope": {
+      const { changeSkillScopeTool } = await import("./meta-tools.js");
+      return await changeSkillScopeTool(
+        String(args?.skillName || ""),
+        (args?.targetScope as any) || "workspace",
         activeWorkspace,
         activeUserNumber
       );

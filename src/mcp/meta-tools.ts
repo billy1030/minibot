@@ -233,12 +233,12 @@ export async function installMcpPackage(
 }
 
 /**
- * Autonomously save or update an agent skill recipe into Global or Workspace scope
+ * Autonomously save or update an agent skill recipe into Global, User, or Workspace scope
  */
 export async function installSkillTool(
   skillName: string,
   content: string,
-  scope: "global" | "workspace" = "global",
+  scope: "global" | "user" | "workspace" = "workspace",
   workspace: string = "default",
   userNumber: string = "00000"
 ): Promise<string> {
@@ -248,6 +248,23 @@ export async function installSkillTool(
     return `❌ Failed to save skill: ${res.error}`;
   }
   return `✨ Skill "${skillName}" successfully saved to ${scope.toUpperCase()} scope at \`${res.filePath}\`! It will be automatically injected whenever relevant tasks are run.`;
+}
+
+/**
+ * Move or switch an existing skill's scope between global, user, and workspace
+ */
+export async function changeSkillScopeTool(
+  skillName: string,
+  targetScope: "global" | "user" | "workspace",
+  workspace: string = "default",
+  userNumber: string = "00000"
+): Promise<string> {
+  const { globalSkillManager } = await import("../skills/skill-manager.js");
+  const res = globalSkillManager.moveSkillScope(skillName, targetScope, workspace, userNumber);
+  if (!res.success) {
+    return `❌ Failed to move skill "${skillName}": ${res.error}`;
+  }
+  return `🔄 Skill "${skillName}" scope changed from ${res.oldScope?.toUpperCase()} to ${res.newScope?.toUpperCase()} at \`${res.filePath}\`.`;
 }
 
 /**
