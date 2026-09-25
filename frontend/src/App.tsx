@@ -1871,7 +1871,13 @@ export function App() {
     try {
       setIsTtsLoading(true);
       setPlayingMessageId(messageId);
-      showAlert(`語音模型生成中，請稍候... (限時 ${ttsTimeout}s)`, "info", "生成語音中 (Generating Voice)");
+      showAlert(
+        ttsLang === "english"
+          ? `Generating voice audio, please wait... (timeout: ${ttsTimeout}s)`
+          : `語音模型生成中，請稍候... (限時 ${ttsTimeout}s)`,
+        "info",
+        ttsLang === "english" ? "Generating Voice" : "生成語音中 (Generating Voice)"
+      );
 
       const response = await fetch("/api/tts", {
         method: "POST",
@@ -1940,7 +1946,13 @@ export function App() {
         console.error("Audio playback error:", e);
         setPlayingMessageId(null);
         setIsTtsPaused(false);
-        showAlert("語音模型回應未及時或音訊解碼失敗，請稍候重試。(Voice model timed out or audio failed to decode)", "warning", "Audio Playback Failed");
+        showAlert(
+          ttsLang === "english"
+            ? "Voice model timed out or audio failed to decode. Please try again."
+            : "語音模型回應未及時或音訊解碼失敗，請稍候重試。(Voice model timed out or audio failed to decode)",
+          "warning",
+          "Audio Playback Failed"
+        );
       };
 
       audio.src = audioUrl;
@@ -1959,7 +1971,13 @@ export function App() {
       }
       console.error("MiniMax TTS error:", err);
       setPlayingMessageId(null);
-      showAlert(`語音大模型未及時反應或生成失敗 (${err.message || err})。建議稍候再試。`, "warning", "Voice Generation Failed");
+      showAlert(
+        ttsLang === "english"
+          ? `Voice model timed out or generation failed (${err.message || err}). Please try again.`
+          : `語音大模型未及時反應或生成失敗 (${err.message || err})。建議稍候再試。`,
+        "warning",
+        "Voice Generation Failed"
+      );
     } finally {
       if (ttsAbortControllerRef.current === abortController) {
         ttsAbortControllerRef.current = null;

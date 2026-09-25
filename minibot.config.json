@@ -64,6 +64,25 @@
       "strictSSL": false,
       "enabled": true,
       "description": "Provides MiniMax official web search, image generation, speech synthesis, and music creation via mmx-cli"
+    },
+    "mini-news": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "c:/ai/mini-news/dist/index.js",
+        "--mcp-only"
+      ],
+      "strictSSL": false,
+      "enabled": true,
+      "description": "7x24 Real-time Financial Flash News with PostgreSQL, pgvector, and Safe Dynamic SQL Query Engine"
+    },
+    "bigfix": {
+      "type": "streamable-http",
+      "args": [],
+      "url": "https://172.22.29.51:9494/mcp",
+      "strictSSL": false,
+      "enabled": true,
+      "description": "Enterprise BigFix Platform Endpoint Management MCP Server (Computers, Fixlets, Actions, Relevance Query)"
     }
   },
   "maxLoopIterations": 50
