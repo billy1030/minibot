@@ -2221,14 +2221,14 @@ export function App() {
             fetchLogs(currentWorkspace); // refresh saved logs list
             fetchWorkspaces();
 
-            // ✨ Trigger flash animation on completion (send button & message bubble) - 10 times (7s)
+            // ✨ Trigger flash animation on completion (send button & message bubble) - 10 times (5s total)
             setJustFinishedMessageId(assistantMessageId);
             setIsFlashingComplete(true);
             if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
             flashTimerRef.current = setTimeout(() => {
               setIsFlashingComplete(false);
               setJustFinishedMessageId(null);
-            }, 7000);
+            }, 5000);
           }
         }
       }

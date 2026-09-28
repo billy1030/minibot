@@ -964,10 +964,10 @@ html.dark .modal-turn-scroll::-webkit-scrollbar-thumb:hover {
 }
 
 .complete-flash-btn {
-  animation: minibot-complete-flash 0.7s ease-in-out 10;
+  animation: minibot-complete-flash 0.5s ease-in-out 10;
 }
 
 .complete-flash-bubble {
-  animation: minibot-bubble-flash 0.7s ease-in-out 10;
+  animation: minibot-bubble-flash 0.5s ease-in-out 10;
 }
 
