@@ -6,6 +6,7 @@ import { LLMClient } from "../llm/client.js";
 import { MCPClientManager } from "../mcp/client-manager.js";
 import { ScopedMCPManager } from "../mcp/scoped-mcp-manager.js";
 import { globalSkillManager } from "../skills/skill-manager.js";
+import { convertLatexToUnicode } from "../llm/latex-to-unicode.js";
 
 export interface LoopEventCallbacks {
   onStepStart?: (iteration: number) => void;
@@ -225,7 +226,7 @@ export class LoopOrchestrator {
         }
 
         // If no tool call, this is the final answer
-        const finalAnswer = message.content || "(No response content)";
+        const finalAnswer = convertLatexToUnicode(message.content || "(No response content)");
         callbacks?.onComplete?.(finalAnswer, iteration, activeSkillNames, false);
         return { answer: finalAnswer, iterations: iteration, history: messages, activeSkills: activeSkillNames, limitReached: false };
       } catch (err: any) {
@@ -246,7 +247,7 @@ export class LoopOrchestrator {
       contextSnippet = `\n\n**最後執行的步驟輸出**：\n\`\`\`text\n${preview}\n\`\`\``;
     }
 
-    const fallbackMsg = `[Guardrail]: Loop reached maximum iterations limit (${maxIterations}).${contextSnippet}`;
+    const fallbackMsg = convertLatexToUnicode(`[Guardrail]: Loop reached maximum iterations limit (${maxIterations}).${contextSnippet}`);
     callbacks?.onComplete?.(fallbackMsg, iteration, activeSkillNames, true);
     return { answer: fallbackMsg, iterations: iteration, history: messages, activeSkills: activeSkillNames, limitReached: true };
   }
