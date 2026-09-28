@@ -196,6 +196,9 @@ export function App() {
   const [currentStep, setCurrentStep] = useState<number | null>(null);
   const [activeRunStartTime, setActiveRunStartTime] = useState<number | null>(null);
   const [liveElapsedSec, setLiveElapsedSec] = useState<number>(0);
+  const [justFinishedMessageId, setJustFinishedMessageId] = useState<string | null>(null);
+  const [isFlashingComplete, setIsFlashingComplete] = useState<boolean>(false);
+  const flashTimerRef = useRef<any>(null);
 
   // Live timer tick during inference & tool execution
   useEffect(() => {
@@ -2217,6 +2220,15 @@ export function App() {
             );
             fetchLogs(currentWorkspace); // refresh saved logs list
             fetchWorkspaces();
+
+            // ✨ Trigger flash animation on completion (send button & message bubble)
+            setJustFinishedMessageId(assistantMessageId);
+            setIsFlashingComplete(true);
+            if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+            flashTimerRef.current = setTimeout(() => {
+              setIsFlashingComplete(false);
+              setJustFinishedMessageId(null);
+            }, 3000);
           }
         }
       }
@@ -5297,12 +5309,15 @@ export function App() {
 
                   {/* Main Assistant Content */}
                   <div
+                    className={justFinishedMessageId === m.id ? "complete-flash-bubble" : ""}
                     style={{
                       background: activeFocusedTurnId === m.id
                         ? "linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%)"
                         : "var(--bg-secondary)",
                       border: activeFocusedTurnId === m.id
                         ? "2px solid var(--accent, #0284c7)"
+                        : justFinishedMessageId === m.id
+                        ? "1.5px solid #10b981"
                         : "1px solid var(--border-color)",
                       borderRadius: "16px 16px 16px 2px",
                       padding: "16px 20px",
@@ -5889,12 +5904,14 @@ export function App() {
         <div
           style={{
             padding: "12px 16px",
-            borderTop: "1px solid var(--border-color)",
+            borderTop: isFlashingComplete ? "1.5px solid #10b981" : "1px solid var(--border-color)",
+            boxShadow: isFlashingComplete ? "0 -2px 12px rgba(16, 185, 129, 0.2)" : "none",
             background: "var(--bg-secondary)",
             display: "flex",
             justifyContent: "center",
             width: "100%",
             boxSizing: "border-box",
+            transition: "border-color 0.3s ease, box-shadow 0.3s ease",
           }}
         >
           <div
@@ -7271,24 +7288,33 @@ export function App() {
             <button
               onClick={() => handleSend()}
               disabled={!inputPrompt.trim()}
-              title="Send message (Enter)"
+              title={isFlashingComplete ? "Output Ready! (Enter to send next)" : "Send message (Enter)"}
+              className={isFlashingComplete ? "complete-flash-btn" : ""}
               style={{
                 width: 36,
                 height: 34,
                 borderRadius: 7,
-                background: !inputPrompt.trim() ? "#94a3b8" : "#1f6feb",
+                background: isFlashingComplete
+                  ? "#10b981"
+                  : !inputPrompt.trim()
+                  ? "#94a3b8"
+                  : "#1f6feb",
                 color: "#ffffff",
-                border: "none",
+                border: isFlashingComplete ? "1.5px solid #059669" : "none",
                 cursor: !inputPrompt.trim() ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: !inputPrompt.trim() ? "none" : "0 2px 4px rgba(31, 111, 235, 0.25)",
-                transition: "background 0.2s, box-shadow 0.2s",
+                boxShadow: isFlashingComplete
+                  ? "0 0 14px rgba(16, 185, 129, 0.6)"
+                  : !inputPrompt.trim()
+                  ? "none"
+                  : "0 2px 4px rgba(31, 111, 235, 0.25)",
+                transition: "background 0.25s, box-shadow 0.25s, border 0.25s",
                 flexShrink: 0,
               }}
             >
-              <Send size={15} />
+              {isFlashingComplete ? <Check size={16} strokeWidth={2.5} /> : <Send size={15} />}
             </button>
           )}
 

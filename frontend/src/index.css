@@ -920,3 +920,54 @@ html.dark .modal-turn-scroll::-webkit-scrollbar-thumb:hover {
   background-color: #cbd5e1;
 }
 
+/* ✨ Completion Flash Animations */
+@keyframes minibot-complete-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    border-color: #10b981;
+  }
+  30% {
+    box-shadow: 0 0 16px 4px rgba(16, 185, 129, 0.45);
+    border-color: #10b981;
+    transform: scale(1.04);
+  }
+  70% {
+    box-shadow: 0 0 20px 6px rgba(16, 185, 129, 0.35);
+    border-color: #34d399;
+  }
+  100% {
+    box-shadow: none;
+    transform: scale(1);
+  }
+}
+
+@keyframes minibot-bubble-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.8), 0 0 12px rgba(16, 185, 129, 0.3);
+    border-color: #10b981 !important;
+  }
+  25% {
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.45), 0 0 24px rgba(16, 185, 129, 0.35);
+    border-color: #10b981 !important;
+  }
+  50% {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.6), 0 0 16px rgba(16, 185, 129, 0.25);
+    border-color: #34d399 !important;
+  }
+  75% {
+    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0.3), 0 0 20px rgba(16, 185, 129, 0.2);
+    border-color: #10b981 !important;
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+.complete-flash-btn {
+  animation: minibot-complete-flash 0.9s ease-in-out 3;
+}
+
+.complete-flash-bubble {
+  animation: minibot-bubble-flash 1.2s ease-in-out 2;
+}
+
