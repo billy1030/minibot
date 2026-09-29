@@ -3555,8 +3555,8 @@ export function App() {
             )}
           </div>
 
-          {/* MCP & Thinking Response View Mode Controls */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {/* MCP & Thinking Response View Mode Controls (Group 1: View Modes) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, background: "rgba(0, 0, 0, 0.03)", padding: "2px 4px", borderRadius: 10, border: "1px solid var(--border-color)" }}>
             {/* Thinking Response Segmented Switch */}
             <div
               style={{
@@ -3747,7 +3747,13 @@ export function App() {
                 <span>Full</span>
               </button>
             </div>
+          </div>
 
+          {/* Group Divider 1 -> 2 */}
+          <div style={{ width: 1, height: 20, background: "var(--border-color)", flexShrink: 0 }} />
+
+          {/* Group 2: Action & Inspection Tools (Sub-Convs, Mermaid, Git, Export, Tool Hub, Config) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
             {/* Sub-Conversation / Turns Inspector Button */}
             {activeSessionFile && (
               <button
@@ -3981,7 +3987,13 @@ export function App() {
             >
               <Sliders size={15} />
             </button>
+          </div>
 
+          {/* Group Divider 2 -> 3 */}
+          <div style={{ width: 1, height: 20, background: "var(--border-color)", flexShrink: 0 }} />
+
+          {/* Group 3: Voice Synthesis & Audio Controls */}
+          <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
             {/* 🔊 Group of 4 Voice Controls: 1. Speak | 2. On-Hold/Resume | 3. Stop | 4. Setup */}
             <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }} ref={ttsMenuRef}>
               <div
@@ -4767,10 +4779,13 @@ export function App() {
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Separator */}
-            <div style={{ width: 1, height: 20, background: "var(--border-color)" }} />
+          {/* Group Divider 3 -> 4 */}
+          <div style={{ width: 1, height: 20, background: "var(--border-color)", flexShrink: 0 }} />
 
+          {/* Group 4: User Profile & Session Controls */}
+          <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
             {/* SLS-Style User Dropdown Menu */}
             <div style={{ position: "relative" }} ref={userMenuRef}>
               <button
