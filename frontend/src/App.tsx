@@ -2324,8 +2324,8 @@ export function App() {
           boxSizing: "border-box",
         }}
       >
-        {/* Left Side: Brand Logo Area (Configured so divider sits precisely at 300px from left screen edge: 16px padding + 284px width) */}
-        <div style={{ display: "flex", alignItems: "center", width: 284, flexShrink: 0 }}>
+        {/* Left Side: Brand Logo Area (Configured so divider sits precisely at 325px from left screen edge: 16px padding + 309px width) */}
+        <div style={{ display: "flex", alignItems: "center", width: 309, flexShrink: 0 }}>
           {/* Brand Logo & Name */}
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <div
@@ -2376,11 +2376,11 @@ export function App() {
           </div>
         </div>
 
-        {/* Sidebar Boundary Vertical Line (Placed exactly at 300px from screen left) */}
-        <div style={{ width: 1, height: 26, background: "var(--border-color)", flexShrink: 0, margin: "0 6px 0 0" }} />
+        {/* Sidebar Boundary Vertical Line (Placed exactly at 325px from screen left) */}
+        <div style={{ width: 1, height: 26, background: "var(--border-color)", flexShrink: 0, margin: "0 2px 0 0" }} />
 
-        {/* Right side of boundary line: Collapse/Expand Icon & Status Indicators (Directly next to divider) */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        {/* Right side of boundary line: Collapse/Expand Icon, Status Indicators & Step Badge (Sits precisely between 325px and 450px, width: 125px) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, width: 125, flexShrink: 0 }}>
           {/* Sidebar Toggle Button (Directly beside the divider line) */}
           <button
             type="button"
@@ -2450,8 +2450,8 @@ export function App() {
           )}
         </div>
 
-        {/* Vertical Divider separating controls from Group 1 */}
-        <div style={{ width: 1, height: 20, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
+        {/* Second Vertical Divider separating controls from Group 1 (Fixed at 450px: 325px + 125px) */}
+        <div style={{ width: 1, height: 20, background: "var(--border-color)", flexShrink: 0 }} />
 
           {/* MCP & Thinking Response View Mode Controls (Group 1: View Modes) */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, background: "rgba(0, 0, 0, 0.03)", padding: "2px 4px", borderRadius: 10, border: "1px solid var(--border-color)" }}>
