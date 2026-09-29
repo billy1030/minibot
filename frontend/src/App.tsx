@@ -2324,8 +2324,8 @@ export function App() {
           boxSizing: "border-box",
         }}
       >
-        {/* Left Side: Brand Logo Area (Aligned with sidebar column width) */}
-        <div style={{ display: "flex", alignItems: "center", width: showSidebar ? 354 : "auto", flexShrink: 0, justifyContent: "space-between", transition: "width 0.22s ease" }}>
+        {/* Left Side: Brand Logo Area (Permanently fixed to 370px to match sidebar boundary perfectly) */}
+        <div style={{ display: "flex", alignItems: "center", width: 354, flexShrink: 0 }}>
           {/* Brand Logo & Name */}
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <div
@@ -2376,8 +2376,8 @@ export function App() {
           </div>
         </div>
 
-        {/* Sidebar Boundary Vertical Divider (Aligns precisely with sidebar border) */}
-        <div style={{ width: 1, height: 26, background: "var(--border-color)", flexShrink: 0, margin: "0 4px" }} />
+        {/* Sidebar Boundary Vertical Line (Permanently fixed at 370px mark from left) */}
+        <div style={{ width: 1, height: 26, background: "var(--border-color)", flexShrink: 0, margin: "0 8px 0 0" }} />
 
         {/* Right side of boundary line: Collapse/Expand Icon & Status Indicators */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
