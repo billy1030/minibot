@@ -28,6 +28,8 @@ import {
   Check,
   X,
   GitFork,
+  PanelLeftClose,
+  PanelLeft,
   Folder,
   FolderPlus,
   Brain,
@@ -243,6 +245,14 @@ export function App() {
   });
   const [showModelPanel, setShowModelPanel] = useState<boolean>(false);
   const [showPastSessions, setShowPastSessions] = useState<boolean>(true);
+  const [showSidebar, setShowSidebar] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("minibot_show_sidebar");
+      return saved !== null ? saved === "1" : true;
+    } catch {
+      return true;
+    }
+  });
   const [mcpViewMode, setMcpViewMode] = useState<"full" | "minimize" | "hide">("full");
   const [thinkingViewMode, setThinkingViewMode] = useState<"full" | "minimize" | "hide">("full");
   const [enableThinking, setEnableThinking] = useState<boolean>(() => {
@@ -2298,66 +2308,108 @@ export function App() {
       {/* Sidebar Navigation (Widened and optimized padding to show maximum title information) */}
       <div
         style={{
-          width: 370,
-          minWidth: 350,
+          width: showSidebar ? 370 : 0,
+          minWidth: showSidebar ? 350 : 0,
           flexShrink: 0,
           background: "var(--bg-secondary)",
-          borderRight: "1px solid var(--border-color)",
+          borderRight: showSidebar ? "1px solid var(--border-color)" : "none",
           display: "flex",
           flexDirection: "column",
-          padding: "16px 8px",
+          padding: showSidebar ? "16px 8px" : "16px 0",
+          overflow: "hidden",
+          transition: "width 0.22s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s ease",
+          visibility: showSidebar ? "visible" : "hidden",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-          <div
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, padding: "0 4px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: "linear-gradient(135deg, var(--accent), var(--accent-purple))",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Cpu size={20} color="#fff" />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)", margin: 0 }}>Minibot</h2>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: "1px 5px",
+                    borderRadius: 9999,
+                    background: "rgba(59, 130, 246, 0.12)",
+                    color: "var(--accent, #2563eb)",
+                    border: "1px solid rgba(59, 130, 246, 0.28)",
+                    lineHeight: "13px",
+                    letterSpacing: "0.2px",
+                  }}
+                >
+                  v1.1
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    padding: "1px 6px",
+                    borderRadius: 4,
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border-color)",
+                    color: "var(--accent)",
+                  }}
+                >
+                  Port 7009
+                </span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>MCP Protocol</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Hide Sidebar Button */}
+          <button
+            onClick={() => {
+              setShowSidebar(false);
+              try {
+                localStorage.setItem("minibot_show_sidebar", "0");
+              } catch {}
+            }}
+            title="Hide left sidebar (Collapse)"
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 8,
-              background: "linear-gradient(135deg, var(--accent), var(--accent-purple))",
-              display: "flex",
+              background: "transparent",
+              border: "1px solid var(--border-color)",
+              color: "var(--text-muted)",
+              borderRadius: 6,
+              padding: "6px",
+              cursor: "pointer",
+              display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
+              transition: "all 0.15s ease",
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "var(--text-main)";
+              e.currentTarget.style.borderColor = "var(--accent)";
+              e.currentTarget.style.backgroundColor = "var(--bg-card)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "var(--text-muted)";
+              e.currentTarget.style.borderColor = "var(--border-color)";
+              e.currentTarget.style.backgroundColor = "transparent";
             }}
           >
-            <Cpu size={20} color="#fff" />
-          </div>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)", margin: 0 }}>Minibot</h2>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  padding: "1px 5px",
-                  borderRadius: 9999,
-                  background: "rgba(59, 130, 246, 0.12)",
-                  color: "var(--accent, #2563eb)",
-                  border: "1px solid rgba(59, 130, 246, 0.28)",
-                  lineHeight: "13px",
-                  letterSpacing: "0.2px",
-                }}
-              >
-                v1.1
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  padding: "1px 6px",
-                  borderRadius: 4,
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border-color)",
-                  color: "var(--accent)",
-                }}
-              >
-                Port 7009
-              </span>
-              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>MCP Protocol</span>
-            </div>
-          </div>
+            <PanelLeftClose size={16} />
+          </button>
         </div>
 
         {/* Workspace Selector & Folder Management Card */}
@@ -3436,6 +3488,45 @@ export function App() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            {/* Unhide / Show Sidebar Button (Shown only when sidebar is hidden) */}
+            {!showSidebar && (
+              <button
+                onClick={() => {
+                  setShowSidebar(true);
+                  try {
+                    localStorage.setItem("minibot_show_sidebar", "1");
+                  } catch {}
+                }}
+                title="Show left sidebar (Expand)"
+                style={{
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-color)",
+                  color: "var(--text-main)",
+                  borderRadius: 6,
+                  padding: "5px 9px",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  transition: "all 0.15s ease",
+                  marginRight: 4,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--accent)";
+                  e.currentTarget.style.color = "var(--accent)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-color)";
+                  e.currentTarget.style.color = "var(--text-main)";
+                }}
+              >
+                <PanelLeft size={15} />
+                <span>Sidebar</span>
+              </button>
+            )}
+
             <div
               style={{
                 width: 8,
