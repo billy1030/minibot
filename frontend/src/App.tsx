@@ -2390,17 +2390,17 @@ export function App() {
             }}
             title={showSidebar ? "Hide left sidebar (Collapse)" : "Show left sidebar (Expand)"}
             style={{
+              width: 32,
+              height: 32,
+              padding: 0,
               background: "var(--bg-card)",
               border: "1px solid var(--border-color)",
               color: "var(--text-main)",
               borderRadius: 6,
-              padding: "5px 8px",
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
-              gap: 5,
-              fontSize: 11.5,
-              fontWeight: 600,
+              justifyContent: "center",
               transition: "all 0.15s ease",
               flexShrink: 0,
             }}
@@ -2413,8 +2413,7 @@ export function App() {
               e.currentTarget.style.color = "var(--text-main)";
             }}
           >
-            {showSidebar ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
-            <span>{showSidebar ? "Collapse" : "Sidebar"}</span>
+            {showSidebar ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
           </button>
 
           {/* Left Vertical Divider 2 */}
