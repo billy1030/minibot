@@ -2324,8 +2324,8 @@ export function App() {
           boxSizing: "border-box",
         }}
       >
-        {/* Left Side: Brand Logo + Version + Port Badge + Sidebar Toggle + Status Dot */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        {/* Left Side: Brand Logo Area (Aligned with sidebar column width) */}
+        <div style={{ display: "flex", alignItems: "center", width: showSidebar ? 354 : "auto", flexShrink: 0, justifyContent: "space-between", transition: "width 0.22s ease" }}>
           {/* Brand Logo & Name */}
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <div
@@ -2374,11 +2374,14 @@ export function App() {
               Port 7009
             </span>
           </div>
+        </div>
 
-          {/* Left Vertical Divider 1 */}
-          <div style={{ width: 1, height: 18, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
+        {/* Sidebar Boundary Vertical Divider (Aligns precisely with sidebar border) */}
+        <div style={{ width: 1, height: 26, background: "var(--border-color)", flexShrink: 0, margin: "0 4px" }} />
 
-          {/* Sidebar Toggle Button (Always visible on Row 1) */}
+        {/* Right side of boundary line: Collapse/Expand Icon & Status Indicators */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          {/* Sidebar Toggle Button (Now positioned right of the sidebar boundary line) */}
           <button
             type="button"
             onClick={() => {
@@ -2416,9 +2419,6 @@ export function App() {
             {showSidebar ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
           </button>
 
-          {/* Left Vertical Divider 2 */}
-          <div style={{ width: 1, height: 18, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
-
           {/* Online Agent Engine Status Indicator */}
           <div
             style={{
@@ -2449,6 +2449,9 @@ export function App() {
             </span>
           )}
         </div>
+
+        {/* Vertical Divider separating controls from Group 1 */}
+        <div style={{ width: 1, height: 20, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
 
           {/* MCP & Thinking Response View Mode Controls (Group 1: View Modes) */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, background: "rgba(0, 0, 0, 0.03)", padding: "2px 4px", borderRadius: 10, border: "1px solid var(--border-color)" }}>
