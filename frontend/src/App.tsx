@@ -2304,29 +2304,34 @@ export function App() {
   }
 
   return (
-    <div style={{ display: "flex", width: "100vw", height: "100vh", background: "var(--bg-primary)" }}>
-      {/* Sidebar Navigation (Widened and optimized padding to show maximum title information) */}
-      <div
+    <div style={{ display: "flex", flexDirection: "column", width: "100vw", height: "100vh", background: "var(--bg-primary)", overflow: "hidden" }}>
+      {/* Row 1: Full-Width Persistent Top Navigation Bar */}
+      <header
         style={{
-          width: showSidebar ? 370 : 0,
-          minWidth: showSidebar ? 350 : 0,
+          width: "100%",
+          height: 56,
           flexShrink: 0,
           background: "var(--bg-secondary)",
-          borderRight: showSidebar ? "1px solid var(--border-color)" : "none",
+          borderBottom: "1px solid var(--border-color)",
           display: "flex",
-          flexDirection: "column",
-          padding: showSidebar ? "16px 8px" : "16px 0",
-          overflow: "hidden",
-          transition: "width 0.22s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s ease",
-          visibility: showSidebar ? "visible" : "hidden",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 16px",
+          flexWrap: "nowrap",
+          overflowX: "auto",
+          zIndex: 100,
+          gap: 12,
+          boxSizing: "border-box",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, padding: "0 4px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        {/* Left Side: Brand Logo + Version + Port Badge + Sidebar Toggle + Status Dot */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          {/* Brand Logo & Name */}
+          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <div
               style={{
-                width: 36,
-                height: 36,
+                width: 32,
+                height: 32,
                 borderRadius: 8,
                 background: "linear-gradient(135deg, var(--accent), var(--accent-purple))",
                 display: "flex",
@@ -2335,1225 +2340,116 @@ export function App() {
                 flexShrink: 0,
               }}
             >
-              <Cpu size={20} color="#fff" />
+              <Cpu size={18} color="#fff" />
             </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)", margin: 0 }}>Minibot</h2>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: "1px 5px",
-                    borderRadius: 9999,
-                    background: "rgba(59, 130, 246, 0.12)",
-                    color: "var(--accent, #2563eb)",
-                    border: "1px solid rgba(59, 130, 246, 0.28)",
-                    lineHeight: "13px",
-                    letterSpacing: "0.2px",
-                  }}
-                >
-                  v1.1
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                    background: "var(--bg-card)",
-                    border: "1px solid var(--border-color)",
-                    color: "var(--accent)",
-                  }}
-                >
-                  Port 7009
-                </span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>MCP Protocol</span>
-              </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)", margin: 0, letterSpacing: "-0.2px" }}>Minibot</h2>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: "1px 5px",
+                  borderRadius: 9999,
+                  background: "rgba(59, 130, 246, 0.12)",
+                  color: "var(--accent, #2563eb)",
+                  border: "1px solid rgba(59, 130, 246, 0.28)",
+                  lineHeight: "13px",
+                  letterSpacing: "0.2px",
+                }}
+              >
+                v1.1
+              </span>
             </div>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                padding: "1px 6px",
+                borderRadius: 4,
+                background: "var(--bg-card)",
+                border: "1px solid var(--border-color)",
+                color: "var(--accent)",
+              }}
+            >
+              Port 7009
+            </span>
           </div>
 
-          {/* Hide Sidebar Button */}
+          {/* Left Vertical Divider 1 */}
+          <div style={{ width: 1, height: 18, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
+
+          {/* Sidebar Toggle Button (Always visible on Row 1) */}
           <button
+            type="button"
             onClick={() => {
-              setShowSidebar(false);
+              const nextVal = !showSidebar;
+              setShowSidebar(nextVal);
               try {
-                localStorage.setItem("minibot_show_sidebar", "0");
+                localStorage.setItem("minibot_show_sidebar", nextVal ? "1" : "0");
               } catch {}
             }}
-            title="Hide left sidebar (Collapse)"
+            title={showSidebar ? "Hide left sidebar (Collapse)" : "Show left sidebar (Expand)"}
             style={{
-              background: "transparent",
+              background: "var(--bg-card)",
               border: "1px solid var(--border-color)",
-              color: "var(--text-muted)",
+              color: "var(--text-main)",
               borderRadius: 6,
-              padding: "6px",
+              padding: "5px 8px",
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
-              justifyContent: "center",
+              gap: 5,
+              fontSize: 11.5,
+              fontWeight: 600,
               transition: "all 0.15s ease",
               flexShrink: 0,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.color = "var(--text-main)";
               e.currentTarget.style.borderColor = "var(--accent)";
-              e.currentTarget.style.backgroundColor = "var(--bg-card)";
+              e.currentTarget.style.color = "var(--accent)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.color = "var(--text-muted)";
               e.currentTarget.style.borderColor = "var(--border-color)";
-              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.color = "var(--text-main)";
             }}
           >
-            <PanelLeftClose size={16} />
+            {showSidebar ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
+            <span>{showSidebar ? "Collapse" : "Sidebar"}</span>
           </button>
-        </div>
 
-        {/* Workspace Selector & Folder Management Card */}
-        <div
-          style={{
-            background: "var(--bg-card)",
-            borderRadius: 8,
-            border: "1px solid var(--border-color)",
-            padding: "10px 12px",
-            marginBottom: 12,
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Folder size={14} color="var(--accent)" />
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-main)" }}>
-                Workspace
-              </span>
-            </div>
-            <button
-              onClick={() => setIsCreatingWs(!isCreatingWs)}
-              title="Create new Workspace folder"
+          {/* Left Vertical Divider 2 */}
+          <div style={{ width: 1, height: 18, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
+
+          {/* Online Agent Engine Status Indicator */}
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: "var(--accent-emerald)",
+              boxShadow: "0 0 8px rgba(22, 163, 74, 0.6)",
+              flexShrink: 0,
+            }}
+            title="Agent Engine Online"
+          />
+          <Activity size={15} color="var(--accent-emerald)" style={{ flexShrink: 0 }} />
+          {currentStep && (
+            <span
               style={{
-                background: isCreatingWs ? "rgba(37, 99, 235, 0.15)" : "transparent",
-                border: "1px solid var(--border-color)",
-                color: "var(--text-main)",
-                borderRadius: 4,
-                padding: "2px 6px",
-                cursor: "pointer",
+                background: "var(--accent)",
+                color: "#fff",
+                padding: "2px 8px",
+                borderRadius: 12,
                 fontSize: 11,
                 fontWeight: 600,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                transition: "all 0.15s ease",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
-              <FolderPlus size={12} color="var(--accent)" /> New
-            </button>
-          </div>
-
-          {/* New Workspace Input Field */}
-          {isCreatingWs && (
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <input
-                type="text"
-                placeholder="Folder name (e.g. BigFix-Audit)"
-                value={newWsName}
-                autoFocus
-                onChange={(e) => setNewWsName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCreateWorkspace();
-                  else if (e.key === "Escape") setIsCreatingWs(false);
-                }}
-                style={{
-                  flex: 1,
-                  fontSize: 11,
-                  padding: "4px 8px",
-                  borderRadius: 4,
-                  border: "1px solid var(--accent)",
-                  background: "var(--bg-primary)",
-                  color: "var(--text-main)",
-                  outline: "none",
-                }}
-              />
-              <button
-                onClick={handleCreateWorkspace}
-                title="Create"
-                style={{
-                  background: "rgba(16, 185, 129, 0.15)",
-                  border: "1px solid rgba(16, 185, 129, 0.4)",
-                  color: "#10b981",
-                  borderRadius: 4,
-                  padding: "4px 6px",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                }}
-              >
-                <Check size={12} />
-              </button>
-              <button
-                onClick={() => setIsCreatingWs(false)}
-                title="Cancel"
-                style={{
-                  background: "transparent",
-                  border: "1px solid var(--border-color)",
-                  color: "var(--text-muted)",
-                  borderRadius: 4,
-                  padding: "4px 6px",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                }}
-              >
-                <X size={12} />
-              </button>
-            </div>
-          )}
-
-          {/* Rename Workspace Input Field */}
-          {isRenamingWs && (
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <input
-                type="text"
-                placeholder="New workspace name"
-                value={renameWsInput}
-                autoFocus
-                onChange={(e) => setRenameWsInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleRenameWorkspace();
-                  else if (e.key === "Escape") setIsRenamingWs(false);
-                }}
-                style={{
-                  flex: 1,
-                  fontSize: 11,
-                  padding: "4px 8px",
-                  borderRadius: 4,
-                  border: "1px solid var(--accent)",
-                  background: "var(--bg-primary)",
-                  color: "var(--text-main)",
-                  outline: "none",
-                }}
-              />
-              <button
-                onClick={handleRenameWorkspace}
-                title="Save"
-                style={{
-                  background: "rgba(16, 185, 129, 0.15)",
-                  border: "1px solid rgba(16, 185, 129, 0.4)",
-                  color: "#10b981",
-                  borderRadius: 4,
-                  padding: "4px 6px",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                }}
-              >
-                <Check size={12} />
-              </button>
-              <button
-                onClick={() => setIsRenamingWs(false)}
-                title="Cancel"
-                style={{
-                  background: "transparent",
-                  border: "1px solid var(--border-color)",
-                  color: "var(--text-muted)",
-                  borderRadius: 4,
-                  padding: "4px 6px",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                }}
-              >
-                <X size={12} />
-              </button>
-            </div>
-          )}
-
-          {/* Workspace Dropdown Select */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <select
-              value={currentWorkspace}
-              onChange={(e) => switchWorkspace(e.target.value)}
-              style={{
-                flex: 1,
-                fontSize: 11,
-                fontWeight: 600,
-                padding: "6px 8px",
-                borderRadius: 6,
-                border: "1px solid var(--border-color)",
-                background: "var(--bg-secondary)",
-                color: "var(--text-main)",
-                outline: "none",
-                cursor: "pointer",
-              }}
-            >
-              {workspaces.map((ws) => (
-                <option key={ws.name} value={ws.name}>
-                  📁 {ws.name} ({ws.sessionCount} sessions)
-                </option>
-              ))}
-            </select>
-
-            {currentWorkspace !== "default" && (
-              <>
-                {/* Rename Workspace Icon Button */}
-                <button
-                  onClick={() => {
-                    setIsRenamingWs(!isRenamingWs);
-                    setRenameWsInput(currentWorkspace);
-                    setIsCreatingWs(false);
-                  }}
-                  title="Rename current workspace"
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    padding: "4px",
-                    borderRadius: 4,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    transition: "color 0.15s",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                >
-                  <Edit2 size={13} />
-                </button>
-
-                {/* Delete Workspace Icon Button */}
-                <button
-                  onClick={(e) => handleDeleteWorkspace(e, currentWorkspace)}
-                  disabled={isDeletingWs}
-                  title={isDeletingWs ? "Deleting workspace..." : "Delete current workspace folder"}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: isDeletingWs ? "#ef4444" : "var(--text-muted)",
-                    cursor: isDeletingWs ? "not-allowed" : "pointer",
-                    padding: "4px",
-                    borderRadius: 4,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    transition: "color 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isDeletingWs) e.currentTarget.style.color = "#ef4444";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isDeletingWs) e.currentTarget.style.color = "var(--text-muted)";
-                  }}
-                >
-                  {isDeletingWs ? (
-                    <Loader2 size={13} className="spin" color="#ef4444" />
-                  ) : (
-                    <Trash2 size={13} />
-                  )}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* New Chat Primary Action Button */}
-        <button
-          onClick={startNewChat}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            padding: "10px 14px",
-            borderRadius: 8,
-            background: "var(--accent)",
-            color: "#ffffff",
-            border: "none",
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 600,
-            marginBottom: 16,
-            transition: "opacity 0.2s",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
-          onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
-        >
-          <PlusCircle size={16} /> New Chat
-        </button>
-
-        {/* Collapsible Past Sessions Section (Matching Active Model Card Style) */}
-        <div
-          style={{
-            background: "var(--bg-card)",
-            borderRadius: 8,
-            border: "1px solid var(--border-color)",
-            marginBottom: 12,
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            minHeight: showPastSessions ? 140 : "auto",
-            transition: "flex 0.2s ease, min-height 0.2s ease",
-          }}
-        >
-          {/* Collapsible Header bar: Matches Active Model Header Style */}
-          <div
-            onClick={() => setShowPastSessions(!showPastSessions)}
-            style={{
-              padding: "10px 14px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              cursor: "pointer",
-              background: showPastSessions ? "var(--bg-secondary)" : "transparent",
-              userSelect: "none",
-              borderBottom: showPastSessions ? "1px solid var(--border-color)" : "none",
-            }}
-            title="Click to collapse / expand past sessions"
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <History size={14} color="var(--accent)" />
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-main)" }}>
-                Past Sessions
-              </span>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              {/* Refresh icon button on the left of Logs badge */}
-              <span
-                style={{
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  padding: "3px",
-                  borderRadius: 4,
-                  color: "var(--text-muted)",
-                  transition: "color 0.15s",
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  fetchLogs();
-                }}
-                title="Refresh saved sessions"
-                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-              >
-                <RefreshCw size={11} />
-              </span>
-
-              <span
-                style={{
-                  fontSize: 10,
-                  padding: "1px 6px",
-                  borderRadius: 4,
-                  background: "rgba(37, 99, 235, 0.1)",
-                  color: "var(--accent)",
-                  fontWeight: 600,
-                }}
-              >
-                {savedSessions.length} Logs
-              </span>
-
-              {showPastSessions ? (
-                <ChevronDown size={15} color="var(--text-muted)" />
-              ) : (
-                <ChevronRight size={15} color="var(--text-muted)" />
-              )}
-            </div>
-          </div>
-
-          {/* Collapsible Sessions Body (Tree View Hierarchy) */}
-          {showPastSessions && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 5,
-                overflowY: "auto",
-                flex: 1,
-                padding: "8px 5px",
-              }}
-            >
-              {savedSessions.length === 0 ? (
-                <div style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic", padding: "4px 0" }}>
-                  No past logs yet.
-                </div>
-              ) : (() => {
-                // Build Tree: Identify Root Sessions vs Sub-Conversations (Forks)
-                const sessionMap = new Map<string, any>();
-                const childrenMap = new Map<string, any[]>();
-                const rootSessions: any[] = [];
-
-                savedSessions.forEach((s) => {
-                  sessionMap.set(s.filename, s);
-                });
-
-                savedSessions.forEach((s) => {
-                  const parent = s.clonedFrom?.parentFilename;
-                  if (parent && sessionMap.has(parent)) {
-                    if (!childrenMap.has(parent)) {
-                      childrenMap.set(parent, []);
-                    }
-                    childrenMap.get(parent)!.push(s);
-                  } else {
-                    rootSessions.push(s);
-                  }
-                });
-
-                // Render session card with multi-level depth support (Level 0: Root, Level 1: Sub, Level 2: Sub-sub/3rd level, etc.)
-                const renderSessionCard = (session: any, depth: number = 0) => {
-                  const isActive = activeSessionFile === session.filename;
-                  const children = childrenMap.get(session.filename) || [];
-                  const hasChildren = children.length > 0;
-                  const isChild = depth > 0;
-
-                  // Branch colors according to depth level (Max Level 5)
-                  const branchColors = [
-                    "var(--accent)",             // Root (0)
-                    "rgba(168, 85, 247, 0.6)",   // Level 1 (Purple)
-                    "rgba(236, 72, 153, 0.6)",   // Level 2 (Pink)
-                    "rgba(20, 184, 166, 0.6)",   // Level 3 (Teal)
-                    "rgba(245, 158, 11, 0.6)",   // Level 4 (Amber)
-                    "rgba(239, 68, 68, 0.6)",    // Level 5 (Red / Max)
-                  ];
-                  const branchBorderColor = branchColors[Math.min(depth, 5)];
-
-                  const isDraggingThis = draggedSessionKey === session.filename;
-                  const isDragOverThis = dragOverSessionKey === session.filename;
-                  const isDeletingThis = deletingSessionFile === session.filename;
-
-                  return (
-                    <div
-                      key={session.filename}
-                      draggable={editingSessionFile !== session.filename && !isDeletingThis}
-                      onDragStart={(e) => {
-                        if (editingSessionFile === session.filename || isDeletingThis) return;
-                        setDraggedSessionKey(session.filename);
-                        e.dataTransfer.effectAllowed = "move";
-                        e.dataTransfer.setData("text/plain", session.filename);
-                      }}
-                      onDragOver={(e) => {
-                        if (!draggedSessionKey || draggedSessionKey === session.filename || isDeletingThis) return;
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = "move";
-                        if (dragOverSessionKey !== session.filename) {
-                          setDragOverSessionKey(session.filename);
-                        }
-                      }}
-                      onDragLeave={() => {
-                        if (dragOverSessionKey === session.filename) {
-                          setDragOverSessionKey(null);
-                        }
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        if (!draggedSessionKey || draggedSessionKey === session.filename || isDeletingThis) {
-                          setDraggedSessionKey(null);
-                          setDragOverSessionKey(null);
-                          return;
-                        }
-
-                        const currentList = [...savedSessions];
-                        const sourceIdx = currentList.findIndex((s) => s.filename === draggedSessionKey);
-                        const targetIdx = currentList.findIndex((s) => s.filename === session.filename);
-
-                        if (sourceIdx !== -1 && targetIdx !== -1) {
-                          const [movedItem] = currentList.splice(sourceIdx, 1);
-                          currentList.splice(targetIdx, 0, movedItem);
-                          handleReorderSessions(currentList);
-                        }
-                        setDraggedSessionKey(null);
-                        setDragOverSessionKey(null);
-                      }}
-                      onDragEnd={() => {
-                        setDraggedSessionKey(null);
-                        setDragOverSessionKey(null);
-                      }}
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 2,
-                        opacity: isDeletingThis ? 0.45 : isDraggingThis ? 0.4 : 1,
-                        pointerEvents: isDeletingThis ? "none" : "auto",
-                        transition: "opacity 0.15s ease",
-                      }}
-                    >
-                      <div
-                        onClick={() => loadSession(session.filename)}
-                        title={`Click to load: ${session.filename}${depth > 0 ? ` (Fork Level ${depth} / 5)` : ""}`}
-                        style={{
-                          padding: isChild ? "4px 6px" : "6px 8px",
-                          borderRadius: 6,
-                          fontSize: 11,
-                          cursor: "pointer",
-                          background: isActive
-                            ? "rgba(37, 99, 235, 0.14)"
-                            : isChild
-                            ? "var(--bg-primary)"
-                            : "var(--bg-secondary)",
-                          border: isDragOverThis
-                            ? "2px dashed var(--accent)"
-                            : isActive
-                            ? "1px solid var(--accent)"
-                            : "1px solid var(--border-color)",
-                          transition: "all 0.15s ease",
-                          position: "relative",
-                          boxShadow: isActive ? "0 0 0 1px var(--accent)" : "none",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!isActive && !isDragOverThis) e.currentTarget.style.borderColor = "var(--text-muted)";
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!isActive && !isDragOverThis) e.currentTarget.style.borderColor = "var(--border-color)";
-                        }}
-                      >
-                        {/* First Line: Title Only (Full Width) */}
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
-                          {editingSessionFile === session.filename ? (
-                            <div
-                              style={{ display: "flex", alignItems: "center", gap: 4, flex: 1 }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <input
-                                type="text"
-                                value={editingTitle}
-                                autoFocus
-                                onChange={(e) => setEditingTitle(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    handleRenameSession(session.filename, editingTitle);
-                                  } else if (e.key === "Escape") {
-                                    setEditingSessionFile(null);
-                                  }
-                                }}
-                                style={{
-                                  flex: 1,
-                                  fontSize: 11,
-                                  padding: "2px 6px",
-                                  borderRadius: 4,
-                                  border: "1px solid var(--accent)",
-                                  background: "var(--bg-card)",
-                                  color: "var(--text-main)",
-                                  outline: "none",
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  handleRenameSession(session.filename, editingTitle);
-                                }}
-                                title="Save Title"
-                                style={{
-                                  background: "rgba(16, 185, 129, 0.15)",
-                                  border: "1px solid rgba(16, 185, 129, 0.4)",
-                                  color: "#10b981",
-                                  borderRadius: 4,
-                                  padding: "2px 4px",
-                                  cursor: "pointer",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                }}
-                              >
-                                <Check size={12} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  setEditingSessionFile(null);
-                                }}
-                                title="Cancel"
-                                style={{
-                                  background: "transparent",
-                                  border: "1px solid var(--border-color)",
-                                  color: "var(--text-muted)",
-                                  borderRadius: 4,
-                                  padding: "2px 4px",
-                                  cursor: "pointer",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                }}
-                              >
-                                <X size={12} />
-                              </button>
-                            </div>
-                          ) : (
-                            <div style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 600, color: "var(--text-main)", flex: 1, minWidth: 0 }}>
-                              {/* Drag Handle Grip */}
-                              <span
-                                style={{
-                                  cursor: "grab",
-                                  color: "var(--text-muted)",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  opacity: 0.6,
-                                  flexShrink: 0,
-                                }}
-                                title="Drag to reorder session"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <GripVertical size={11} />
-                              </span>
-                              {depth === 0 ? (
-                                <MessageSquare size={13} color="var(--accent)" style={{ flexShrink: 0 }} />
-                              ) : depth === 1 ? (
-                                <GitFork size={13} color="#a855f7" style={{ flexShrink: 0 }} />
-                              ) : depth === 2 ? (
-                                <GitFork size={13} color="#ec4899" style={{ flexShrink: 0 }} />
-                              ) : depth === 3 ? (
-                                <GitFork size={13} color="#14b8a6" style={{ flexShrink: 0 }} />
-                              ) : depth === 4 ? (
-                                <GitFork size={13} color="#f59e0b" style={{ flexShrink: 0 }} />
-                              ) : (
-                                <GitFork size={13} color="#ef4444" style={{ flexShrink: 0 }} />
-                              )}
-                              <span
-                                style={{
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                  fontSize: isChild ? 11.5 : 12.5,
-                                  letterSpacing: "0.2px",
-                                }}
-                              >
-                                {session.customTitle || session.preview || "Untitled Conversation"}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Second Line: Metadata (Timestamp on Far Left, Badges & Action Icons on Far Right) */}
-                        <div
-                          style={{
-                            fontSize: 9.5,
-                            color: "var(--text-muted)",
-                            marginTop: 4,
-                            paddingLeft: 0,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 2,
-                          }}
-                        >
-                          {/* Left Side: Timestamp / Filename (Click to copy to clipboard) */}
-                          <div style={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
-                            <span
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                try {
-                                  await navigator.clipboard.writeText(session.filename);
-                                  setCopiedSessionFilename(session.filename);
-                                  setTimeout(() => {
-                                    setCopiedSessionFilename((curr) => (curr === session.filename ? null : curr));
-                                  }, 1800);
-                                } catch (err) {
-                                  console.error("Failed to copy filename:", err);
-                                }
-                              }}
-                              title={copiedSessionFilename === session.filename ? "Copied to clipboard!" : `Click to copy filename (${session.filename})`}
-                              style={{
-                                fontFamily: "ui-monospace, monospace",
-                                fontSize: 9.5,
-                                whiteSpace: "nowrap",
-                                color: copiedSessionFilename === session.filename ? "#10b981" : "var(--text-muted)",
-                                letterSpacing: "-0.2px",
-                                cursor: "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 3,
-                                padding: "1px 3px",
-                                borderRadius: 3,
-                                transition: "all 0.15s ease",
-                                backgroundColor: copiedSessionFilename === session.filename ? "rgba(16, 185, 129, 0.12)" : "transparent",
-                              }}
-                              onMouseEnter={(e) => {
-                                if (copiedSessionFilename !== session.filename) {
-                                  e.currentTarget.style.color = "var(--accent)";
-                                  e.currentTarget.style.backgroundColor = "rgba(2, 132, 199, 0.08)";
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (copiedSessionFilename !== session.filename) {
-                                  e.currentTarget.style.color = "var(--text-muted)";
-                                  e.currentTarget.style.backgroundColor = "transparent";
-                                }
-                              }}
-                            >
-                              {copiedSessionFilename === session.filename ? (
-                                <>
-                                  <Check size={9.5} style={{ color: "#10b981" }} />
-                                  <span style={{ fontWeight: 600 }}>Copied!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy size={9} style={{ opacity: 0.6 }} />
-                                  <span>{session.filename.replace(".md", "")}</span>
-                                </>
-                              )}
-                            </span>
-                          </div>
-
-                          {/* Right Side: Attachment Badge & Action Icons */}
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                            {/* Attachment Badge if session has documents */}
-                            {session.attachedDocCount && session.attachedDocCount > 0 ? (
-                              <span
-                                title={`${session.attachedDocCount} attached document(s)`}
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 2,
-                                  padding: "1px 4px",
-                                  borderRadius: 4,
-                                  fontSize: 9,
-                                  fontWeight: 600,
-                                  backgroundColor: "rgba(37, 99, 235, 0.12)",
-                                  color: "var(--accent)",
-                                  border: "1px solid rgba(37, 99, 235, 0.25)",
-                                }}
-                              >
-                                <Paperclip size={9.5} />
-                                {session.attachedDocCount}
-                              </span>
-                            ) : null}
-
-                            {/* Action Icon Buttons Grouped on the Right */}
-                            {editingSessionFile !== session.filename && (
-                              <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
-                                {/* Sub-Conversation Inspector / Fork Icon Button (Dimmed & Disabled when max fork level 5+ reached) */}
-                                <button
-                                  disabled={depth >= 5}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (depth >= 5) return;
-                                    setSubConvModalFile(session.filename);
-                                  }}
-                                  title={depth >= 5 ? "Max fork depth reached (Level 5) - cannot fork deeper" : "Inspect Sub-Conversations & Fork/Clone"}
-                                  style={{
-                                    background: "transparent",
-                                    border: "none",
-                                    cursor: depth >= 5 ? "not-allowed" : "pointer",
-                                    opacity: depth >= 5 ? 0.3 : 1,
-                                    padding: "2px 3px",
-                                    borderRadius: 4,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    color: depth >= 5 ? "var(--text-muted)" : "var(--text-muted)",
-                                    transition: "color 0.15s, background-color 0.15s, opacity 0.15s",
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (depth < 5) {
-                                      e.currentTarget.style.color = "var(--accent)";
-                                      e.currentTarget.style.backgroundColor = "rgba(37, 99, 235, 0.1)";
-                                    }
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (depth < 5) {
-                                      e.currentTarget.style.color = "var(--text-muted)";
-                                      e.currentTarget.style.backgroundColor = "transparent";
-                                    }
-                                  }}
-                                >
-                                  <GitFork size={11.5} />
-                                </button>
-
-                                {/* Edit / Rename Icon Button */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingSessionFile(session.filename);
-                                    setEditingTitle(session.customTitle || session.preview || "");
-                                  }}
-                                  title="Rename this session"
-                                  style={{
-                                    background: "transparent",
-                                    border: "none",
-                                    cursor: "pointer",
-                                    padding: "2px 3px",
-                                    borderRadius: 4,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    color: "var(--text-muted)",
-                                    transition: "color 0.15s, background-color 0.15s",
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.color = "var(--accent)";
-                                    e.currentTarget.style.backgroundColor = "rgba(37, 99, 235, 0.1)";
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.color = "var(--text-muted)";
-                                    e.currentTarget.style.backgroundColor = "transparent";
-                                  }}
-                                >
-                                  <Edit2 size={11.5} />
-                                </button>
-
-                                {/* Delete Icon Button */}
-                                <button
-                                  onClick={(e) => deleteSession(e, session.filename)}
-                                  disabled={isDeletingThis}
-                                  title={isDeletingThis ? "Deleting session..." : "Delete this session"}
-                                  style={{
-                                    background: "transparent",
-                                    border: "none",
-                                    cursor: isDeletingThis ? "not-allowed" : "pointer",
-                                    padding: "2px 3px",
-                                    borderRadius: 4,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    color: isDeletingThis ? "#ef4444" : "var(--text-muted)",
-                                    transition: "color 0.15s, background-color 0.15s",
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    if (!isDeletingThis) {
-                                      e.currentTarget.style.color = "#ef4444";
-                                      e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.1)";
-                                    }
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    if (!isDeletingThis) {
-                                      e.currentTarget.style.color = "var(--text-muted)";
-                                      e.currentTarget.style.backgroundColor = "transparent";
-                                    }
-                                  }}
-                                >
-                                  {isDeletingThis ? (
-                                    <Loader2 size={11.5} className="spin" color="#ef4444" />
-                                  ) : (
-                                    <Trash2 size={11.5} />
-                                  )}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Tree Branch Line & Sub-Conversations (Recursive for unlimited levels) */}
-                      {hasChildren && (
-                        <div
-                          style={{
-                            marginLeft: 6,
-                            paddingLeft: 4,
-                            borderLeft: `2px solid ${branchBorderColor}`,
-                            display: "flex",
-                            flexDirection: "column",
-                            marginBottom: 3,
-                          }}
-                        >
-                          {children.map((child) => renderSessionCard(child, depth + 1))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                };
-
-                return rootSessions.map((root) => renderSessionCard(root, 0));
-              })()}
-            </div>
+              Step {currentStep}
+            </span>
           )}
         </div>
-
-        {/* Collapsible Active Model & Tools Container at Bottom */}
-        <div
-          style={{
-            background: "var(--bg-card)",
-            borderRadius: 8,
-            border: "1px solid var(--border-color)",
-            marginBottom: 0,
-            marginTop: "auto",
-            overflow: "hidden",
-            transition: "flex 0.2s ease",
-            display: "flex",
-            flexDirection: "column",
-            flex: showModelPanel ? 1 : "0 0 auto",
-          }}
-        >
-          {/* Collapsible Header bar: Shows 'Active Model' when collapsed */}
-          <div
-            onClick={() => setShowModelPanel(!showModelPanel)}
-            style={{
-              padding: "10px 14px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              cursor: "pointer",
-              background: showModelPanel ? "var(--bg-secondary)" : "transparent",
-              userSelect: "none",
-              gap: 8,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
-              <Sparkles size={14} color="var(--accent)" style={{ flexShrink: 0 }} />
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "var(--text-main)",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-                title={config?.llm.model}
-              >
-                Model {showModelPanel ? "" : `(${config?.llm.model || "Loading..."})`}
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-              {!showModelPanel && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                    background: "rgba(37, 99, 235, 0.1)",
-                    color: "var(--accent)",
-                    fontWeight: 600,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {config?.tools?.length || 0} Tools
-                </span>
-              )}
-              {showModelPanel ? <ChevronDown size={15} color="var(--text-muted)" /> : <ChevronRight size={15} color="var(--text-muted)" />}
-            </div>
-          </div>
-
-          {/* Expanded Content: Model Details + Active MCP Tools */}
-          {showModelPanel && (
-            <div style={{ padding: "12px 14px", borderTop: "1px solid var(--border-color)", display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>CURRENT LLM MODEL</div>
-                <button
-                  type="button"
-                  onClick={() => setShowModelSelectorModal(true)}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "var(--accent, #0284c7)",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    padding: 0,
-                  }}
-                >
-                  Manage ⚙️
-                </button>
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  <Cpu size={14} /> {config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm.model || "Loading..."}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowModelSelectorModal(true)}
-                  style={{
-                    fontSize: 10,
-                    padding: "2px 7px",
-                    borderRadius: 4,
-                    background: "rgba(2, 132, 199, 0.12)",
-                    color: "var(--accent, #0284c7)",
-                    border: "1px solid rgba(2, 132, 199, 0.3)",
-                    cursor: "pointer",
-                    fontWeight: 700,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Switch
-                </button>
-              </div>
-
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
-                <span>ACTIVE MCP SERVERS</span>
-                <span style={{ color: "var(--accent-emerald)", fontWeight: 600 }}>{config?.tools?.length || 0} Tools</span>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", flex: 1 }}>
-                {config?.mcpServers &&
-                  Object.entries(config.mcpServers).map(([serverKey, serverDef]: [string, any]) => {
-                    const serverTools = (config.discoveredTools || []).filter(
-                      (t) => t.serverName === serverKey
-                    );
-
-                    return (
-                      <div
-                        key={serverKey}
-                        style={{
-                          background: "var(--bg-secondary)",
-                          border: "1px solid var(--border-color)",
-                          borderRadius: 6,
-                          padding: "6px 8px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            marginBottom: 4,
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                            <Server size={12} color="var(--accent)" />
-                            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-main)" }}>
-                              {serverKey}
-                            </span>
-                          </div>
-                          <span
-                            style={{
-                              fontSize: 9,
-                              padding: "1px 4px",
-                              borderRadius: 3,
-                              background: serverDef.enabled ? "rgba(22, 163, 74, 0.15)" : "var(--bg-card)",
-                              color: serverDef.enabled ? "var(--accent-emerald)" : "var(--text-muted)",
-                              fontWeight: 600,
-                            }}
-                          >
-                            {serverDef.enabled ? "Active" : "Off"}
-                          </span>
-                        </div>
-
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                          {serverTools.length > 0 ? (
-                            serverTools.map((t) => (
-                              <div
-                                key={t.name}
-                                onClick={() =>
-                                  setSelectedToolDetail({
-                                    ...t,
-                                    serverDef,
-                                  })
-                                }
-                                title="Click to view tool details"
-                                style={{
-                                  fontSize: 10,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  gap: 4,
-                                  color: "var(--text-main)",
-                                  background: "var(--bg-card)",
-                                  padding: "2px 5px",
-                                  borderRadius: 4,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                  <Globe size={10} color="var(--accent-emerald)" />
-                                  <code>{t.name}</code>
-                                </span>
-                                <Info size={11} color="var(--text-muted)" />
-                              </div>
-                            ))
-                          ) : (
-                            <div style={{ fontSize: 10, color: "var(--text-muted)", fontStyle: "italic" }}>
-                              No tools loaded
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Main Chat & Loop Trace Area */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", minWidth: 0, overflow: "hidden", position: "relative" }}>
-        {/* Header */}
-        <header
-          style={{
-            height: 56,
-            borderBottom: "1px solid var(--border-color)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 14px",
-            background: "var(--bg-secondary)",
-            flexWrap: "nowrap",
-            gap: 10,
-            position: "relative",
-            zIndex: 100,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {/* Unhide / Show Sidebar Button (Shown only when sidebar is hidden) */}
-            {!showSidebar && (
-              <button
-                onClick={() => {
-                  setShowSidebar(true);
-                  try {
-                    localStorage.setItem("minibot_show_sidebar", "1");
-                  } catch {}
-                }}
-                title="Show left sidebar (Expand)"
-                style={{
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border-color)",
-                  color: "var(--text-main)",
-                  borderRadius: 6,
-                  padding: "5px 9px",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  transition: "all 0.15s ease",
-                  marginRight: 4,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--accent)";
-                  e.currentTarget.style.color = "var(--accent)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--border-color)";
-                  e.currentTarget.style.color = "var(--text-main)";
-                }}
-              >
-                <PanelLeft size={15} />
-                <span>Sidebar</span>
-              </button>
-            )}
-
-            <div
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: "var(--accent-emerald)",
-                boxShadow: "0 0 8px rgba(22, 163, 74, 0.6)",
-              }}
-              title="Agent Engine Online"
-            />
-            <Activity size={16} color="var(--accent-emerald)" />
-            {currentStep && (
-              <span
-                style={{
-                  background: "var(--accent)",
-                  color: "#fff",
-                  padding: "2px 8px",
-                  borderRadius: 12,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Step {currentStep}
-              </span>
-            )}
-          </div>
 
           {/* MCP & Thinking Response View Mode Controls (Group 1: View Modes) */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, background: "rgba(0, 0, 0, 0.03)", padding: "2px 4px", borderRadius: 10, border: "1px solid var(--border-color)" }}>
@@ -5068,7 +3964,1087 @@ export function App() {
               )}
             </div>
           </div>
-        </header>
+      </header>
+
+      {/* Row 2: Lower Workspace & Main Content Area */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "row", width: "100%", height: "calc(100vh - 56px)", minHeight: 0, overflow: "hidden" }}>
+      {/* Sidebar Navigation (Widened and optimized padding to show maximum title information) */}
+      <div
+        style={{
+          width: showSidebar ? 370 : 0,
+          minWidth: showSidebar ? 350 : 0,
+          flexShrink: 0,
+          background: "var(--bg-secondary)",
+          borderRight: showSidebar ? "1px solid var(--border-color)" : "none",
+          display: "flex",
+          flexDirection: "column",
+          padding: showSidebar ? "16px 8px" : "16px 0",
+          overflow: "hidden",
+          transition: "width 0.22s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s ease",
+          visibility: showSidebar ? "visible" : "hidden",
+        }}
+      >
+
+        {/* Workspace Selector & Folder Management Card */}
+        <div
+          style={{
+            background: "var(--bg-card)",
+            borderRadius: 8,
+            border: "1px solid var(--border-color)",
+            padding: "10px 12px",
+            marginBottom: 12,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Folder size={14} color="var(--accent)" />
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-main)" }}>
+                Workspace
+              </span>
+            </div>
+            <button
+              onClick={() => setIsCreatingWs(!isCreatingWs)}
+              title="Create new Workspace folder"
+              style={{
+                background: isCreatingWs ? "rgba(37, 99, 235, 0.15)" : "transparent",
+                border: "1px solid var(--border-color)",
+                color: "var(--text-main)",
+                borderRadius: 4,
+                padding: "2px 6px",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <FolderPlus size={12} color="var(--accent)" /> New
+            </button>
+          </div>
+
+          {/* New Workspace Input Field */}
+          {isCreatingWs && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <input
+                type="text"
+                placeholder="Folder name (e.g. BigFix-Audit)"
+                value={newWsName}
+                autoFocus
+                onChange={(e) => setNewWsName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreateWorkspace();
+                  else if (e.key === "Escape") setIsCreatingWs(false);
+                }}
+                style={{
+                  flex: 1,
+                  fontSize: 11,
+                  padding: "4px 8px",
+                  borderRadius: 4,
+                  border: "1px solid var(--accent)",
+                  background: "var(--bg-primary)",
+                  color: "var(--text-main)",
+                  outline: "none",
+                }}
+              />
+              <button
+                onClick={handleCreateWorkspace}
+                title="Create"
+                style={{
+                  background: "rgba(16, 185, 129, 0.15)",
+                  border: "1px solid rgba(16, 185, 129, 0.4)",
+                  color: "#10b981",
+                  borderRadius: 4,
+                  padding: "4px 6px",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                <Check size={12} />
+              </button>
+              <button
+                onClick={() => setIsCreatingWs(false)}
+                title="Cancel"
+                style={{
+                  background: "transparent",
+                  border: "1px solid var(--border-color)",
+                  color: "var(--text-muted)",
+                  borderRadius: 4,
+                  padding: "4px 6px",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
+          {/* Rename Workspace Input Field */}
+          {isRenamingWs && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <input
+                type="text"
+                placeholder="New workspace name"
+                value={renameWsInput}
+                autoFocus
+                onChange={(e) => setRenameWsInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleRenameWorkspace();
+                  else if (e.key === "Escape") setIsRenamingWs(false);
+                }}
+                style={{
+                  flex: 1,
+                  fontSize: 11,
+                  padding: "4px 8px",
+                  borderRadius: 4,
+                  border: "1px solid var(--accent)",
+                  background: "var(--bg-primary)",
+                  color: "var(--text-main)",
+                  outline: "none",
+                }}
+              />
+              <button
+                onClick={handleRenameWorkspace}
+                title="Save"
+                style={{
+                  background: "rgba(16, 185, 129, 0.15)",
+                  border: "1px solid rgba(16, 185, 129, 0.4)",
+                  color: "#10b981",
+                  borderRadius: 4,
+                  padding: "4px 6px",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                <Check size={12} />
+              </button>
+              <button
+                onClick={() => setIsRenamingWs(false)}
+                title="Cancel"
+                style={{
+                  background: "transparent",
+                  border: "1px solid var(--border-color)",
+                  color: "var(--text-muted)",
+                  borderRadius: 4,
+                  padding: "4px 6px",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
+          {/* Workspace Dropdown Select */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <select
+              value={currentWorkspace}
+              onChange={(e) => switchWorkspace(e.target.value)}
+              style={{
+                flex: 1,
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "6px 8px",
+                borderRadius: 6,
+                border: "1px solid var(--border-color)",
+                background: "var(--bg-secondary)",
+                color: "var(--text-main)",
+                outline: "none",
+                cursor: "pointer",
+              }}
+            >
+              {workspaces.map((ws) => (
+                <option key={ws.name} value={ws.name}>
+                  📁 {ws.name} ({ws.sessionCount} sessions)
+                </option>
+              ))}
+            </select>
+
+            {currentWorkspace !== "default" && (
+              <>
+                {/* Rename Workspace Icon Button */}
+                <button
+                  onClick={() => {
+                    setIsRenamingWs(!isRenamingWs);
+                    setRenameWsInput(currentWorkspace);
+                    setIsCreatingWs(false);
+                  }}
+                  title="Rename current workspace"
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    padding: "4px",
+                    borderRadius: 4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    transition: "color 0.15s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                >
+                  <Edit2 size={13} />
+                </button>
+
+                {/* Delete Workspace Icon Button */}
+                <button
+                  onClick={(e) => handleDeleteWorkspace(e, currentWorkspace)}
+                  disabled={isDeletingWs}
+                  title={isDeletingWs ? "Deleting workspace..." : "Delete current workspace folder"}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: isDeletingWs ? "#ef4444" : "var(--text-muted)",
+                    cursor: isDeletingWs ? "not-allowed" : "pointer",
+                    padding: "4px",
+                    borderRadius: 4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    transition: "color 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isDeletingWs) e.currentTarget.style.color = "#ef4444";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isDeletingWs) e.currentTarget.style.color = "var(--text-muted)";
+                  }}
+                >
+                  {isDeletingWs ? (
+                    <Loader2 size={13} className="spin" color="#ef4444" />
+                  ) : (
+                    <Trash2 size={13} />
+                  )}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* New Chat Primary Action Button */}
+        <button
+          onClick={startNewChat}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            padding: "10px 14px",
+            borderRadius: 8,
+            background: "var(--accent)",
+            color: "#ffffff",
+            border: "none",
+            cursor: "pointer",
+            fontSize: 13,
+            fontWeight: 600,
+            marginBottom: 16,
+            transition: "opacity 0.2s",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+        >
+          <PlusCircle size={16} /> New Chat
+        </button>
+
+        {/* Collapsible Past Sessions Section (Matching Active Model Card Style) */}
+        <div
+          style={{
+            background: "var(--bg-card)",
+            borderRadius: 8,
+            border: "1px solid var(--border-color)",
+            marginBottom: 12,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            minHeight: showPastSessions ? 140 : "auto",
+            transition: "flex 0.2s ease, min-height 0.2s ease",
+          }}
+        >
+          {/* Collapsible Header bar: Matches Active Model Header Style */}
+          <div
+            onClick={() => setShowPastSessions(!showPastSessions)}
+            style={{
+              padding: "10px 14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              cursor: "pointer",
+              background: showPastSessions ? "var(--bg-secondary)" : "transparent",
+              userSelect: "none",
+              borderBottom: showPastSessions ? "1px solid var(--border-color)" : "none",
+            }}
+            title="Click to collapse / expand past sessions"
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <History size={14} color="var(--accent)" />
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-main)" }}>
+                Past Sessions
+              </span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {/* Refresh icon button on the left of Logs badge */}
+              <span
+                style={{
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  padding: "3px",
+                  borderRadius: 4,
+                  color: "var(--text-muted)",
+                  transition: "color 0.15s",
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fetchLogs();
+                }}
+                title="Refresh saved sessions"
+                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+              >
+                <RefreshCw size={11} />
+              </span>
+
+              <span
+                style={{
+                  fontSize: 10,
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                  background: "rgba(37, 99, 235, 0.1)",
+                  color: "var(--accent)",
+                  fontWeight: 600,
+                }}
+              >
+                {savedSessions.length} Logs
+              </span>
+
+              {showPastSessions ? (
+                <ChevronDown size={15} color="var(--text-muted)" />
+              ) : (
+                <ChevronRight size={15} color="var(--text-muted)" />
+              )}
+            </div>
+          </div>
+
+          {/* Collapsible Sessions Body (Tree View Hierarchy) */}
+          {showPastSessions && (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 5,
+                overflowY: "auto",
+                flex: 1,
+                padding: "8px 5px",
+              }}
+            >
+              {savedSessions.length === 0 ? (
+                <div style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic", padding: "4px 0" }}>
+                  No past logs yet.
+                </div>
+              ) : (() => {
+                // Build Tree: Identify Root Sessions vs Sub-Conversations (Forks)
+                const sessionMap = new Map<string, any>();
+                const childrenMap = new Map<string, any[]>();
+                const rootSessions: any[] = [];
+
+                savedSessions.forEach((s) => {
+                  sessionMap.set(s.filename, s);
+                });
+
+                savedSessions.forEach((s) => {
+                  const parent = s.clonedFrom?.parentFilename;
+                  if (parent && sessionMap.has(parent)) {
+                    if (!childrenMap.has(parent)) {
+                      childrenMap.set(parent, []);
+                    }
+                    childrenMap.get(parent)!.push(s);
+                  } else {
+                    rootSessions.push(s);
+                  }
+                });
+
+                // Render session card with multi-level depth support (Level 0: Root, Level 1: Sub, Level 2: Sub-sub/3rd level, etc.)
+                const renderSessionCard = (session: any, depth: number = 0) => {
+                  const isActive = activeSessionFile === session.filename;
+                  const children = childrenMap.get(session.filename) || [];
+                  const hasChildren = children.length > 0;
+                  const isChild = depth > 0;
+
+                  // Branch colors according to depth level (Max Level 5)
+                  const branchColors = [
+                    "var(--accent)",             // Root (0)
+                    "rgba(168, 85, 247, 0.6)",   // Level 1 (Purple)
+                    "rgba(236, 72, 153, 0.6)",   // Level 2 (Pink)
+                    "rgba(20, 184, 166, 0.6)",   // Level 3 (Teal)
+                    "rgba(245, 158, 11, 0.6)",   // Level 4 (Amber)
+                    "rgba(239, 68, 68, 0.6)",    // Level 5 (Red / Max)
+                  ];
+                  const branchBorderColor = branchColors[Math.min(depth, 5)];
+
+                  const isDraggingThis = draggedSessionKey === session.filename;
+                  const isDragOverThis = dragOverSessionKey === session.filename;
+                  const isDeletingThis = deletingSessionFile === session.filename;
+
+                  return (
+                    <div
+                      key={session.filename}
+                      draggable={editingSessionFile !== session.filename && !isDeletingThis}
+                      onDragStart={(e) => {
+                        if (editingSessionFile === session.filename || isDeletingThis) return;
+                        setDraggedSessionKey(session.filename);
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", session.filename);
+                      }}
+                      onDragOver={(e) => {
+                        if (!draggedSessionKey || draggedSessionKey === session.filename || isDeletingThis) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        if (dragOverSessionKey !== session.filename) {
+                          setDragOverSessionKey(session.filename);
+                        }
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverSessionKey === session.filename) {
+                          setDragOverSessionKey(null);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (!draggedSessionKey || draggedSessionKey === session.filename || isDeletingThis) {
+                          setDraggedSessionKey(null);
+                          setDragOverSessionKey(null);
+                          return;
+                        }
+
+                        const currentList = [...savedSessions];
+                        const sourceIdx = currentList.findIndex((s) => s.filename === draggedSessionKey);
+                        const targetIdx = currentList.findIndex((s) => s.filename === session.filename);
+
+                        if (sourceIdx !== -1 && targetIdx !== -1) {
+                          const [movedItem] = currentList.splice(sourceIdx, 1);
+                          currentList.splice(targetIdx, 0, movedItem);
+                          handleReorderSessions(currentList);
+                        }
+                        setDraggedSessionKey(null);
+                        setDragOverSessionKey(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedSessionKey(null);
+                        setDragOverSessionKey(null);
+                      }}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                        opacity: isDeletingThis ? 0.45 : isDraggingThis ? 0.4 : 1,
+                        pointerEvents: isDeletingThis ? "none" : "auto",
+                        transition: "opacity 0.15s ease",
+                      }}
+                    >
+                      <div
+                        onClick={() => loadSession(session.filename)}
+                        title={`Click to load: ${session.filename}${depth > 0 ? ` (Fork Level ${depth} / 5)` : ""}`}
+                        style={{
+                          padding: isChild ? "4px 6px" : "6px 8px",
+                          borderRadius: 6,
+                          fontSize: 11,
+                          cursor: "pointer",
+                          background: isActive
+                            ? "rgba(37, 99, 235, 0.14)"
+                            : isChild
+                            ? "var(--bg-primary)"
+                            : "var(--bg-secondary)",
+                          border: isDragOverThis
+                            ? "2px dashed var(--accent)"
+                            : isActive
+                            ? "1px solid var(--accent)"
+                            : "1px solid var(--border-color)",
+                          transition: "all 0.15s ease",
+                          position: "relative",
+                          boxShadow: isActive ? "0 0 0 1px var(--accent)" : "none",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isActive && !isDragOverThis) e.currentTarget.style.borderColor = "var(--text-muted)";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isActive && !isDragOverThis) e.currentTarget.style.borderColor = "var(--border-color)";
+                        }}
+                      >
+                        {/* First Line: Title Only (Full Width) */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+                          {editingSessionFile === session.filename ? (
+                            <div
+                              style={{ display: "flex", alignItems: "center", gap: 4, flex: 1 }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="text"
+                                value={editingTitle}
+                                autoFocus
+                                onChange={(e) => setEditingTitle(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleRenameSession(session.filename, editingTitle);
+                                  } else if (e.key === "Escape") {
+                                    setEditingSessionFile(null);
+                                  }
+                                }}
+                                style={{
+                                  flex: 1,
+                                  fontSize: 11,
+                                  padding: "2px 6px",
+                                  borderRadius: 4,
+                                  border: "1px solid var(--accent)",
+                                  background: "var(--bg-card)",
+                                  color: "var(--text-main)",
+                                  outline: "none",
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  handleRenameSession(session.filename, editingTitle);
+                                }}
+                                title="Save Title"
+                                style={{
+                                  background: "rgba(16, 185, 129, 0.15)",
+                                  border: "1px solid rgba(16, 185, 129, 0.4)",
+                                  color: "#10b981",
+                                  borderRadius: 4,
+                                  padding: "2px 4px",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <Check size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setEditingSessionFile(null);
+                                }}
+                                title="Cancel"
+                                style={{
+                                  background: "transparent",
+                                  border: "1px solid var(--border-color)",
+                                  color: "var(--text-muted)",
+                                  borderRadius: 4,
+                                  padding: "2px 4px",
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 600, color: "var(--text-main)", flex: 1, minWidth: 0 }}>
+                              {/* Drag Handle Grip */}
+                              <span
+                                style={{
+                                  cursor: "grab",
+                                  color: "var(--text-muted)",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  opacity: 0.6,
+                                  flexShrink: 0,
+                                }}
+                                title="Drag to reorder session"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <GripVertical size={11} />
+                              </span>
+                              {depth === 0 ? (
+                                <MessageSquare size={13} color="var(--accent)" style={{ flexShrink: 0 }} />
+                              ) : depth === 1 ? (
+                                <GitFork size={13} color="#a855f7" style={{ flexShrink: 0 }} />
+                              ) : depth === 2 ? (
+                                <GitFork size={13} color="#ec4899" style={{ flexShrink: 0 }} />
+                              ) : depth === 3 ? (
+                                <GitFork size={13} color="#14b8a6" style={{ flexShrink: 0 }} />
+                              ) : depth === 4 ? (
+                                <GitFork size={13} color="#f59e0b" style={{ flexShrink: 0 }} />
+                              ) : (
+                                <GitFork size={13} color="#ef4444" style={{ flexShrink: 0 }} />
+                              )}
+                              <span
+                                style={{
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                  fontSize: isChild ? 11.5 : 12.5,
+                                  letterSpacing: "0.2px",
+                                }}
+                              >
+                                {session.customTitle || session.preview || "Untitled Conversation"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Second Line: Metadata (Timestamp on Far Left, Badges & Action Icons on Far Right) */}
+                        <div
+                          style={{
+                            fontSize: 9.5,
+                            color: "var(--text-muted)",
+                            marginTop: 4,
+                            paddingLeft: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 2,
+                          }}
+                        >
+                          {/* Left Side: Timestamp / Filename (Click to copy to clipboard) */}
+                          <div style={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
+                            <span
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                try {
+                                  await navigator.clipboard.writeText(session.filename);
+                                  setCopiedSessionFilename(session.filename);
+                                  setTimeout(() => {
+                                    setCopiedSessionFilename((curr) => (curr === session.filename ? null : curr));
+                                  }, 1800);
+                                } catch (err) {
+                                  console.error("Failed to copy filename:", err);
+                                }
+                              }}
+                              title={copiedSessionFilename === session.filename ? "Copied to clipboard!" : `Click to copy filename (${session.filename})`}
+                              style={{
+                                fontFamily: "ui-monospace, monospace",
+                                fontSize: 9.5,
+                                whiteSpace: "nowrap",
+                                color: copiedSessionFilename === session.filename ? "#10b981" : "var(--text-muted)",
+                                letterSpacing: "-0.2px",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 3,
+                                padding: "1px 3px",
+                                borderRadius: 3,
+                                transition: "all 0.15s ease",
+                                backgroundColor: copiedSessionFilename === session.filename ? "rgba(16, 185, 129, 0.12)" : "transparent",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (copiedSessionFilename !== session.filename) {
+                                  e.currentTarget.style.color = "var(--accent)";
+                                  e.currentTarget.style.backgroundColor = "rgba(2, 132, 199, 0.08)";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (copiedSessionFilename !== session.filename) {
+                                  e.currentTarget.style.color = "var(--text-muted)";
+                                  e.currentTarget.style.backgroundColor = "transparent";
+                                }
+                              }}
+                            >
+                              {copiedSessionFilename === session.filename ? (
+                                <>
+                                  <Check size={9.5} style={{ color: "#10b981" }} />
+                                  <span style={{ fontWeight: 600 }}>Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy size={9} style={{ opacity: 0.6 }} />
+                                  <span>{session.filename.replace(".md", "")}</span>
+                                </>
+                              )}
+                            </span>
+                          </div>
+
+                          {/* Right Side: Attachment Badge & Action Icons */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                            {/* Attachment Badge if session has documents */}
+                            {session.attachedDocCount && session.attachedDocCount > 0 ? (
+                              <span
+                                title={`${session.attachedDocCount} attached document(s)`}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 2,
+                                  padding: "1px 4px",
+                                  borderRadius: 4,
+                                  fontSize: 9,
+                                  fontWeight: 600,
+                                  backgroundColor: "rgba(37, 99, 235, 0.12)",
+                                  color: "var(--accent)",
+                                  border: "1px solid rgba(37, 99, 235, 0.25)",
+                                }}
+                              >
+                                <Paperclip size={9.5} />
+                                {session.attachedDocCount}
+                              </span>
+                            ) : null}
+
+                            {/* Action Icon Buttons Grouped on the Right */}
+                            {editingSessionFile !== session.filename && (
+                              <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                {/* Sub-Conversation Inspector / Fork Icon Button (Dimmed & Disabled when max fork level 5+ reached) */}
+                                <button
+                                  disabled={depth >= 5}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (depth >= 5) return;
+                                    setSubConvModalFile(session.filename);
+                                  }}
+                                  title={depth >= 5 ? "Max fork depth reached (Level 5) - cannot fork deeper" : "Inspect Sub-Conversations & Fork/Clone"}
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: depth >= 5 ? "not-allowed" : "pointer",
+                                    opacity: depth >= 5 ? 0.3 : 1,
+                                    padding: "2px 3px",
+                                    borderRadius: 4,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    color: depth >= 5 ? "var(--text-muted)" : "var(--text-muted)",
+                                    transition: "color 0.15s, background-color 0.15s, opacity 0.15s",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (depth < 5) {
+                                      e.currentTarget.style.color = "var(--accent)";
+                                      e.currentTarget.style.backgroundColor = "rgba(37, 99, 235, 0.1)";
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (depth < 5) {
+                                      e.currentTarget.style.color = "var(--text-muted)";
+                                      e.currentTarget.style.backgroundColor = "transparent";
+                                    }
+                                  }}
+                                >
+                                  <GitFork size={11.5} />
+                                </button>
+
+                                {/* Edit / Rename Icon Button */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingSessionFile(session.filename);
+                                    setEditingTitle(session.customTitle || session.preview || "");
+                                  }}
+                                  title="Rename this session"
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    padding: "2px 3px",
+                                    borderRadius: 4,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    color: "var(--text-muted)",
+                                    transition: "color 0.15s, background-color 0.15s",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.color = "var(--accent)";
+                                    e.currentTarget.style.backgroundColor = "rgba(37, 99, 235, 0.1)";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.color = "var(--text-muted)";
+                                    e.currentTarget.style.backgroundColor = "transparent";
+                                  }}
+                                >
+                                  <Edit2 size={11.5} />
+                                </button>
+
+                                {/* Delete Icon Button */}
+                                <button
+                                  onClick={(e) => deleteSession(e, session.filename)}
+                                  disabled={isDeletingThis}
+                                  title={isDeletingThis ? "Deleting session..." : "Delete this session"}
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: isDeletingThis ? "not-allowed" : "pointer",
+                                    padding: "2px 3px",
+                                    borderRadius: 4,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    color: isDeletingThis ? "#ef4444" : "var(--text-muted)",
+                                    transition: "color 0.15s, background-color 0.15s",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (!isDeletingThis) {
+                                      e.currentTarget.style.color = "#ef4444";
+                                      e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.1)";
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (!isDeletingThis) {
+                                      e.currentTarget.style.color = "var(--text-muted)";
+                                      e.currentTarget.style.backgroundColor = "transparent";
+                                    }
+                                  }}
+                                >
+                                  {isDeletingThis ? (
+                                    <Loader2 size={11.5} className="spin" color="#ef4444" />
+                                  ) : (
+                                    <Trash2 size={11.5} />
+                                  )}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tree Branch Line & Sub-Conversations (Recursive for unlimited levels) */}
+                      {hasChildren && (
+                        <div
+                          style={{
+                            marginLeft: 6,
+                            paddingLeft: 4,
+                            borderLeft: `2px solid ${branchBorderColor}`,
+                            display: "flex",
+                            flexDirection: "column",
+                            marginBottom: 3,
+                          }}
+                        >
+                          {children.map((child) => renderSessionCard(child, depth + 1))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+
+                return rootSessions.map((root) => renderSessionCard(root, 0));
+              })()}
+            </div>
+          )}
+        </div>
+
+        {/* Collapsible Active Model & Tools Container at Bottom */}
+        <div
+          style={{
+            background: "var(--bg-card)",
+            borderRadius: 8,
+            border: "1px solid var(--border-color)",
+            marginBottom: 0,
+            marginTop: "auto",
+            overflow: "hidden",
+            transition: "flex 0.2s ease",
+            display: "flex",
+            flexDirection: "column",
+            flex: showModelPanel ? 1 : "0 0 auto",
+          }}
+        >
+          {/* Collapsible Header bar: Shows 'Active Model' when collapsed */}
+          <div
+            onClick={() => setShowModelPanel(!showModelPanel)}
+            style={{
+              padding: "10px 14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              cursor: "pointer",
+              background: showModelPanel ? "var(--bg-secondary)" : "transparent",
+              userSelect: "none",
+              gap: 8,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+              <Sparkles size={14} color="var(--accent)" style={{ flexShrink: 0 }} />
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "var(--text-main)",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+                title={config?.llm.model}
+              >
+                Model {showModelPanel ? "" : `(${config?.llm.model || "Loading..."})`}
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              {!showModelPanel && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    padding: "1px 6px",
+                    borderRadius: 4,
+                    background: "rgba(37, 99, 235, 0.1)",
+                    color: "var(--accent)",
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {config?.tools?.length || 0} Tools
+                </span>
+              )}
+              {showModelPanel ? <ChevronDown size={15} color="var(--text-muted)" /> : <ChevronRight size={15} color="var(--text-muted)" />}
+            </div>
+          </div>
+
+          {/* Expanded Content: Model Details + Active MCP Tools */}
+          {showModelPanel && (
+            <div style={{ padding: "12px 14px", borderTop: "1px solid var(--border-color)", display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>CURRENT LLM MODEL</div>
+                <button
+                  type="button"
+                  onClick={() => setShowModelSelectorModal(true)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--accent, #0284c7)",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                >
+                  Manage ⚙️
+                </button>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <Cpu size={14} /> {config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm.model || "Loading..."}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowModelSelectorModal(true)}
+                  style={{
+                    fontSize: 10,
+                    padding: "2px 7px",
+                    borderRadius: 4,
+                    background: "rgba(2, 132, 199, 0.12)",
+                    color: "var(--accent, #0284c7)",
+                    border: "1px solid rgba(2, 132, 199, 0.3)",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Switch
+                </button>
+              </div>
+
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+                <span>ACTIVE MCP SERVERS</span>
+                <span style={{ color: "var(--accent-emerald)", fontWeight: 600 }}>{config?.tools?.length || 0} Tools</span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowY: "auto", flex: 1 }}>
+                {config?.mcpServers &&
+                  Object.entries(config.mcpServers).map(([serverKey, serverDef]: [string, any]) => {
+                    const serverTools = (config.discoveredTools || []).filter(
+                      (t) => t.serverName === serverKey
+                    );
+
+                    return (
+                      <div
+                        key={serverKey}
+                        style={{
+                          background: "var(--bg-secondary)",
+                          border: "1px solid var(--border-color)",
+                          borderRadius: 6,
+                          padding: "6px 8px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: 4,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                            <Server size={12} color="var(--accent)" />
+                            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-main)" }}>
+                              {serverKey}
+                            </span>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              padding: "1px 4px",
+                              borderRadius: 3,
+                              background: serverDef.enabled ? "rgba(22, 163, 74, 0.15)" : "var(--bg-card)",
+                              color: serverDef.enabled ? "var(--accent-emerald)" : "var(--text-muted)",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {serverDef.enabled ? "Active" : "Off"}
+                          </span>
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          {serverTools.length > 0 ? (
+                            serverTools.map((t) => (
+                              <div
+                                key={t.name}
+                                onClick={() =>
+                                  setSelectedToolDetail({
+                                    ...t,
+                                    serverDef,
+                                  })
+                                }
+                                title="Click to view tool details"
+                                style={{
+                                  fontSize: 10,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  gap: 4,
+                                  color: "var(--text-main)",
+                                  background: "var(--bg-card)",
+                                  padding: "2px 5px",
+                                  borderRadius: 4,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  <Globe size={10} color="var(--accent-emerald)" />
+                                  <code>{t.name}</code>
+                                </span>
+                                <Info size={11} color="var(--text-muted)" />
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{ fontSize: 10, color: "var(--text-muted)", fontStyle: "italic" }}>
+                              No tools loaded
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Chat & Loop Trace Area */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", minWidth: 0, overflow: "hidden", position: "relative" }}>
+        {/* Header */}
 
         {/* Message Thread */}
         <div
@@ -5089,7 +5065,7 @@ export function App() {
           <div
             style={{
               width: "100%",
-              maxWidth: "calc((100vw - 370px) * 0.8)",
+              maxWidth: showSidebar ? "calc((100vw - 370px) * 0.8)" : "90%", transition: "max-width 0.22s ease",
               display: "flex",
               flexDirection: "column",
               gap: 20,
@@ -6023,7 +5999,7 @@ export function App() {
           <div
             style={{
               width: "100%",
-              maxWidth: "calc((100vw - 370px) * 0.8)",
+              maxWidth: showSidebar ? "calc((100vw - 370px) * 0.8)" : "90%", transition: "max-width 0.22s ease",
               display: "flex",
               gap: 8,
               alignItems: "center",
@@ -7493,6 +7469,8 @@ export function App() {
           </button>
           </div>
         </div>
+      </div>
+
       </div>
 
       {/* Configuration Modal */}
