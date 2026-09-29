@@ -2377,11 +2377,11 @@ export function App() {
         </div>
 
         {/* Sidebar Boundary Vertical Line (Placed exactly at 284px from screen left) */}
-        <div style={{ width: 1, height: 26, background: "var(--border-color)", flexShrink: 0, margin: "0 8px 0 0" }} />
+        <div style={{ width: 1, height: 26, background: "var(--border-color)", flexShrink: 0, margin: "0 6px 0 0" }} />
 
-        {/* Right side of boundary line: Collapse/Expand Icon & Status Indicators */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          {/* Sidebar Toggle Button (Now positioned right of the sidebar boundary line) */}
+        {/* Right side of boundary line: Collapse/Expand Icon & Status Indicators (Directly next to divider) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {/* Sidebar Toggle Button (Directly beside the divider line) */}
           <button
             type="button"
             onClick={() => {
