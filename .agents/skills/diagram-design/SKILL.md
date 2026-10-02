@@ -158,6 +158,7 @@ These mark "AI slop" schematics of any type:
 | Reproducing Mermaid's renderer layout | Imports automatic spacing and routing instead of making an editorial layout |
 | Unwrapped text exceeding card width (> 52 chars) | SVG `<text>` never auto-wraps and punches through card edges; split into `<tspan dy="16">` elements |
 | Clustered or overlapping connector attach points | Multiple arrows converging on the same edge must fan out evenly with >= 28px clearance (`attach_x = card_x + width*k/(N+1)`) |
+| Hairpin connector U-turns or dangling stubs | Cramped loops back into own source or orphan stubs in tight gaps (< 32px); vertical child stack clearance must be >= 44px with straight vertical line |
 | Connector path cutting through intermediate cards | Connectors must NEVER cross behind/through non-adjacent cards; route via dedicated clearance corridors or source from boundary nodes |
 | Connector label clipping card borders or text | Labels (e.g. `HYBRID SEED`) must sit strictly in clear open channels between containers with opaque masking badges |
 | Card border slicing or touching text | Occurs when card height is less than lowest text Y + 18px; root card min-height is 80px to 86px |

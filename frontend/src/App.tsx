@@ -6999,49 +6999,95 @@ export function App() {
             {/* 🪄 Slash Command ("/") Dropdown Menu for Skills and MCP Tools */}
             {showSlashMenu && (() => {
               type SlashEntry =
-                | { type: "skill"; key: string; item: SkillItem; name: string; desc: string; badge: string; isWorkspace: boolean }
-                | { type: "tool"; key: string; item: ToolItem; name: string; desc: string; badge: string; isWorkspace: boolean };
+                | { type: "skill"; key: string; item: SkillItem; name: string; desc: string; badge: string; isWorkspace: boolean; score: number }
+                | { type: "tool"; key: string; item: ToolItem; name: string; desc: string; badge: string; isWorkspace: boolean; score: number };
 
-              const query = slashFilter.toLowerCase();
+              const query = slashFilter.toLowerCase().trim();
 
               const skillEntries: SlashEntry[] = activeSkillsList
-                .filter((s) => {
-                  if (!query) return true;
-                  const nameMatch = s.name.toLowerCase().includes(query);
-                  const descMatch = s.description && s.description.toLowerCase().includes(query);
-                  const triggerMatch = s.triggers && s.triggers.some((t) => t.toLowerCase().includes(query));
-                  const archifyAlias = (query.includes("arch") || query.includes("diagram")) && (s.name.includes("diagram") || s.name.includes("arch"));
-                  return nameMatch || descMatch || triggerMatch || archifyAlias;
+                .map((s) => {
+                  if (!query) {
+                    return {
+                      type: "skill" as const,
+                      key: `skill-${s.name}`,
+                      item: s,
+                      name: s.name,
+                      desc: s.description || "",
+                      badge: s.scope.toUpperCase(),
+                      isWorkspace: s.scope === "workspace",
+                      score: 0,
+                    };
+                  }
+                  const nameLower = s.name.toLowerCase();
+                  const descLower = (s.description || "").toLowerCase();
+                  const triggersLower = (s.triggers || []).map((t) => t.toLowerCase());
+
+                  let score = -1;
+                  if (nameLower === query) score = 100;
+                  else if (nameLower.startsWith(query)) score = 80;
+                  else if (nameLower.includes(query)) score = 60;
+                  else if (triggersLower.some((t) => t.startsWith(query))) score = 40;
+                  else if (triggersLower.some((t) => t.includes(query))) score = 30;
+                  else if (descLower.includes(query)) score = 10;
+                  else if ((query.includes("arch") || query.includes("diagram")) && (nameLower.includes("diagram") || nameLower.includes("arch"))) score = 25;
+
+                  return {
+                    type: "skill" as const,
+                    key: `skill-${s.name}`,
+                    item: s,
+                    name: s.name,
+                    desc: s.description || "",
+                    badge: s.scope.toUpperCase(),
+                    isWorkspace: s.scope === "workspace",
+                    score,
+                  };
                 })
-                .map((s) => ({
-                  type: "skill" as const,
-                  key: `skill-${s.name}`,
-                  item: s,
-                  name: s.name,
-                  desc: s.description || "",
-                  badge: s.scope.toUpperCase(),
-                  isWorkspace: s.scope === "workspace",
-                }));
+                .filter((e) => e.score >= 0);
 
               const toolEntries: SlashEntry[] = activeToolsList
-                .filter((t) => {
-                  if (!query) return true;
-                  const nameMatch = t.name.toLowerCase().includes(query);
-                  const serverMatch = t.serverName.toLowerCase().includes(query);
-                  const descMatch = t.description && t.description.toLowerCase().includes(query);
-                  return nameMatch || serverMatch || descMatch;
-                })
-                .map((t) => ({
-                  type: "tool" as const,
-                  key: `tool-${t.serverName}-${t.name}`,
-                  item: t,
-                  name: `${t.serverName}/${t.name}`,
-                  desc: t.description || "",
-                  badge: "MCP TOOL",
-                  isWorkspace: false,
-                }));
+                .map((t) => {
+                  if (!query) {
+                    return {
+                      type: "tool" as const,
+                      key: `tool-${t.serverName}-${t.name}`,
+                      item: t,
+                      name: `${t.serverName}/${t.name}`,
+                      desc: t.description || "",
+                      badge: "MCP TOOL",
+                      isWorkspace: false,
+                      score: 0,
+                    };
+                  }
+                  const nameLower = t.name.toLowerCase();
+                  const serverLower = t.serverName.toLowerCase();
+                  const fullLower = `${serverLower}/${nameLower}`;
+                  const descLower = (t.description || "").toLowerCase();
 
-              const allEntries: SlashEntry[] = [...skillEntries, ...toolEntries];
+                  let score = -1;
+                  if (nameLower === query || fullLower === query) score = 90;
+                  else if (nameLower.startsWith(query) || fullLower.startsWith(query)) score = 70;
+                  else if (nameLower.includes(query) || serverLower.includes(query)) score = 50;
+                  else if (descLower.includes(query)) score = 10;
+
+                  return {
+                    type: "tool" as const,
+                    key: `tool-${t.serverName}-${t.name}`,
+                    item: t,
+                    name: `${t.serverName}/${t.name}`,
+                    desc: t.description || "",
+                    badge: "MCP TOOL",
+                    isWorkspace: false,
+                    score,
+                  };
+                })
+                .filter((e) => e.score >= 0);
+
+              // Sort highest relevance score first, then skills before tools, then alphabetically
+              const allEntries: SlashEntry[] = [...skillEntries, ...toolEntries].sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                if (a.type !== b.type) return a.type === "skill" ? -1 : 1;
+                return a.name.localeCompare(b.name);
+              });
 
               return (
                 <div
@@ -7067,8 +7113,13 @@ export function App() {
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color: "var(--accent, #0284c7)" }}>
                       <Sparkles size={14} />
                       <span>COMMANDS & SKILLS ({allEntries.length})</span>
+                      {query && (
+                        <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-muted)", marginLeft: 4 }}>
+                          Matching "{query}"
+                        </span>
+                      )}
                     </div>
-                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>↑↓ Navigate • Enter Select • Esc Close</span>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)" }}>↑↓ Navigate • Enter / Tab Select • Esc Close</span>
                   </div>
 
                   {allEntries.length === 0 ? (
@@ -7143,8 +7194,11 @@ export function App() {
                 setInputPrompt(val);
                 // Check if user is typing a slash command at the start
                 if (val.startsWith("/")) {
+                  if (activeSkillsList.length === 0) {
+                    fetchSkills(currentWorkspace);
+                  }
                   setShowSlashMenu(true);
-                  setSlashFilter(val.slice(1).trim());
+                  setSlashFilter(val.slice(1));
                   setSlashSelectedIndex(0);
                 } else if (showSlashMenu) {
                   setShowSlashMenu(false);
@@ -7152,27 +7206,50 @@ export function App() {
               }}
               onKeyDown={(e) => {
                 if (showSlashMenu) {
-                  const query = slashFilter.toLowerCase();
-                  const skillEntries = activeSkillsList.filter((s) => {
-                    if (!query) return true;
-                    return (
-                      s.name.toLowerCase().includes(query) ||
-                      (s.description && s.description.toLowerCase().includes(query)) ||
-                      (s.triggers && s.triggers.some((t) => t.toLowerCase().includes(query))) ||
-                      ((query.includes("arch") || query.includes("diagram")) && (s.name.includes("diagram") || s.name.includes("arch")))
-                    );
-                  }).map((s) => ({ type: "skill" as const, item: s }));
+                  const query = slashFilter.toLowerCase().trim();
+                  const skillEntries = activeSkillsList
+                    .map((s) => {
+                      if (!query) return { type: "skill" as const, item: s, score: 0, name: s.name };
+                      const nameLower = s.name.toLowerCase();
+                      const descLower = (s.description || "").toLowerCase();
+                      const triggersLower = (s.triggers || []).map((t) => t.toLowerCase());
 
-                  const toolEntries = activeToolsList.filter((t) => {
-                    if (!query) return true;
-                    return (
-                      t.name.toLowerCase().includes(query) ||
-                      t.serverName.toLowerCase().includes(query) ||
-                      (t.description && t.description.toLowerCase().includes(query))
-                    );
-                  }).map((t) => ({ type: "tool" as const, item: t }));
+                      let score = -1;
+                      if (nameLower === query) score = 100;
+                      else if (nameLower.startsWith(query)) score = 80;
+                      else if (nameLower.includes(query)) score = 60;
+                      else if (triggersLower.some((t) => t.startsWith(query))) score = 40;
+                      else if (triggersLower.some((t) => t.includes(query))) score = 30;
+                      else if (descLower.includes(query)) score = 10;
+                      else if ((query.includes("arch") || query.includes("diagram")) && (nameLower.includes("diagram") || nameLower.includes("arch"))) score = 25;
 
-                  const allEntries = [...skillEntries, ...toolEntries];
+                      return { type: "skill" as const, item: s, score, name: s.name };
+                    })
+                    .filter((x) => x.score >= 0);
+
+                  const toolEntries = activeToolsList
+                    .map((t) => {
+                      if (!query) return { type: "tool" as const, item: t, score: 0, name: `${t.serverName}/${t.name}` };
+                      const nameLower = t.name.toLowerCase();
+                      const serverLower = t.serverName.toLowerCase();
+                      const fullLower = `${serverLower}/${nameLower}`;
+                      const descLower = (t.description || "").toLowerCase();
+
+                      let score = -1;
+                      if (nameLower === query || fullLower === query) score = 90;
+                      else if (nameLower.startsWith(query) || fullLower.startsWith(query)) score = 70;
+                      else if (nameLower.includes(query) || serverLower.includes(query)) score = 50;
+                      else if (descLower.includes(query)) score = 10;
+
+                      return { type: "tool" as const, item: t, score, name: fullLower };
+                    })
+                    .filter((x) => x.score >= 0);
+
+                  const allEntries = [...skillEntries, ...toolEntries].sort((a, b) => {
+                    if (b.score !== a.score) return b.score - a.score;
+                    if (a.type !== b.type) return a.type === "skill" ? -1 : 1;
+                    return a.name.localeCompare(b.name);
+                  });
 
                   if (e.key === "ArrowDown") {
                     e.preventDefault();
