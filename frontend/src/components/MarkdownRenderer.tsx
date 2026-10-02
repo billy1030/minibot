@@ -87,7 +87,16 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
         .replace(/&nbsp;?/gi, ' ')
         .replace(/&mdash;?/gi, '—')
         .replace(/&ndash;?/gi, '–')
-        .replace(/&copy;?/gi, '©');
+        .replace(/&copy;?/gi, '©')
+        .replace(/&rarr;?/gi, '→')
+        .replace(/&larr;?/gi, '←')
+        .replace(/&harr;?/gi, '↔')
+        .replace(/&uarr;?/gi, '↑')
+        .replace(/&darr;?/gi, '↓')
+        .replace(/&rArr;?/gi, '⇒')
+        .replace(/&lArr;?/gi, '⇐')
+        .replace(/&hArr;?/gi, '⇔')
+        .replace(/&hellip;?/gi, '…');
 
       // Replace bare & not followed by standard xml entity (amp, lt, gt, quot, apos, #123, #x123)
       return cleanSvgStr.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, '&amp;');

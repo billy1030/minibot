@@ -157,11 +157,12 @@ These mark "AI slop" schematics of any type:
 | Coral on every "important" node | Coral is 1–2 editorial accents, not a signaling system |
 | Reproducing Mermaid's renderer layout | Imports automatic spacing and routing instead of making an editorial layout |
 | Unwrapped text exceeding card width (> 52 chars) | SVG `<text>` never auto-wraps and punches through card edges; split into `<tspan dy="16">` elements |
+| Clustered or overlapping connector attach points | Multiple arrows converging on the same edge must fan out evenly with >= 28px clearance (`attach_x = card_x + width*k/(N+1)`) |
 | Connector path cutting through intermediate cards | Connectors must NEVER cross behind/through non-adjacent cards; route via dedicated clearance corridors or source from boundary nodes |
 | Connector label clipping card borders or text | Labels (e.g. `HYBRID SEED`) must sit strictly in clear open channels between containers with opaque masking badges |
 | Card border slicing or touching text | Occurs when card height is less than lowest text Y + 18px; root card min-height is 80px to 86px |
 | Splitting inline key-value into dual `<text>` tags | Hardcoding estimated X offset causes words to crash together; use single `<text>` with `<tspan>` for label |
-| Using HTML named entities (`&bull;`, `&nbsp;`) | Unrecognized in pure SVG XML; use literal UTF-8 `•`, `·` or numeric entities `&#8226;`, `&#183;` |
+| Using HTML named entities (`&bull;`, `&nbsp;`, `&rarr;`) | Unrecognized in pure SVG XML; use literal UTF-8 `•`, `·`, `→` or numeric entities `&#8226;`, `&#8594;` |
 | Inter-zone vertical gap < 48px | Causes vertical choking; adjacent zones must maintain >= 48px to 64px clearance for labels and flow lines |
 | Inset card grid gap < 16px | Chokes container boundaries; inner cards require at least 20px side padding and 16px grid gap |
 | Cramped cards (< 65px for title + desc) | Suffocates text lines; title + subtitle requires >= 76px height, 3-line cards require >= 92px with >= 14px padding |

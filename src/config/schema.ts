@@ -49,57 +49,64 @@ export const PromptsConfigSchema = z.object({
     "   - Primary Accents: Ocean Blue `#2563eb`, Forest Emerald `#059669`, Royal Violet `#7c3aed`, Warm Amber `#d97706`, Crimson Red `#e11d48`\n" +
     "   - Neutral Card Containers: `#f8fafc` (cards), `#f1f5f9` (active highlights), `#ffffff` (sub-cards), `#e2e8f0` (border lines)\n" +
     "   - Typography: Title `#0f172a`, Body `#334155`, Subtitle/Labels `#64748b`, Muted Badges `#94a3b8`\n" +
-    "2. Strict Obstacle Avoidance & Corridor Routing (NEVER CUT THROUGH CARDS - CRITICAL):\n" +
+    "2. Fan-out Multi-Connector Attach Points (NO OVERLAPPING ARROWHEADS - CRITICAL):\n" +
+    "   - When multiple connectors enter or exit the same card edge (e.g. 3 arrows converging downwards into a central Dispatcher card):\n" +
+    "     * NEVER dump all arrows into the exact same X coordinate or cluster (causes overlapping arrowheads and cramped lines)!\n" +
+    "     * You MUST distribute the attach points evenly across the edge with at least 28px to 48px clearance:\n" +
+    "       `attach_x(k) = card_x + (card_width * k) / (N + 1)` for k = 1..N.\n" +
+    "     * Each incoming arrow line MUST maintain its own dedicated vertical corridor leading to its distinct attach point without converging or colliding with neighboring lines.\n" +
+    "3. Strict Obstacle Avoidance & Corridor Routing (NEVER CUT THROUGH CARDS - CRITICAL):\n" +
     "   - A connector path MUST NEVER cross behind, through, or over any intermediate component card or text!\n" +
     "   - NEVER draw a straight line from an inner column card (e.g. `ML-KEM`) through an adjacent card (e.g. `ML-DSA`) to reach another zone.\n" +
     "   - If connecting non-adjacent elements across pillars, you MUST either:\n" +
     "     a) Route along a dedicated clearance corridor using orthogonal elbows around the obstacles (`M -> V -> H -> V -> H`) with >= 16px clearance outside any card's rect; OR\n" +
     "     b) Connect from the outermost boundary component directly facing the destination (e.g. source from `ML-DSA` instead of burying under `ML-KEM`).\n" +
     "   - Connector labels (e.g. `HYBRID SEED`) MUST sit in the open channel between pillars, NEVER overlapping or clipping against any card's border.\n" +
-    "3. Text Line Length Budget & Forced Two-Line Wrapping (CRITICAL):\n" +
+    "4. Text Line Length Budget & Forced Two-Line Wrapping (CRITICAL):\n" +
     "   - SVG `<text>` elements NEVER auto-wrap! In standard cards (width ~380-440px), a single text line MUST NOT exceed 52 characters (including spaces).\n" +
     "   - If a description or bullet exceeds 52 characters (e.g. \"...Heisenberg uncertainty & No-Cloning theorem\"), you MUST split it into two explicit `<tspan>` tags:\n" +
     "     `<text x=\"...\" y=\"...\"><tspan x=\"...\" dy=\"0\">First part of line...</tspan><tspan x=\"...\" dy=\"16\">Second part of line...</tspan></text>`\n" +
     "   - NEVER allow text to touch or extend beyond `card_x + card_width - 20px`.\n" +
-    "4. Card Height Must Strictly Exceed Lowest Text Line (NEVER SLICE TEXT):\n" +
+    "5. Card Height Must Strictly Exceed Lowest Text Line (NEVER SLICE TEXT):\n" +
     "   - Card `<rect height=\"...\">` MUST be strictly calculated from its lowest text baseline:\n" +
     "     `card_height >= (lowest_text_y - card_y) + 18px` (minimum bottom padding of 18px).\n" +
     "   - Root / Bridge Card containing Badge + Title + Subtitle: Minimum height is 80px to 86px (NEVER <= 65px).\n" +
     "   - NEVER draw a card's bottom border through or touching any text baseline.\n" +
-    "5. Inline Key-Value & Bullet Lists (NO SPLIT X COORDINATES - CRITICAL):\n" +
+    "6. Inline Key-Value & Bullet Lists (NO SPLIT X COORDINATES - CRITICAL):\n" +
     "   - In single-line bullet points or key-value entries (e.g. \"• Hardware Footprint: Runs on existing silicon\"): NEVER split label and value into separate `<text>` tags with guessed X offsets.\n" +
     "   - Always use a SINGLE `<text>` element with inline `<tspan font-weight=\"600\">Hardware Footprint:</tspan> Runs on existing silicon...` so the browser's layout engine automatically flows text without crashing words together.\n" +
     "   - If creating a formal two-column table, Column 2 MUST start at `x2 >= x1 + max_label_width + 16px` (allow at least 160px for technical labels).\n" +
-    "6. XML Entity Safety & Bullets (NEVER USE &bull;):\n" +
-    "   - Standard XML does NOT support HTML named entities. NEVER use `&bull;`, `&nbsp;`, `&copy;`, or `&mdash;` in SVG.\n" +
+    "7. XML Entity Safety & Arrows/Bullets (NEVER USE &bull; OR &rarr;):\n" +
+    "   - Standard XML does NOT support HTML named entities. NEVER use `&bull;`, `&nbsp;`, `&copy;`, `&mdash;`, or arrow entities like `&rarr;`, `&larr;`, `&harr;` in SVG.\n" +
+    "   - For arrows, use literal UTF-8 `→`, `←`, `↔` or numeric entities `&#8594;`, `&#8592;`.\n" +
     "   - For bullets, use literal UTF-8 bullet `•` or numeric entity `&#8226;`.\n" +
     "   - For middle separators, use literal `·` or `&#183;`.\n" +
     "   - For standard escaping, ONLY use: `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`.\n" +
-    "7. Inter-Zone Breathing Room & Vertical Clearance (NEVER TOO CLOSE):\n" +
+    "8. Inter-Zone Breathing Room & Vertical Clearance (NEVER TOO CLOSE):\n" +
     "   - When stacking major zones (e.g. Zone 01 -> Defense Pillars -> Zone 02), the vertical gap between adjacent zone borders MUST be at least 48px to 64px (NEVER <= 30px).\n" +
     "   - Inter-zone flow connectors require a minimum length of 40px so connector label badges (`height=20px`) have at least 10px clear stroke visible both above and below the badge.\n" +
     "   - Connector labels MUST NOT touch or graze the top border of the receiving zone or pillar (maintain >= 14px clearance).\n" +
-    "8. Container Inset Padding & Card Grid Spacing:\n" +
+    "9. Container Inset Padding & Card Grid Spacing:\n" +
     "   - In multi-component containers (e.g. Pillar A / Pillar B), inner component cards MUST start at `y_container + 48px` (24px for Zone title + 24px buffer).\n" +
     "   - Leave at least 20px horizontal padding between container borders and inner cards.\n" +
     "   - Component Grid Gap: Keep at least 16px horizontal and 16px vertical gap between component cards.\n" +
-    "9. Card Height & Vertical Rhythm:\n" +
+    "10. Card Height & Vertical Rhythm:\n" +
     "   - Do NOT use cramped fixed heights (< 65px) for cards containing title + badge + description:\n" +
     "     * Single-line title card: `min-height = 56px`.\n" +
     "     * Title + Subtitle card: `min-height = 76px`.\n" +
     "     * Title + 2-line Subtitle / Spec card: `min-height = 92px`.\n" +
     "   - Internal card padding MUST be at least 14px on all sides. Tag badge to title horizontal/vertical clearance MUST be >= 10px.\n" +
-    "10. Strict Text Hierarchy & Collision-Free Stacking:\n" +
+    "11. Strict Text Hierarchy & Collision-Free Stacking:\n" +
     "   - Inside any container or card, calculate explicit Y coordinates for each tier: Tag Badge `y = top + 20` -> Title `y = tag_y + 24` -> Subtitle `y = title_bottom + 18` -> Description `y = subtitle_bottom + 16`. Each line MUST have at least `fontSize + 6px` clearance. NEVER reuse identical or overlapping Y coordinates.\n" +
     "   - No Dual-Anchor Overlap: Never render an overarching container title and a child phase title at the same horizontal coordinate range. Container headers belong at `y=22..28`; column contents start below at `y >= 54`.\n" +
-    "11. Horizontal Multi-Column Banners & Roadmaps:\n" +
+    "12. Horizontal Multi-Column Banners & Roadmaps:\n" +
     "   - Divide available width into strict disjoint column slots: `x_col(i) = x0 + i * (col_width + col_gap)`.\n" +
     "   - Column text MUST NEVER exceed `col_width - 16px`. Truncate or wrap multi-line text into explicit `<tspan dy=\"16\">` tags.\n" +
-    "12. Central Bridge Cards & Connector Stride:\n" +
+    "13. Central Bridge Cards & Connector Stride:\n" +
     "   - Every connector exiting a component MUST run straight for at least 16px before turning or hosting a label badge.\n" +
     "   - Branch connector labels (e.g. \"Math Defense\", \"Physics Defense\") MUST sit outside the card bounds on horizontal connector runs, with an opaque background badge `<rect fill=\"#ffffff\" rx=\"3\"/>`.\n" +
     "   - Never let labels overlap card borders or connector corners.\n" +
-    "13. XML & Tag Integrity:\n" +
+    "14. XML & Tag Integrity:\n" +
     "   - Every `<g>` MUST have an exact closing `</g>`. Keep tag depth strictly balanced.\n" +
     "   - Explicit `viewBox` with ample height padding (+60px to 80px) to prevent bottom cutoff.\n" +
     "   - Output format: Wrap raw SVG in ```xml or ```svg code blocks without markdown wrapping."

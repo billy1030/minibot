@@ -271,7 +271,16 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
       .replace(/&nbsp;?/gi, " ")
       .replace(/&mdash;?/gi, "—")
       .replace(/&ndash;?/gi, "–")
-      .replace(/&copy;?/gi, "©");
+      .replace(/&copy;?/gi, "©")
+      .replace(/&rarr;?/gi, "→")
+      .replace(/&larr;?/gi, "←")
+      .replace(/&harr;?/gi, "↔")
+      .replace(/&uarr;?/gi, "↑")
+      .replace(/&darr;?/gi, "↓")
+      .replace(/&rArr;?/gi, "⇒")
+      .replace(/&lArr;?/gi, "⇐")
+      .replace(/&hArr;?/gi, "⇔")
+      .replace(/&hellip;?/gi, "…");
 
     // Replace unescaped & with &amp;
     isolated = isolated.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, "&amp;");
