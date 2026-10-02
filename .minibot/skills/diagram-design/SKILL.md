@@ -145,6 +145,13 @@ Before generating any diagram, state:
 - Never draw lines with unrounded sharp 90-degree corners. Always apply `rx`, `ry`, or rounded elbow paths.
 - Avoid centered multi-line text blocks. Left-align body copy; reserve center-alignment for single-line titles or badges.
 - Avoid ambiguous arrow directions; label relationship lines when meaning isn't obvious.
+- **NEVER allow inter-zone gap to be < 48px**: Major zones stacked vertically must maintain at least 48px to 64px clearance so connectors have at least 40px length and label badges have >= 14px space from receiving zone borders.
+- **NEVER use cramped card heights**: Cards with title + badge + description require at least 76px to 92px height with >= 14px internal padding on all sides. Component grid gap inside containers must be >= 16px.
+- **NEVER stack text with overlapping Y coordinates**: Always calculate explicit Y coordinates for each tier (Tag `y = top + 20` -> Title `y = tag_y + 24` -> Subtitle `y = title_bottom + 18` -> Body `y = subtitle_bottom + 16`). Every text line requires at least `fontSize + 6px` clearance.
+- **NEVER place an overarching container header at the same horizontal coordinate as a child column title**: Top container titles belong in the header bar (`y=22..28`); columns and phase cards start below at `y >= 54`.
+- **NEVER overflow horizontal multi-column cards**: In multi-step or roadmap banners, divide width into strict non-overlapping column bounds; wrap long titles with `<tspan dy="16">` or limit font sizes to prevent intrusion into adjacent columns.
+- **NEVER occlude connector branch labels under floating cards**: Labels on connectors emerging from central bridge cards (e.g. "Math Defense", "Physics Defense") must sit outside card bounds with an opaque background badge.
+- **NEVER leave XML tags unbalanced**: Every opened `<g>` must have an exact corresponding `</g>`.
 
 ---
 

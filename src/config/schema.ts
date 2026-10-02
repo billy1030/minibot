@@ -43,14 +43,47 @@ export const PromptsConfigSchema = z.object({
     "- Tool Transparency: Always clearly state what action you are taking."
   ),
   svgPrompt: z.string().optional().default(
-    "### Standalone Editorial SVG Generation & Color System Guidelines:\n" +
+    "### Standalone Editorial SVG Generation & Typography Collision-Free Guidelines:\n" +
     "1. Palette & Theming (Default: Clean Light Minimalist):\n" +
     "   - Canvas Background: Pure White `#ffffff` or Soft Slate `#f8fafc` with crisp border `stroke=\"#e2e8f0\"`\n" +
     "   - Primary Accents: Ocean Blue `#2563eb`, Forest Emerald `#059669`, Royal Violet `#7c3aed`, Warm Amber `#d97706`, Crimson Red `#e11d48`\n" +
     "   - Neutral Card Containers: `#f8fafc` (cards), `#f1f5f9` (active highlights), `#ffffff` (sub-cards), `#e2e8f0` (border lines)\n" +
     "   - Typography: Title `#0f172a`, Body `#334155`, Subtitle/Labels `#64748b`, Muted Badges `#94a3b8`\n" +
-    "2. Quality Protocols:\n" +
-    "   - Always escape XML entities in text nodes: use `&amp;` instead of `&` (e.g., `lasers &amp; fiber`).\n" +
+    "2. Inline Key-Value & Bullet Lists (NO SPLIT X COORDINATES - CRITICAL):\n" +
+    "   - In single-line bullet points or key-value entries (e.g. \"• Hardware Footprint: Runs on existing silicon\"): NEVER split label and value into separate `<text>` tags with guessed X offsets.\n" +
+    "   - Always use a SINGLE `<text>` element with inline `<tspan font-weight=\"600\">Hardware Footprint:</tspan> Runs on existing silicon...` so the browser's layout engine automatically flows text without crashing words together.\n" +
+    "   - If creating a formal two-column table, Column 2 MUST start at `x2 >= x1 + max_label_width + 16px` (allow at least 160px for technical labels).\n" +
+    "3. XML Entity Safety & Bullets (NEVER USE &bull;):\n" +
+    "   - Standard XML does NOT support HTML named entities. NEVER use `&bull;`, `&nbsp;`, `&copy;`, or `&mdash;` in SVG.\n" +
+    "   - For bullets, use literal UTF-8 bullet `•` or numeric entity `&#8226;`.\n" +
+    "   - For middle separators, use literal `·` or `&#183;`.\n" +
+    "   - For standard escaping, ONLY use: `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`.\n" +
+    "4. Inter-Zone Breathing Room & Vertical Clearance (NEVER TOO CLOSE):\n" +
+    "   - When stacking major zones (e.g. Zone 01 -> Defense Pillars -> Zone 02), the vertical gap between adjacent zone borders MUST be at least 48px to 64px (NEVER <= 30px).\n" +
+    "   - Inter-zone flow connectors require a minimum length of 40px so connector label badges (`height=20px`) have at least 10px clear stroke visible both above and below the badge.\n" +
+    "   - Connector labels MUST NOT touch or graze the top border of the receiving zone or pillar (maintain >= 14px clearance).\n" +
+    "5. Container Inset Padding & Card Grid Spacing:\n" +
+    "   - In multi-component containers (e.g. Pillar A / Pillar B), inner component cards MUST start at `y_container + 48px` (24px for Zone title + 24px buffer).\n" +
+    "   - Leave at least 20px horizontal padding between container borders and inner cards.\n" +
+    "   - Component Grid Gap: Keep at least 16px horizontal and 16px vertical gap between component cards.\n" +
+    "6. Card Height & Vertical Rhythm:\n" +
+    "   - Do NOT use cramped fixed heights (< 65px) for cards containing title + badge + description:\n" +
+    "     * Single-line title card: `min-height = 56px`.\n" +
+    "     * Title + Subtitle card: `min-height = 76px`.\n" +
+    "     * Title + 2-line Subtitle / Spec card: `min-height = 92px`.\n" +
+    "   - Internal card padding MUST be at least 14px on all sides. Tag badge to title horizontal/vertical clearance MUST be >= 10px.\n" +
+    "7. Strict Text Hierarchy & Collision-Free Stacking:\n" +
+    "   - Inside any container or card, calculate explicit Y coordinates for each tier: Tag Badge `y = top + 20` -> Title `y = tag_y + 24` -> Subtitle `y = title_bottom + 18` -> Description `y = subtitle_bottom + 16`. Each line MUST have at least `fontSize + 6px` clearance. NEVER reuse identical or overlapping Y coordinates.\n" +
+    "   - No Dual-Anchor Overlap: Never render an overarching container title and a child phase title at the same horizontal coordinate range. Container headers belong at `y=22..28`; column contents start below at `y >= 54`.\n" +
+    "8. Horizontal Multi-Column Banners & Roadmaps:\n" +
+    "   - Divide available width into strict disjoint column slots: `x_col(i) = x0 + i * (col_width + col_gap)`.\n" +
+    "   - Column text MUST NEVER exceed `col_width - 16px`. Truncate or wrap multi-line text into explicit `<tspan dy=\"16\">` tags.\n" +
+    "9. Central Bridge Cards & Connector Stride:\n" +
+    "   - Every connector exiting a component MUST run straight for at least 16px before turning or hosting a label badge.\n" +
+    "   - Branch connector labels (e.g. \"Math Defense\", \"Physics Defense\") MUST sit outside the card bounds on horizontal connector runs, with an opaque background badge `<rect fill=\"#ffffff\" rx=\"3\"/>`.\n" +
+    "   - Never let labels overlap card borders or connector corners.\n" +
+    "10. XML & Tag Integrity:\n" +
+    "   - Every `<g>` MUST have an exact closing `</g>`. Keep tag depth strictly balanced.\n" +
     "   - Explicit `viewBox` with ample height padding (+60px to 80px) to prevent bottom cutoff.\n" +
     "   - Output format: Wrap raw SVG in ```xml or ```svg code blocks without markdown wrapping."
   ),

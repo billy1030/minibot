@@ -71,14 +71,30 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
         cleanSvgStr = cleanSvgStr.trim();
         // Remove trailing incomplete tag if cut off mid-attribute e.g. <text font-size="
         cleanSvgStr = cleanSvgStr.replace(/<[^>]*$/, '');
-        cleanSvgStr += '\n</g>\n</svg>';
+
+        // Dynamically balance unclosed <g> tags or other containers
+        const openGCount = (cleanSvgStr.match(/<g[\s>]/gi) || []).length;
+        const closeGCount = (cleanSvgStr.match(/<\/g>/gi) || []).length;
+        const missingG = Math.max(0, openGCount - closeGCount);
+        if (missingG > 0) {
+          cleanSvgStr += '\n' + '</g>\n'.repeat(missingG);
+        }
+        cleanSvgStr += '</svg>';
       }
+      // Normalize invalid HTML-only entities in SVG to proper XML Unicode / characters
+      cleanSvgStr = cleanSvgStr
+        .replace(/&bull;?/gi, '•')
+        .replace(/&nbsp;?/gi, ' ')
+        .replace(/&mdash;?/gi, '—')
+        .replace(/&ndash;?/gi, '–')
+        .replace(/&copy;?/gi, '©');
+
       // Replace bare & not followed by standard xml entity (amp, lt, gt, quot, apos, #123, #x123)
       return cleanSvgStr.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, '&amp;');
     };
 
     // First capture fenced SVG blocks (both completed and unclosed/truncated fences)
-    clean = clean.replace(/`{3,}(?:xml|html|svg)?\s*([\s\S]*?<svg[\s\S]*?)(?:<\/svg>\s*`{3,}|`{3,}|$)/gi, (match, svgContent) => {
+    clean = clean.replace(/`{3,}(?:xml|html|svg)?\s*([\s\S]*?<svg[\s\S]*?(?:<\/svg>)?)\s*(?:`{3,}|$)/gi, (match, svgContent) => {
       // Only treat as SVG if it has <svg tag
       if (!svgContent.includes('<svg')) return match;
       const token = `MINIBOTSVGBLOCKTOKEN${svgBlocks.length}ENDTOKEN`;

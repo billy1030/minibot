@@ -243,13 +243,56 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showThemeMenu]);
 
-  // Auto-clean raw SVG: ensure strict <svg> bounds and fix unescaped ampersands
+  // Auto-clean raw SVG: ensure strict <svg> bounds, balance tags, and fix unescaped ampersands
   const cleanSvg = useMemo(() => {
     if (!svgContent) return "";
     const startIdx = svgContent.indexOf("<svg");
-    const endIdx = svgContent.lastIndexOf("</svg>");
-    let isolated = startIdx !== -1 && endIdx !== -1 ? svgContent.slice(startIdx, endIdx + 6) : svgContent;
+    if (startIdx === -1) return svgContent;
+
+    let isolated = svgContent.slice(startIdx);
+    const endIdx = isolated.lastIndexOf("</svg>");
+    if (endIdx !== -1) {
+      isolated = isolated.slice(0, endIdx + 6);
+    } else {
+      // SVG was truncated mid-generation: close open tags and add </svg>
+      isolated = isolated.trim().replace(/<[^>]*$/, "");
+      const openGCount = (isolated.match(/<g[\s>]/gi) || []).length;
+      const closeGCount = (isolated.match(/<\/g>/gi) || []).length;
+      const missingG = Math.max(0, openGCount - closeGCount);
+      if (missingG > 0) {
+        isolated += "\n" + "</g>\n".repeat(missingG);
+      }
+      isolated += "</svg>";
+    }
+
+    // Normalize invalid HTML-only entities in SVG to proper XML Unicode / characters
+    isolated = isolated
+      .replace(/&bull;?/gi, "•")
+      .replace(/&nbsp;?/gi, " ")
+      .replace(/&mdash;?/gi, "—")
+      .replace(/&ndash;?/gi, "–")
+      .replace(/&copy;?/gi, "©");
+
+    // Replace unescaped & with &amp;
     isolated = isolated.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, "&amp;");
+
+    // Guard against unbalanced <g> tags within completed SVG (e.g. extra </g> before </svg>)
+    const openGCount = (isolated.match(/<g[\s>]/gi) || []).length;
+    const closeGCount = (isolated.match(/<\/g>/gi) || []).length;
+    if (closeGCount > openGCount) {
+      // Remove trailing excess </g> tags immediately before </svg>
+      let excess = closeGCount - openGCount;
+      isolated = isolated.replace(/(?:<\s*\/\s*g\s*>\s*)+<\s*\/\s*svg\s*>\s*$/i, (match) => {
+        const trailingCloses = (match.match(/<\s*\/\s*g\s*>/gi) || []).length;
+        const toRemove = Math.min(excess, trailingCloses);
+        let replaced = match;
+        for (let i = 0; i < toRemove; i++) {
+          replaced = replaced.replace(/<\s*\/\s*g\s*>\s*/i, "");
+        }
+        return replaced;
+      });
+    }
+
     return recolorSvg(isolated, activeTheme);
   }, [svgContent, activeTheme]);
 

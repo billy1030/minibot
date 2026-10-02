@@ -156,6 +156,17 @@ These mark "AI slop" schematics of any type:
 | `rounded-2xl` on boxes | Max radius 6–10px or none |
 | Coral on every "important" node | Coral is 1–2 editorial accents, not a signaling system |
 | Reproducing Mermaid's renderer layout | Imports automatic spacing and routing instead of making an editorial layout |
+| Splitting inline key-value into dual `<text>` tags | Hardcoding estimated X offset causes words to crash together; use single `<text>` with `<tspan>` for label |
+| Using HTML named entities (`&bull;`, `&nbsp;`) | Unrecognized in pure SVG XML; use literal UTF-8 `•`, `·` or numeric entities `&#8226;`, `&#183;` |
+| Inter-zone vertical gap < 48px | Causes vertical choking; adjacent zones must maintain >= 48px to 64px clearance for labels and flow lines |
+| Inset card grid gap < 16px | Chokes container boundaries; inner cards require at least 20px side padding and 16px grid gap |
+| Cramped cards (< 65px for title + desc) | Suffocates text lines; title + subtitle requires >= 76px height, 3-line cards require >= 92px with >= 14px padding |
+| Connector label grazing zone borders | Connectors must run at least 40px with >= 14px clear stroke between label badges and container edges |
+| Overlapping text lines in same card | Hardcoding identical/near-identical Y coordinates (`fontSize + 6px` clearance required per tier) |
+| Container title sharing horizontal coordinates with phase title | Causes severe text collision; container headers belong at `y=22..28`, column contents at `y >= 54` |
+| Unbounded multi-column text | Text extending into adjacent columns; must strictly allocate non-overlapping column bounds |
+| Occluded connector labels under floating cards | Branch labels must sit outside card bounds with an opaque `<rect>` background badge |
+| Unbalanced `<g>` XML tags | Leads to browser XML parser errors upon SVG export; tag stack depth must strictly equal zero |
 | Any breach of the six §6 connector rules | Diagonal slants, labels touching their stroke, masks clipped by a later node, overlapping paths, shared attach points, transit behind a non-endpoint box — each is an automatic fail; §6 states them in full |
 
 Type-specific anti-patterns live in each type reference linked in the guide.
