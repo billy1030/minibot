@@ -145,6 +145,10 @@ Before generating any diagram, state:
 - Never draw lines with unrounded sharp 90-degree corners. Always apply `rx`, `ry`, or rounded elbow paths.
 - Avoid centered multi-line text blocks. Left-align body copy; reserve center-alignment for single-line titles or badges.
 - Avoid ambiguous arrow directions; label relationship lines when meaning isn't obvious.
+- **NEVER allow unwrapped text to exceed card width (> 52 chars)**: SVG `<text>` never auto-wraps; descriptions exceeding 52 characters must be split into `<tspan dy="16">` to prevent punching through right borders.
+- **NEVER allow card bottom borders to slice or touch text**: Card `<rect height="...">` must exceed lowest text baseline by at least 18px (`card_height >= (lowest_text_y - card_y) + 18px`). Root bridge card min-height is 80px to 86px.
+- **NEVER split inline key-values into dual `<text>` tags**: Always use a single `<text>` with inline `<tspan font-weight="600">Key:</tspan> Value` to prevent words crashing together.
+- **NEVER use HTML named entities (`&bull;`, `&nbsp;`)**: SVG XML only supports `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`; use literal `•` or `&#8226;` for bullets.
 - **NEVER allow inter-zone gap to be < 48px**: Major zones stacked vertically must maintain at least 48px to 64px clearance so connectors have at least 40px length and label badges have >= 14px space from receiving zone borders.
 - **NEVER use cramped card heights**: Cards with title + badge + description require at least 76px to 92px height with >= 14px internal padding on all sides. Component grid gap inside containers must be >= 16px.
 - **NEVER stack text with overlapping Y coordinates**: Always calculate explicit Y coordinates for each tier (Tag `y = top + 20` -> Title `y = tag_y + 24` -> Subtitle `y = title_bottom + 18` -> Body `y = subtitle_bottom + 16`). Every text line requires at least `fontSize + 6px` clearance.

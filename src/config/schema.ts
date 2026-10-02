@@ -49,11 +49,21 @@ export const PromptsConfigSchema = z.object({
     "   - Primary Accents: Ocean Blue `#2563eb`, Forest Emerald `#059669`, Royal Violet `#7c3aed`, Warm Amber `#d97706`, Crimson Red `#e11d48`\n" +
     "   - Neutral Card Containers: `#f8fafc` (cards), `#f1f5f9` (active highlights), `#ffffff` (sub-cards), `#e2e8f0` (border lines)\n" +
     "   - Typography: Title `#0f172a`, Body `#334155`, Subtitle/Labels `#64748b`, Muted Badges `#94a3b8`\n" +
-    "2. Inline Key-Value & Bullet Lists (NO SPLIT X COORDINATES - CRITICAL):\n" +
+    "2. Text Line Length Budget & Forced Two-Line Wrapping (CRITICAL):\n" +
+    "   - SVG `<text>` elements NEVER auto-wrap! In standard cards (width ~380-440px), a single text line MUST NOT exceed 52 characters (including spaces).\n" +
+    "   - If a description or bullet exceeds 52 characters (e.g. \"...Heisenberg uncertainty & No-Cloning theorem\"), you MUST split it into two explicit `<tspan>` tags:\n" +
+    "     `<text x=\"...\" y=\"...\"><tspan x=\"...\" dy=\"0\">First part of line...</tspan><tspan x=\"...\" dy=\"16\">Second part of line...</tspan></text>`\n" +
+    "   - NEVER allow text to touch or extend beyond `card_x + card_width - 20px`.\n" +
+    "3. Card Height Must Strictly Exceed Lowest Text Line (NEVER SLICE TEXT):\n" +
+    "   - Card `<rect height=\"...\">` MUST be strictly calculated from its lowest text baseline:\n" +
+    "     `card_height >= (lowest_text_y - card_y) + 18px` (minimum bottom padding of 18px).\n" +
+    "   - Root / Bridge Card containing Badge + Title + Subtitle: Minimum height is 80px to 86px (NEVER <= 65px).\n" +
+    "   - NEVER draw a card's bottom border through or touching any text baseline.\n" +
+    "4. Inline Key-Value & Bullet Lists (NO SPLIT X COORDINATES - CRITICAL):\n" +
     "   - In single-line bullet points or key-value entries (e.g. \"• Hardware Footprint: Runs on existing silicon\"): NEVER split label and value into separate `<text>` tags with guessed X offsets.\n" +
     "   - Always use a SINGLE `<text>` element with inline `<tspan font-weight=\"600\">Hardware Footprint:</tspan> Runs on existing silicon...` so the browser's layout engine automatically flows text without crashing words together.\n" +
     "   - If creating a formal two-column table, Column 2 MUST start at `x2 >= x1 + max_label_width + 16px` (allow at least 160px for technical labels).\n" +
-    "3. XML Entity Safety & Bullets (NEVER USE &bull;):\n" +
+    "5. XML Entity Safety & Bullets (NEVER USE &bull;):\n" +
     "   - Standard XML does NOT support HTML named entities. NEVER use `&bull;`, `&nbsp;`, `&copy;`, or `&mdash;` in SVG.\n" +
     "   - For bullets, use literal UTF-8 bullet `•` or numeric entity `&#8226;`.\n" +
     "   - For middle separators, use literal `·` or `&#183;`.\n" +

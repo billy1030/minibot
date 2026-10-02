@@ -156,6 +156,8 @@ These mark "AI slop" schematics of any type:
 | `rounded-2xl` on boxes | Max radius 6–10px or none |
 | Coral on every "important" node | Coral is 1–2 editorial accents, not a signaling system |
 | Reproducing Mermaid's renderer layout | Imports automatic spacing and routing instead of making an editorial layout |
+| Unwrapped text exceeding card width (> 52 chars) | SVG `<text>` never auto-wraps and punches through card edges; split into `<tspan dy="16">` elements |
+| Card border slicing or touching text | Occurs when card height is less than lowest text Y + 18px; root card min-height is 80px to 86px |
 | Splitting inline key-value into dual `<text>` tags | Hardcoding estimated X offset causes words to crash together; use single `<text>` with `<tspan>` for label |
 | Using HTML named entities (`&bull;`, `&nbsp;`) | Unrecognized in pure SVG XML; use literal UTF-8 `•`, `·` or numeric entities `&#8226;`, `&#183;` |
 | Inter-zone vertical gap < 48px | Causes vertical choking; adjacent zones must maintain >= 48px to 64px clearance for labels and flow lines |
