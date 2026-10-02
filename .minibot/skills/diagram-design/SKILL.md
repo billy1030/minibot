@@ -146,6 +146,8 @@ Before generating any diagram, state:
 - Avoid centered multi-line text blocks. Left-align body copy; reserve center-alignment for single-line titles or badges.
 - Avoid ambiguous arrow directions; label relationship lines when meaning isn't obvious.
 - **NEVER allow unwrapped text to exceed card width (> 52 chars)**: SVG `<text>` never auto-wraps; descriptions exceeding 52 characters must be split into `<tspan dy="16">` to prevent punching through right borders.
+- **NEVER cut connectors through intermediate cards or text**: A connector MUST NOT cross through non-adjacent cards (e.g. from `ML-KEM` straight through `ML-DSA`). Either route along dedicated clearance corridors (`M -> V -> H -> V -> H`) with >= 16px clearance outside any card bounds, or connect from the outermost boundary component facing the target.
+- **NEVER clip connector labels against card borders**: Labels (e.g. `HYBRID SEED`) MUST sit in open channels between containers with opaque masking `<rect>` badges, never colliding with or grazing card borders or titles.
 - **NEVER allow card bottom borders to slice or touch text**: Card `<rect height="...">` must exceed lowest text baseline by at least 18px (`card_height >= (lowest_text_y - card_y) + 18px`). Root bridge card min-height is 80px to 86px.
 - **NEVER split inline key-values into dual `<text>` tags**: Always use a single `<text>` with inline `<tspan font-weight="600">Key:</tspan> Value` to prevent words crashing together.
 - **NEVER use HTML named entities (`&bull;`, `&nbsp;`)**: SVG XML only supports `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`; use literal `•` or `&#8226;` for bullets.

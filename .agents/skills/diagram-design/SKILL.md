@@ -157,6 +157,8 @@ These mark "AI slop" schematics of any type:
 | Coral on every "important" node | Coral is 1–2 editorial accents, not a signaling system |
 | Reproducing Mermaid's renderer layout | Imports automatic spacing and routing instead of making an editorial layout |
 | Unwrapped text exceeding card width (> 52 chars) | SVG `<text>` never auto-wraps and punches through card edges; split into `<tspan dy="16">` elements |
+| Connector path cutting through intermediate cards | Connectors must NEVER cross behind/through non-adjacent cards; route via dedicated clearance corridors or source from boundary nodes |
+| Connector label clipping card borders or text | Labels (e.g. `HYBRID SEED`) must sit strictly in clear open channels between containers with opaque masking badges |
 | Card border slicing or touching text | Occurs when card height is less than lowest text Y + 18px; root card min-height is 80px to 86px |
 | Splitting inline key-value into dual `<text>` tags | Hardcoding estimated X offset causes words to crash together; use single `<text>` with `<tspan>` for label |
 | Using HTML named entities (`&bull;`, `&nbsp;`) | Unrecognized in pure SVG XML; use literal UTF-8 `•`, `·` or numeric entities `&#8226;`, `&#183;` |
