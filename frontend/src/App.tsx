@@ -32,6 +32,10 @@ import {
   PanelLeft,
   Folder,
   FolderPlus,
+  Layers,
+  Bookmark,
+  Tag,
+  CheckSquare,
   Brain,
   Shield,
   Users,
@@ -154,6 +158,16 @@ interface WorkspaceInfo {
   sessionCount: number;
 }
 
+interface SessionCollection {
+  id: string;
+  name: string;
+  color?: string;
+  description?: string;
+  sessionFiles: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export function App() {
   const { currentUser, isLoading: isAuthLoading, logout } = useAuth();
   const [show2FAModal, setShow2FAModal] = useState(false);
@@ -236,6 +250,37 @@ export function App() {
   const [isRenamingWs, setIsRenamingWs] = useState<boolean>(false);
   const [renameWsInput, setRenameWsInput] = useState<string>("");
   const [savedSessions, setSavedSessions] = useState<any[]>([]);
+  // 📁 Collections State & View Mode ("all" | "collections")
+  const [collections, setCollections] = useState<SessionCollection[]>([]);
+  const [sidebarViewMode, setSidebarViewMode] = useState<"all" | "collections">(() => {
+    try {
+      return (localStorage.getItem("minibot_sidebar_view_mode") as "all" | "collections") || "all";
+    } catch {
+      return "all";
+    }
+  });
+  const [expandedCollections, setExpandedCollections] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem("minibot_expanded_collections");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [isCreatingCollection, setIsCreatingCollection] = useState<boolean>(false);
+  const [newCollectionName, setNewCollectionName] = useState<string>("");
+  const [newCollectionColor, setNewCollectionColor] = useState<string>("#0284c7");
+  const [editingCollection, setEditingCollection] = useState<SessionCollection | null>(null);
+  const [editCollectionName, setEditCollectionName] = useState<string>("");
+  const [editCollectionColor, setEditCollectionColor] = useState<string>("#0284c7");
+  const [manageCollectionModal, setManageCollectionModal] = useState<SessionCollection | null>(null);
+  const [sessionAddToCollectionTarget, setSessionAddToCollectionTarget] = useState<string | null>(null);
+
+  // ☑️ Multi-select Sessions State (Batch assign to Collection)
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState<boolean>(false);
+  const [selectedSessionFiles, setSelectedSessionFiles] = useState<Set<string>>(new Set());
+  const [showBatchAssignModal, setShowBatchAssignModal] = useState<boolean>(false);
+
   const [activeSessionFile, setActiveSessionFile] = useState<string | null>(() => {
     try {
       return localStorage.getItem("minibot_active_session") || null;
@@ -627,6 +672,7 @@ export function App() {
     localStorage.setItem("active_workspace", wsName);
     startNewChat();
     fetchLogs(wsName);
+    fetchCollections(wsName);
     fetchSkills(wsName);
   };
 
@@ -836,13 +882,167 @@ export function App() {
     }
   };
 
-  // Fetch initial configuration, workspaces, and active MCP tools
+  // Fetch initial configuration, workspaces, collections, and active MCP tools
   useEffect(() => {
     fetchConfig();
     fetchWorkspaces();
     fetchLogs(currentWorkspace, true);
+    fetchCollections(currentWorkspace);
     fetchSkills(currentWorkspace);
   }, []);
+
+  const fetchCollections = async (wsName?: string) => {
+    const ws = wsName || currentWorkspace;
+    try {
+      const res = await fetch(`/api/collections?workspace=${encodeURIComponent(ws)}`, {
+        credentials: "include",
+        signal: AbortSignal.timeout(6000),
+      });
+      const data = await res.json();
+      if (data.collections) {
+        setCollections(data.collections);
+      }
+    } catch (err) {
+      console.error("Failed to load collections:", err);
+    }
+  };
+
+  const handleCreateCollection = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const clean = newCollectionName.trim();
+    if (!clean) return;
+    try {
+      const res = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          name: clean,
+          color: newCollectionColor,
+          workspace: currentWorkspace,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCollections((prev) => [...prev, data.collection]);
+        // Auto-expand newly created collection
+        setExpandedCollections((prev) => {
+          const next = { ...prev, [data.collection.id]: true };
+          try {
+            localStorage.setItem("minibot_expanded_collections", JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+        setNewCollectionName("");
+        setIsCreatingCollection(false);
+        showAlert(`Collection "${data.collection.name}" created!`, "success");
+      } else {
+        showAlert(`Failed to create collection: ${data.error || "Unknown error"}`, "error");
+      }
+    } catch (err: any) {
+      showAlert(`Error creating collection: ${err.message || err}`, "error");
+    }
+  };
+
+  const handleUpdateCollection = async (id: string, updates: Partial<SessionCollection>) => {
+    try {
+      const res = await fetch(`/api/collections/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          ...updates,
+          workspace: currentWorkspace,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCollections((prev) => prev.map((c) => (c.id === id ? data.collection : c)));
+        if (editingCollection && editingCollection.id === id) {
+          setEditingCollection(null);
+        }
+        if (manageCollectionModal && manageCollectionModal.id === id) {
+          setManageCollectionModal(data.collection);
+        }
+        showAlert("Collection updated!", "success");
+      } else {
+        showAlert(`Failed to update collection: ${data.error || "Unknown error"}`, "error");
+      }
+    } catch (err: any) {
+      showAlert(`Error updating collection: ${err.message || err}`, "error");
+    }
+  };
+
+  const handleDeleteCollection = async (e: React.MouseEvent, col: SessionCollection) => {
+    e.stopPropagation();
+    showConfirm(
+      `Are you sure you want to delete collection "${col.name}"? (Your session log files will NOT be deleted)`,
+      async () => {
+        try {
+          const res = await fetch(
+            `/api/collections/${encodeURIComponent(col.id)}?workspace=${encodeURIComponent(currentWorkspace)}`,
+            {
+              method: "DELETE",
+              credentials: "include",
+            }
+          );
+          if (res.ok) {
+            setCollections((prev) => prev.filter((c) => c.id !== col.id));
+            showAlert(`Collection "${col.name}" deleted.`, "info");
+          } else {
+            const data = await res.json();
+            showAlert(`Failed to delete collection: ${data.error || "Unknown error"}`, "error");
+          }
+        } catch (err: any) {
+          showAlert(`Error deleting collection: ${err.message || err}`, "error");
+        }
+      },
+      "Delete Collection",
+      "Confirm Delete"
+    );
+  };
+
+  const handleToggleSessionInCollection = async (colId: string, sessionFile: string) => {
+    try {
+      const res = await fetch(`/api/collections/${encodeURIComponent(colId)}/toggle-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          sessionFile,
+          workspace: currentWorkspace,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCollections((prev) => prev.map((c) => (c.id === colId ? data.collection : c)));
+        if (manageCollectionModal && manageCollectionModal.id === colId) {
+          setManageCollectionModal(data.collection);
+        }
+      } else {
+        showAlert(`Failed to update collection: ${data.error || "Unknown error"}`, "error");
+      }
+    } catch (err: any) {
+      showAlert(`Error toggling session in collection: ${err.message || err}`, "error");
+    }
+  };
+
+  const handleBatchAddToCollection = async (colId: string) => {
+    const targetCol = collections.find((c) => c.id === colId);
+    if (!targetCol) return;
+
+    const filesToAdd = Array.from(selectedSessionFiles);
+    if (filesToAdd.length === 0) return;
+
+    // Merge new files into collection sessionFiles without duplicates
+    const updatedFiles = Array.from(new Set([...targetCol.sessionFiles, ...filesToAdd]));
+
+    await handleUpdateCollection(colId, { sessionFiles: updatedFiles });
+    setSelectedSessionFiles(new Set());
+    setIsMultiSelectMode(false);
+    setShowBatchAssignModal(false);
+    showAlert(`Added ${filesToAdd.length} cards to "${targetCol.name}"!`, "success");
+  };
 
   const fetchLogs = async (wsName?: string, isInitialLoad?: boolean) => {
     const ws = wsName || currentWorkspace;
@@ -938,10 +1138,17 @@ export function App() {
           if (res.ok) {
             // Optimistically remove session from sidebar with 0 latency
             setSavedSessions((prev) => prev.filter((s) => s.filename !== filename));
+            setCollections((prev) =>
+              prev.map((col) => ({
+                ...col,
+                sessionFiles: col.sessionFiles.filter((f) => f !== filename),
+              }))
+            );
 
-            // Re-sync logs and workspaces in parallel in the background
+            // Re-sync logs, collections, and workspaces in parallel in the background
             await Promise.all([
               fetchLogs(currentWorkspace),
+              fetchCollections(currentWorkspace),
               fetchWorkspaces(),
             ]);
           } else {
@@ -4310,8 +4517,9 @@ export function App() {
                 onClick={(e) => {
                   e.stopPropagation();
                   fetchLogs();
+                  fetchCollections();
                 }}
-                title="Refresh saved sessions"
+                title="Refresh saved sessions and collections"
                 onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
                 onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
               >
@@ -4338,6 +4546,232 @@ export function App() {
               )}
             </div>
           </div>
+
+          {/* 🔀 Sub-Header: View Mode Switcher Pill (All Sessions vs Collections) */}
+          {showPastSessions && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "6px 10px",
+                background: "var(--bg-main)",
+                borderBottom: "1px solid var(--border-color)",
+                gap: 6,
+              }}
+            >
+              <div
+                style={{
+                  display: "inline-flex",
+                  background: "var(--bg-card)",
+                  padding: "2px",
+                  borderRadius: 6,
+                  border: "1px solid var(--border-color)",
+                  gap: 2,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSidebarViewMode("all");
+                    try {
+                      localStorage.setItem("minibot_sidebar_view_mode", "all");
+                    } catch {}
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "3px 8px",
+                    borderRadius: 4,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                    background: sidebarViewMode === "all" ? "var(--accent)" : "transparent",
+                    color: sidebarViewMode === "all" ? "#ffffff" : "var(--text-muted)",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <FileText size={11} />
+                  <span>All</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSidebarViewMode("collections");
+                    try {
+                      localStorage.setItem("minibot_sidebar_view_mode", "collections");
+                    } catch {}
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "3px 8px",
+                    borderRadius: 4,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                    background: sidebarViewMode === "collections" ? "var(--accent)" : "transparent",
+                    color: sidebarViewMode === "collections" ? "#ffffff" : "var(--text-muted)",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Layers size={11} />
+                  <span>Collections</span>
+                  {collections.length > 0 && (
+                    <span
+                      style={{
+                        fontSize: 9,
+                        padding: "0 4px",
+                        borderRadius: 10,
+                        background: sidebarViewMode === "collections" ? "rgba(255,255,255,0.25)" : "rgba(37,99,235,0.12)",
+                        color: sidebarViewMode === "collections" ? "#ffffff" : "var(--accent)",
+                      }}
+                    >
+                      {collections.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                {/* 🔘 Select Mode Trigger Button (Allow multi-selecting session cards) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMultiSelectMode(!isMultiSelectMode);
+                    if (isMultiSelectMode) {
+                      setSelectedSessionFiles(new Set());
+                    }
+                  }}
+                  title={isMultiSelectMode ? "Exit Select Mode" : "Select cards to add to collection"}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "3px 7px",
+                    borderRadius: 5,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    border: isMultiSelectMode ? "1px solid var(--accent)" : "1px solid var(--border-color)",
+                    background: isMultiSelectMode ? "var(--accent)" : "var(--bg-card)",
+                    color: isMultiSelectMode ? "#ffffff" : "var(--text-muted)",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <CheckSquare size={12} />
+                  <span>{isMultiSelectMode ? "Cancel" : "Select"}</span>
+                </button>
+
+                {sidebarViewMode === "collections" && !isMultiSelectMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingCollection(true);
+                      setNewCollectionName("");
+                    }}
+                    title="Create new collection"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "3px 7px",
+                      borderRadius: 5,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      border: "1px solid rgba(2, 132, 199, 0.3)",
+                      background: "rgba(2, 132, 199, 0.08)",
+                      color: "var(--accent)",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "var(--accent)";
+                      e.currentTarget.style.color = "#ffffff";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "rgba(2, 132, 199, 0.08)";
+                      e.currentTarget.style.color = "var(--accent)";
+                    }}
+                  >
+                    <Plus size={12} />
+                    <span>New</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 🏷️ Multi-Select Active Action Banner */}
+          {showPastSessions && isMultiSelectMode && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "6px 10px",
+                background: "rgba(2, 132, 199, 0.08)",
+                borderBottom: "1px solid rgba(2, 132, 199, 0.2)",
+                fontSize: 11,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontWeight: 600, color: "var(--accent)" }}>
+                  {selectedSessionFiles.size} selected
+                </span>
+                <span style={{ color: "var(--text-muted)" }}>•</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedSessionFiles.size === savedSessions.length) {
+                      setSelectedSessionFiles(new Set());
+                    } else {
+                      setSelectedSessionFiles(new Set(savedSessions.map((s) => s.filename)));
+                    }
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--accent)",
+                    cursor: "pointer",
+                    fontSize: 11,
+                    padding: 0,
+                    textDecoration: "underline",
+                  }}
+                >
+                  {selectedSessionFiles.size === savedSessions.length ? "Deselect All" : "Select All"}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                disabled={selectedSessionFiles.size === 0}
+                onClick={() => setShowBatchAssignModal(true)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "3px 8px",
+                  borderRadius: 5,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  border: "none",
+                  background: selectedSessionFiles.size > 0 ? "var(--accent)" : "rgba(100, 116, 139, 0.2)",
+                  color: selectedSessionFiles.size > 0 ? "#ffffff" : "var(--text-muted)",
+                  cursor: selectedSessionFiles.size > 0 ? "pointer" : "not-allowed",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <Bookmark size={11} />
+                <span>Add to Collection</span>
+              </button>
+            </div>
+          )}
 
           {/* Collapsible Sessions Body (Tree View Hierarchy) */}
           {showPastSessions && (
@@ -4402,9 +4836,12 @@ export function App() {
                   return (
                     <div
                       key={session.filename}
-                      draggable={editingSessionFile !== session.filename && !isDeletingThis}
+                      draggable={!isMultiSelectMode && editingSessionFile !== session.filename && !isDeletingThis}
                       onDragStart={(e) => {
-                        if (editingSessionFile === session.filename || isDeletingThis) return;
+                        if (isMultiSelectMode || editingSessionFile === session.filename || isDeletingThis) {
+                          e.preventDefault();
+                          return;
+                        }
                         setDraggedSessionKey(session.filename);
                         e.dataTransfer.effectAllowed = "move";
                         e.dataTransfer.setData("text/plain", session.filename);
@@ -4456,19 +4893,41 @@ export function App() {
                       }}
                     >
                       <div
-                        onClick={() => loadSession(session.filename)}
-                        title={`Click to load: ${session.filename}${depth > 0 ? ` (Fork Level ${depth} / 5)` : ""}`}
+                        onClick={() => {
+                          if (isMultiSelectMode) {
+                            setSelectedSessionFiles((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(session.filename)) {
+                                next.delete(session.filename);
+                              } else {
+                                next.add(session.filename);
+                              }
+                              return next;
+                            });
+                          } else {
+                            loadSession(session.filename);
+                          }
+                        }}
+                        title={
+                          isMultiSelectMode
+                            ? "Click to select / deselect this card"
+                            : `Click to load: ${session.filename}${depth > 0 ? ` (Fork Level ${depth} / 5)` : ""}`
+                        }
                         style={{
                           padding: isChild ? "4px 6px" : "6px 8px",
                           borderRadius: 6,
                           fontSize: 11,
                           cursor: "pointer",
-                          background: isActive
+                          background: isMultiSelectMode && selectedSessionFiles.has(session.filename)
+                            ? "rgba(2, 132, 199, 0.16)"
+                            : isActive
                             ? "rgba(37, 99, 235, 0.14)"
                             : isChild
                             ? "var(--bg-primary)"
                             : "var(--bg-secondary)",
-                          border: isDragOverThis
+                          border: isMultiSelectMode && selectedSessionFiles.has(session.filename)
+                            ? "1px solid var(--accent)"
+                            : isDragOverThis
                             ? "2px dashed var(--accent)"
                             : isActive
                             ? "1px solid var(--accent)"
@@ -4559,21 +5018,46 @@ export function App() {
                             </div>
                           ) : (
                             <div style={{ display: "flex", alignItems: "center", gap: 4, fontWeight: 600, color: "var(--text-main)", flex: 1, minWidth: 0 }}>
-                              {/* Drag Handle Grip */}
-                              <span
-                                style={{
-                                  cursor: "grab",
-                                  color: "var(--text-muted)",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  opacity: 0.6,
-                                  flexShrink: 0,
-                                }}
-                                title="Drag to reorder session"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <GripVertical size={11} />
-                              </span>
+                              {/* Drag Handle Grip OR Checkbox when in Multi-Select Mode */}
+                              {isMultiSelectMode ? (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedSessionFiles.has(session.filename)}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedSessionFiles((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(session.filename)) {
+                                        next.delete(session.filename);
+                                      } else {
+                                        next.add(session.filename);
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    cursor: "pointer",
+                                    marginRight: 2,
+                                    accentColor: "var(--accent)",
+                                  }}
+                                />
+                              ) : (
+                                <span
+                                  style={{
+                                    cursor: "grab",
+                                    color: "var(--text-muted)",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    opacity: 0.6,
+                                    flexShrink: 0,
+                                  }}
+                                  title="Drag to reorder session"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <GripVertical size={11} />
+                                </span>
+                              )}
                               {depth === 0 ? (
                                 <MessageSquare size={13} color="var(--accent)" style={{ flexShrink: 0 }} />
                               ) : depth === 1 ? (
@@ -4739,6 +5223,40 @@ export function App() {
                                   <GitFork size={11.5} />
                                 </button>
 
+                                {/* Add / Assign to Collection Button */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSessionAddToCollectionTarget(session.filename);
+                                  }}
+                                  title="Add to Collection"
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    padding: "2px 3px",
+                                    borderRadius: 4,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    color: collections.some((c) => c.sessionFiles.includes(session.filename))
+                                      ? "var(--accent)"
+                                      : "var(--text-muted)",
+                                    transition: "color 0.15s, background-color 0.15s",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.color = "var(--accent)";
+                                    e.currentTarget.style.backgroundColor = "rgba(37, 99, 235, 0.1)";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    const isAssigned = collections.some((c) => c.sessionFiles.includes(session.filename));
+                                    e.currentTarget.style.color = isAssigned ? "var(--accent)" : "var(--text-muted)";
+                                    e.currentTarget.style.backgroundColor = "transparent";
+                                  }}
+                                >
+                                  <Bookmark size={11.5} />
+                                </button>
+
                                 {/* Edit / Rename Icon Button */}
                                 <button
                                   onClick={(e) => {
@@ -4832,6 +5350,294 @@ export function App() {
                   );
                 };
 
+                // If in "collections" mode, render grouped Accordions
+                if (sidebarViewMode === "collections") {
+                  const assignedFileSet = new Set<string>();
+                  collections.forEach((c) => {
+                    c.sessionFiles.forEach((f) => assignedFileSet.add(f));
+                  });
+
+                  const unassignedSessions = savedSessions.filter((s) => !assignedFileSet.has(s.filename));
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {/* List of Collections */}
+                      {collections.length === 0 && unassignedSessions.length === 0 ? (
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic", padding: "8px 4px" }}>
+                          No collections or sessions yet.
+                        </div>
+                      ) : null}
+
+                      {collections.map((col) => {
+                        const isExpanded = !!expandedCollections[col.id]; // default collapsed unless explicitly expanded
+                        const colSessions = col.sessionFiles
+                          .map((f) => sessionMap.get(f))
+                          .filter(Boolean);
+
+                        return (
+                          <div
+                            key={col.id}
+                            style={{
+                              borderRadius: 6,
+                              border: "1px solid var(--border-color)",
+                              background: "var(--bg-card)",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {/* Collection Header Bar */}
+                            <div
+                              onClick={() => {
+                                setExpandedCollections((prev) => {
+                                  const next = { ...prev, [col.id]: !isExpanded };
+                                  try {
+                                    localStorage.setItem("minibot_expanded_collections", JSON.stringify(next));
+                                  } catch {}
+                                  return next;
+                                });
+                              }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "6px 8px",
+                                background: "var(--bg-secondary)",
+                                cursor: "pointer",
+                                userSelect: "none",
+                                borderBottom: isExpanded ? "1px solid var(--border-color)" : "none",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
+                                {isExpanded ? (
+                                  <ChevronDown size={13} color="var(--text-muted)" />
+                                ) : (
+                                  <ChevronRight size={13} color="var(--text-muted)" />
+                                )}
+                                <span
+                                  style={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: "50%",
+                                    background: col.color || "#0284c7",
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    color: "var(--text-main)",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {col.name}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 9.5,
+                                    padding: "0 5px",
+                                    borderRadius: 4,
+                                    background: "rgba(37, 99, 235, 0.1)",
+                                    color: "var(--accent)",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {colSessions.length}
+                                </span>
+                              </div>
+
+                              {/* Collection Action Icons */}
+                              <div
+                                style={{ display: "flex", alignItems: "center", gap: 2 }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {/* Manage / Pick Cards Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => setManageCollectionModal(col)}
+                                  title="Manage cards in this collection"
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    padding: "2px 4px",
+                                    borderRadius: 4,
+                                    color: "var(--text-muted)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
+                                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                                >
+                                  <Tag size={11} />
+                                </button>
+
+                                {/* Edit / Rename Collection Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingCollection(col);
+                                    setEditCollectionName(col.name);
+                                    setEditCollectionColor(col.color || "#0284c7");
+                                  }}
+                                  title="Edit collection name / color"
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    padding: "2px 4px",
+                                    borderRadius: 4,
+                                    color: "var(--text-muted)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent)")}
+                                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                                >
+                                  <Edit2 size={11} />
+                                </button>
+
+                                {/* Delete Collection Button */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleDeleteCollection(e, col)}
+                                  title="Delete collection (keeps sessions)"
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    padding: "2px 4px",
+                                    borderRadius: 4,
+                                    color: "var(--text-muted)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.color = "#ef4444")}
+                                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Collection Children Body */}
+                            {isExpanded && (
+                              <div
+                                style={{
+                                  padding: "4px",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 4,
+                                }}
+                              >
+                                {colSessions.length === 0 ? (
+                                  <div
+                                    style={{
+                                      fontSize: 10.5,
+                                      color: "var(--text-muted)",
+                                      fontStyle: "italic",
+                                      padding: "8px 6px",
+                                      textAlign: "center",
+                                    }}
+                                  >
+                                    No cards yet. Click{" "}
+                                    <span
+                                      onClick={() => setManageCollectionModal(col)}
+                                      style={{ color: "var(--accent)", cursor: "pointer", textDecoration: "underline" }}
+                                    >
+                                      Manage
+                                    </span>{" "}
+                                    or the bookmark icon on any card.
+                                  </div>
+                                ) : (
+                                  colSessions.map((s) => renderSessionCard(s, 0))
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Uncategorized Section */}
+                      {unassignedSessions.length > 0 && (
+                        <div
+                          style={{
+                            borderRadius: 6,
+                            border: "1px dashed var(--border-color)",
+                            background: "transparent",
+                            overflow: "hidden",
+                            marginTop: 4,
+                          }}
+                        >
+                          <div
+                            onClick={() => {
+                              const isUncatExpanded = !!expandedCollections.__uncategorized;
+                              setExpandedCollections((prev) => {
+                                const next = { ...prev, __uncategorized: !isUncatExpanded };
+                                try {
+                                  localStorage.setItem("minibot_expanded_collections", JSON.stringify(next));
+                                } catch {}
+                                return next;
+                              });
+                            }}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "6px 8px",
+                              background: "rgba(0,0,0,0.03)",
+                              cursor: "pointer",
+                              userSelect: "none",
+                              borderBottom:
+                                expandedCollections.__uncategorized
+                                  ? "1px dashed var(--border-color)"
+                                  : "none",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              {expandedCollections.__uncategorized ? (
+                                <ChevronDown size={13} color="var(--text-muted)" />
+                              ) : (
+                                <ChevronRight size={13} color="var(--text-muted)" />
+                              )}
+                              <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)" }}>
+                                Uncategorized
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  padding: "0 5px",
+                                  borderRadius: 4,
+                                  background: "rgba(100, 116, 139, 0.12)",
+                                  color: "var(--text-muted)",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {unassignedSessions.length}
+                              </span>
+                            </div>
+                          </div>
+
+                          {expandedCollections.__uncategorized && (
+                            <div
+                              style={{
+                                padding: "4px",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 4,
+                              }}
+                            >
+                              {unassignedSessions.map((s) => renderSessionCard(s, 0))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Default "all" mode: render normal hierarchy tree
                 return rootSessions.map((root) => renderSessionCard(root, 0));
               })()}
             </div>
@@ -8742,6 +9548,659 @@ export function App() {
         onSelectActiveModel={handleSelectActiveModel}
         onSaveProfiles={handleSaveProfiles}
       />
+
+      {/* 📁 Create / Edit Collection Modal */}
+      {(isCreatingCollection || editingCollection) && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.55)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+          }}
+          onClick={() => {
+            setIsCreatingCollection(false);
+            setEditingCollection(null);
+          }}
+        >
+          <div
+            style={{
+              background: "var(--bg-primary)",
+              borderRadius: 12,
+              border: "1px solid var(--border-color)",
+              padding: 24,
+              width: 420,
+              maxWidth: "92vw",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Layers size={18} color="var(--accent)" />
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)", margin: 0 }}>
+                  {editingCollection ? "Edit Collection" : "New Collection"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCreatingCollection(false);
+                  setEditingCollection(null);
+                }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (editingCollection) {
+                  const clean = editCollectionName.trim();
+                  if (!clean) return;
+                  handleUpdateCollection(editingCollection.id, {
+                    name: clean,
+                    color: editCollectionColor,
+                  });
+                } else {
+                  handleCreateCollection();
+                }
+              }}
+            >
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-main)", marginBottom: 6 }}>
+                  Collection Name
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="e.g. Bible study, Work Projects, Research..."
+                  value={editingCollection ? editCollectionName : newCollectionName}
+                  onChange={(e) => {
+                    if (editingCollection) setEditCollectionName(e.target.value);
+                    else setNewCollectionName(e.target.value);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "9px 12px",
+                    borderRadius: 6,
+                    border: "1px solid var(--border-color)",
+                    background: "var(--bg-card)",
+                    color: "var(--text-main)",
+                    fontSize: 13,
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-main)", marginBottom: 8 }}>
+                  Theme Color Badge
+                </label>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  {[
+                    "#0284c7", // Blue
+                    "#10b981", // Emerald
+                    "#8b5cf6", // Purple
+                    "#ec4899", // Pink
+                    "#f59e0b", // Amber
+                    "#ef4444", // Red
+                    "#64748b", // Slate
+                  ].map((c) => {
+                    const activeColor = editingCollection ? editCollectionColor : newCollectionColor;
+                    const isSelected = activeColor === c;
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => {
+                          if (editingCollection) setEditCollectionColor(c);
+                          else setNewCollectionColor(c);
+                        }}
+                        style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: "50%",
+                          background: c,
+                          border: isSelected ? "3px solid #ffffff" : "2px solid transparent",
+                          outline: isSelected ? `2px solid ${c}` : "none",
+                          cursor: "pointer",
+                          transition: "transform 0.15s ease",
+                          transform: isSelected ? "scale(1.15)" : "scale(1)",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreatingCollection(false);
+                    setEditingCollection(null);
+                  }}
+                  style={{
+                    padding: "7px 14px",
+                    borderRadius: 6,
+                    border: "1px solid var(--border-color)",
+                    background: "transparent",
+                    color: "var(--text-muted)",
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editingCollection ? !editCollectionName.trim() : !newCollectionName.trim()}
+                  style={{
+                    padding: "7px 16px",
+                    borderRadius: 6,
+                    border: "none",
+                    background: "var(--accent)",
+                    color: "#ffffff",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    opacity: (editingCollection ? !editCollectionName.trim() : !newCollectionName.trim()) ? 0.5 : 1,
+                  }}
+                >
+                  {editingCollection ? "Save Changes" : "Create Collection"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🏷️ Manage Collection Cards Modal (Batch Selection & Grouping) */}
+      {manageCollectionModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.55)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+          }}
+          onClick={() => setManageCollectionModal(null)}
+        >
+          <div
+            style={{
+              background: "var(--bg-primary)",
+              borderRadius: 12,
+              border: "1px solid var(--border-color)",
+              padding: 22,
+              width: 520,
+              maxWidth: "92vw",
+              maxHeight: "80vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: manageCollectionModal.color || "#0284c7",
+                  }}
+                />
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)", margin: 0 }}>
+                  Manage Cards in "{manageCollectionModal.name}"
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setManageCollectionModal(null)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0" }}>
+              Check or uncheck conversation sessions to add or remove them from this collection:
+            </p>
+
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                border: "1px solid var(--border-color)",
+                borderRadius: 8,
+                padding: "8px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                background: "var(--bg-card)",
+              }}
+            >
+              {savedSessions.length === 0 ? (
+                <div style={{ fontSize: 12, color: "var(--text-muted)", padding: 12, textAlign: "center" }}>
+                  No sessions found in this workspace.
+                </div>
+              ) : (
+                savedSessions.map((s) => {
+                  const isInCollection = manageCollectionModal.sessionFiles.includes(s.filename);
+                  return (
+                    <div
+                      key={s.filename}
+                      onClick={() => handleToggleSessionInCollection(manageCollectionModal.id, s.filename)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: "8px 10px",
+                        borderRadius: 6,
+                        border: isInCollection ? "1px solid rgba(2, 132, 199, 0.4)" : "1px solid var(--border-color)",
+                        background: isInCollection ? "rgba(2, 132, 199, 0.08)" : "var(--bg-primary)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isInCollection}
+                        onChange={() => {}} // handled by div click
+                        style={{ cursor: "pointer" }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 12.5,
+                            fontWeight: 600,
+                            color: "var(--text-main)",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {s.customTitle || s.preview || "Untitled Conversation"}
+                        </div>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace" }}>
+                          {s.filename.replace(".md", "")}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setManageCollectionModal(null)}
+                style={{
+                  padding: "7px 18px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "var(--accent)",
+                  color: "#ffffff",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔖 Quick Assign Single Card to Collection Modal */}
+      {sessionAddToCollectionTarget && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.55)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+          }}
+          onClick={() => setSessionAddToCollectionTarget(null)}
+        >
+          <div
+            style={{
+              background: "var(--bg-primary)",
+              borderRadius: 12,
+              border: "1px solid var(--border-color)",
+              padding: 22,
+              width: 400,
+              maxWidth: "92vw",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Bookmark size={18} color="var(--accent)" />
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)", margin: 0 }}>
+                  Assign to Collection
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSessionAddToCollectionTarget(null)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 14 }}>
+              Target Session:{" "}
+              <code style={{ color: "var(--accent)", fontFamily: "monospace" }}>
+                {sessionAddToCollectionTarget.replace(".md", "")}
+              </code>
+            </div>
+
+            {collections.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "16px 8px" }}>
+                <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 12 }}>
+                  No collections yet in workspace "{currentWorkspace}".
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionAddToCollectionTarget(null);
+                    setIsCreatingCollection(true);
+                  }}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    border: "none",
+                    background: "var(--accent)",
+                    color: "#ffffff",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Create First Collection
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 260, overflowY: "auto" }}>
+                {collections.map((col) => {
+                  const isAssigned = col.sessionFiles.includes(sessionAddToCollectionTarget);
+                  return (
+                    <div
+                      key={col.id}
+                      onClick={() => handleToggleSessionInCollection(col.id, sessionAddToCollectionTarget)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "8px 12px",
+                        borderRadius: 6,
+                        border: isAssigned ? "1px solid rgba(2, 132, 199, 0.4)" : "1px solid var(--border-color)",
+                        background: isAssigned ? "rgba(2, 132, 199, 0.08)" : "var(--bg-card)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: col.color || "#0284c7",
+                          }}
+                        />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>
+                          {col.name}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          background: isAssigned ? "var(--accent)" : "rgba(100, 116, 139, 0.12)",
+                          color: isAssigned ? "#ffffff" : "var(--text-muted)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {isAssigned ? "Added" : "Add"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setSessionAddToCollectionTarget(null)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 6,
+                  border: "1px solid var(--border-color)",
+                  background: "transparent",
+                  color: "var(--text-muted)",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📦 Batch Assign Multiple Cards to Collection Modal */}
+      {showBatchAssignModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.55)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+          }}
+          onClick={() => setShowBatchAssignModal(false)}
+        >
+          <div
+            style={{
+              background: "var(--bg-primary)",
+              borderRadius: 12,
+              border: "1px solid var(--border-color)",
+              padding: 24,
+              width: 440,
+              maxWidth: "92vw",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Layers size={18} color="var(--accent)" />
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-main)", margin: 0 }}>
+                  Add {selectedSessionFiles.size} Cards to Collection
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBatchAssignModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px 0" }}>
+              Select which collection you would like to add the {selectedSessionFiles.size} chosen conversation cards into:
+            </p>
+
+            {collections.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "16px 8px" }}>
+                <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginBottom: 12 }}>
+                  No collections available yet. Create one first!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBatchAssignModal(false);
+                    setIsCreatingCollection(true);
+                  }}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    border: "none",
+                    background: "var(--accent)",
+                    color: "#ffffff",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Create Collection
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 280, overflowY: "auto" }}>
+                {collections.map((col) => {
+                  return (
+                    <div
+                      key={col.id}
+                      onClick={() => handleBatchAddToCollection(col.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "9px 12px",
+                        borderRadius: 6,
+                        border: "1px solid var(--border-color)",
+                        background: "var(--bg-card)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = "var(--accent)";
+                        e.currentTarget.style.background = "rgba(2, 132, 199, 0.08)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = "var(--border-color)";
+                        e.currentTarget.style.background = "var(--bg-card)";
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: "50%",
+                            background: col.color || "#0284c7",
+                          }}
+                        />
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-main)" }}>
+                            {col.name}
+                          </div>
+                          <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                            Currently has {col.sessionFiles.length} cards
+                          </div>
+                        </div>
+                      </div>
+
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: "3px 9px",
+                          borderRadius: 4,
+                          background: "var(--accent)",
+                          color: "#ffffff",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Add Here
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+              <button
+                type="button"
+                onClick={() => setShowBatchAssignModal(false)}
+                style={{
+                  padding: "7px 16px",
+                  borderRadius: 6,
+                  border: "1px solid var(--border-color)",
+                  background: "transparent",
+                  color: "var(--text-muted)",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

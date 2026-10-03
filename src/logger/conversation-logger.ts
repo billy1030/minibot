@@ -69,6 +69,16 @@ export interface WorkspaceSummary {
   lastUpdated?: string;
 }
 
+export interface SessionCollection {
+  id: string;
+  name: string;
+  color?: string;
+  description?: string;
+  sessionFiles: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 const migratedUsers = new Set<string>();
 
 /**
@@ -537,6 +547,170 @@ export function saveConversationOrder(
 }
 
 /**
+ * Gets path to collections.json for a specific workspace
+ */
+function getCollectionsFilePath(workspace: string = "default", baseDir: string = "logs", userNumber: string = "00000"): string {
+  const dir = getWorkspaceDir(workspace, baseDir, userNumber);
+  return path.join(dir, "collections.json");
+}
+
+/**
+ * Lists all collections for a workspace
+ */
+export function listCollections(
+  workspace: string = "default",
+  baseDir: string = "logs",
+  userNumber: string = "00000"
+): SessionCollection[] {
+  ensureWorkspaceMigration(baseDir, userNumber);
+  const filePath = getCollectionsFilePath(workspace, baseDir, userNumber);
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch (err) {
+    console.warn(`[Conversation Logger] Failed to read collections.json for workspace ${workspace}:`, err);
+  }
+  return [];
+}
+
+/**
+ * Saves the full list of collections for a workspace
+ */
+export function saveCollections(
+  collections: SessionCollection[],
+  workspace: string = "default",
+  baseDir: string = "logs",
+  userNumber: string = "00000"
+): boolean {
+  ensureWorkspaceMigration(baseDir, userNumber);
+  const filePath = getCollectionsFilePath(workspace, baseDir, userNumber);
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(collections, null, 2), "utf-8");
+    return true;
+  } catch (err) {
+    console.error(`[Conversation Logger] Failed to write collections.json for workspace ${workspace}:`, err);
+    return false;
+  }
+}
+
+/**
+ * Creates a new collection in a workspace
+ */
+export function createCollection(
+  name: string,
+  color?: string,
+  description?: string,
+  workspace: string = "default",
+  baseDir: string = "logs",
+  userNumber: string = "00000"
+): SessionCollection {
+  const collections = listCollections(workspace, baseDir, userNumber);
+  const safeName = (name || "").trim();
+  if (!safeName) {
+    throw new Error("Collection name cannot be empty");
+  }
+
+  const id = `col_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const now = new Date().toISOString();
+  const newCol: SessionCollection = {
+    id,
+    name: safeName,
+    color: color || "#0284c7",
+    description: description ? description.trim() : "",
+    sessionFiles: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  collections.push(newCol);
+  saveCollections(collections, workspace, baseDir, userNumber);
+  return newCol;
+}
+
+/**
+ * Updates an existing collection (name, color, description, or sessionFiles)
+ */
+export function updateCollection(
+  id: string,
+  updates: Partial<Omit<SessionCollection, "id" | "createdAt">>,
+  workspace: string = "default",
+  baseDir: string = "logs",
+  userNumber: string = "00000"
+): SessionCollection {
+  const collections = listCollections(workspace, baseDir, userNumber);
+  const index = collections.findIndex((c) => c.id === id);
+  if (index === -1) {
+    throw new Error(`Collection with id "${id}" not found`);
+  }
+
+  const existing = collections[index];
+  const updated: SessionCollection = {
+    ...existing,
+    name: updates.name !== undefined ? updates.name.trim() : existing.name,
+    color: updates.color !== undefined ? updates.color : existing.color,
+    description: updates.description !== undefined ? updates.description.trim() : existing.description,
+    sessionFiles: Array.isArray(updates.sessionFiles) ? updates.sessionFiles : existing.sessionFiles,
+    updatedAt: new Date().toISOString(),
+  };
+
+  collections[index] = updated;
+  saveCollections(collections, workspace, baseDir, userNumber);
+  return updated;
+}
+
+/**
+ * Deletes a collection (does NOT delete any session markdown files)
+ */
+export function deleteCollection(
+  id: string,
+  workspace: string = "default",
+  baseDir: string = "logs",
+  userNumber: string = "00000"
+): boolean {
+  const collections = listCollections(workspace, baseDir, userNumber);
+  const filtered = collections.filter((c) => c.id !== id);
+  if (filtered.length === collections.length) {
+    return false;
+  }
+  return saveCollections(filtered, workspace, baseDir, userNumber);
+}
+
+/**
+ * Adds or removes a session file in a collection
+ */
+export function toggleSessionInCollection(
+  collectionId: string,
+  sessionFile: string,
+  workspace: string = "default",
+  baseDir: string = "logs",
+  userNumber: string = "00000"
+): SessionCollection {
+  const collections = listCollections(workspace, baseDir, userNumber);
+  const target = collections.find((c) => c.id === collectionId);
+  if (!target) {
+    throw new Error(`Collection "${collectionId}" not found`);
+  }
+
+  const safeFilename = path.basename(sessionFile);
+  const hasFile = target.sessionFiles.includes(safeFilename);
+  if (hasFile) {
+    target.sessionFiles = target.sessionFiles.filter((f) => f !== safeFilename);
+  } else {
+    target.sessionFiles.push(safeFilename);
+  }
+  target.updatedAt = new Date().toISOString();
+
+  saveCollections(collections, workspace, baseDir, userNumber);
+  return target;
+}
+
+/**
  * Parses a saved conversation markdown file back into structured multi-turn messages & tool calls
  */
 export function parseConversationLog(filename: string, workspace: string = "default", baseDir: string = "logs", userNumber: string = "00000") {
@@ -923,6 +1097,27 @@ export function deleteConversationLog(filename: string, workspace: string = "def
         if (Array.isArray(orderList)) {
           const filtered = orderList.filter((f) => f !== safeFilename);
           fs.writeFileSync(orderFilePath, JSON.stringify(filtered, null, 2), "utf-8");
+        }
+      } catch (e) {}
+    }
+
+    // Clean up collections.json if present
+    const collectionsFilePath = path.join(getWorkspaceDir(workspace, baseDir, userNumber), "collections.json");
+    if (fs.existsSync(collectionsFilePath)) {
+      try {
+        const colList = JSON.parse(fs.readFileSync(collectionsFilePath, "utf-8"));
+        if (Array.isArray(colList)) {
+          let colChanged = false;
+          colList.forEach((col: any) => {
+            if (Array.isArray(col.sessionFiles) && col.sessionFiles.includes(safeFilename)) {
+              col.sessionFiles = col.sessionFiles.filter((f: string) => f !== safeFilename);
+              col.updatedAt = new Date().toISOString();
+              colChanged = true;
+            }
+          });
+          if (colChanged) {
+            fs.writeFileSync(collectionsFilePath, JSON.stringify(colList, null, 2), "utf-8");
+          }
         }
       } catch (e) {}
     }

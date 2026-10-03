@@ -37,6 +37,11 @@ import {
   createWorkspace,
   deleteWorkspace,
   renameWorkspace,
+  listCollections,
+  createCollection,
+  updateCollection,
+  deleteCollection,
+  toggleSessionInCollection,
 } from "./logger/conversation-logger.js";
 import { DocumentManager } from "./documents/document-manager.js";
 import { globalSkillManager } from "./skills/skill-manager.js";
@@ -1710,6 +1715,81 @@ app.delete("/api/workspaces/:name", requireAuth, (req, res) => {
     } else {
       res.status(404).json({ success: false, error: "Workspace not found." });
     }
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// 6b. Collections Management Endpoints (Scoped per Workspace & User)
+app.get("/api/collections", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const workspace = (req.query.workspace as string) || "default";
+    const collections = listCollections(workspace, "logs", userNumber);
+    res.json({ success: true, collections, workspace });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/collections", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const { name, color, description, workspace = "default" } = req.body;
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ success: false, error: "Collection name is required." });
+    }
+    const collection = createCollection(name, color, description, workspace, "logs", userNumber);
+    res.json({ success: true, collection });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.put("/api/collections/:id", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const id = String(req.params.id);
+    const { name, color, description, sessionFiles, workspace = "default" } = req.body;
+    const updated = updateCollection(
+      id,
+      { name, color, description, sessionFiles },
+      workspace,
+      "logs",
+      userNumber
+    );
+    res.json({ success: true, collection: updated });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.delete("/api/collections/:id", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const id = String(req.params.id);
+    const workspace = (req.query.workspace as string) || (req.body && req.body.workspace) || "default";
+    const deleted = deleteCollection(id, workspace, "logs", userNumber);
+    if (deleted) {
+      res.json({ success: true, message: `Deleted collection ${id}` });
+    } else {
+      res.status(404).json({ success: false, error: "Collection not found." });
+    }
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/collections/:id/toggle-session", requireAuth, (req, res) => {
+  try {
+    const { userNumber } = getAuthContext(req);
+    const id = String(req.params.id);
+    const { sessionFile, workspace = "default" } = req.body;
+    if (!sessionFile || typeof sessionFile !== "string") {
+      return res.status(400).json({ success: false, error: "sessionFile is required." });
+    }
+    const updated = toggleSessionInCollection(id, sessionFile, workspace, "logs", userNumber);
+    res.json({ success: true, collection: updated });
   } catch (err: any) {
     res.status(400).json({ success: false, error: err.message });
   }
