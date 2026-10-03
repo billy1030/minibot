@@ -17,7 +17,6 @@ import {
   Info,
   Plus,
   PlusCircle,
-  History,
   MessageSquare,
   Loader2,
   Trash2,
@@ -4440,31 +4439,6 @@ export function App() {
           </div>
         </div>
 
-        {/* New Chat Primary Action Button */}
-        <button
-          onClick={startNewChat}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            padding: "10px 14px",
-            borderRadius: 8,
-            background: "var(--accent)",
-            color: "#ffffff",
-            border: "none",
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 600,
-            marginBottom: 16,
-            transition: "opacity 0.2s",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
-          onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
-        >
-          <PlusCircle size={16} /> New Chat
-        </button>
-
         {/* Collapsible Past Sessions Section (Matching Active Model Card Style) */}
         <div
           style={{
@@ -4480,11 +4454,11 @@ export function App() {
             transition: "flex 0.2s ease, min-height 0.2s ease",
           }}
         >
-          {/* Collapsible Header bar: Matches Active Model Header Style */}
+          {/* Header bar with compact New Chat button and controls */}
           <div
             onClick={() => setShowPastSessions(!showPastSessions)}
             style={{
-              padding: "10px 14px",
+              padding: "7px 10px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -4495,11 +4469,36 @@ export function App() {
             }}
             title="Click to collapse / expand past sessions"
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <History size={14} color="var(--accent)" />
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-main)" }}>
-                Past Sessions
-              </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {/* Compact New Chat Button replacing the old large button & Past Sessions label */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startNewChat();
+                }}
+                title="Start a new chat session"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "4px 9px",
+                  borderRadius: 6,
+                  background: "var(--accent)",
+                  color: "#ffffff",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  transition: "opacity 0.15s ease",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+              >
+                <PlusCircle size={13} />
+                <span>New Chat</span>
+              </button>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
