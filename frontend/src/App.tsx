@@ -455,6 +455,7 @@ export function App() {
   const ttsAbortControllerRef = useRef<AbortController | null>(null);
   const chatAbortControllerRef = useRef<AbortController | null>(null);
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const activeUtteranceQueueRef = useRef<SpeechSynthesisUtterance[]>([]);
   const ttsSpeakingTimeoutRef = useRef<any>(null);
   // 快取最後一次合成/播放的音訊資訊，支援免重新生成立即重播 (Repeat without regeneration)
   const lastTtsPlaybackRef = useRef<{
@@ -1832,11 +1833,18 @@ export function App() {
       clearInterval(ttsSpeakingTimeoutRef.current);
       ttsSpeakingTimeoutRef.current = null;
     }
-    // Clear active utterance ref
+    // Clear active utterance ref and queue
     if (activeUtteranceRef.current) {
       activeUtteranceRef.current.onend = null;
       activeUtteranceRef.current.onerror = null;
       activeUtteranceRef.current = null;
+    }
+    if (activeUtteranceQueueRef.current) {
+      activeUtteranceQueueRef.current.forEach((u) => {
+        u.onend = null;
+        u.onerror = null;
+      });
+      activeUtteranceQueueRef.current = [];
     }
     // Stop MiniMax audio element without triggering onerror
     if (ttsAudioRef.current) {
@@ -1995,12 +2003,9 @@ export function App() {
         audioBlobUrl: null,
       };
 
-      const utterance = new SpeechSynthesisUtterance(cleanText);
       const targetLang = ttsLang === "cantonese" ? "zh-HK" : ttsLang === "mandarin" ? "zh-CN" : "en-US";
-      utterance.rate = ttsSpeed || 1.0;
-      utterance.pitch = 1.0;
-
       const voices = window.speechSynthesis.getVoices();
+
       // 1. If user explicitly picked a voice URI, apply it
       let selectedVoice: SpeechSynthesisVoice | undefined;
       if (localTtsVoiceURI) {
@@ -2022,12 +2027,47 @@ export function App() {
         }
       }
 
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-        utterance.lang = selectedVoice.lang || targetLang;
-      } else {
-        utterance.lang = targetLang;
-      }
+      // Split text into reasonable chunks (~120-180 characters) by punctuation to prevent
+      // Google / Chromium network-based voices from failing or silently aborting on long text
+      const splitIntoChunks = (str: string, maxLen = 140): string[] => {
+        // Regex matches sentences ending with common Chinese or English punctuation
+        const regex = /[^。！？!?；;\n]+[。！？!?；;\n]+|[^。！？!?；;\n]+$/g;
+        const rawSentences = str.match(regex) || [str];
+        const chunks: string[] = [];
+        let currentChunk = "";
+
+        for (const s of rawSentences) {
+          const trimmed = s.trim();
+          if (!trimmed) continue;
+          if (currentChunk.length + trimmed.length <= maxLen) {
+            currentChunk += (currentChunk ? " " : "") + trimmed;
+          } else {
+            if (currentChunk) chunks.push(currentChunk);
+            if (trimmed.length > maxLen) {
+              // Further split very long sentence by commas or pauses
+              const subParts = trimmed.split(/([，,、])/);
+              let subChunk = "";
+              for (const part of subParts) {
+                if (subChunk.length + part.length <= maxLen) {
+                  subChunk += part;
+                } else {
+                  if (subChunk.trim()) chunks.push(subChunk.trim());
+                  subChunk = part;
+                }
+              }
+              currentChunk = subChunk.trim();
+            } else {
+              currentChunk = trimmed;
+            }
+          }
+        }
+        if (currentChunk.trim()) {
+          chunks.push(currentChunk.trim());
+        }
+        return chunks.length > 0 ? chunks : [str];
+      };
+
+      const textChunks = splitIntoChunks(cleanText);
 
       const cleanupUtterance = () => {
         if (ttsSpeakingTimeoutRef.current) {
@@ -2035,20 +2075,47 @@ export function App() {
           ttsSpeakingTimeoutRef.current = null;
         }
         activeUtteranceRef.current = null;
+        if (activeUtteranceQueueRef.current) {
+          activeUtteranceQueueRef.current = [];
+        }
         setPlayingMessageId(null);
         setIsTtsPaused(false);
       };
 
-      utterance.onend = () => {
-        cleanupUtterance();
-      };
-      utterance.onerror = (e) => {
-        console.warn("Local TTS error:", e);
-        cleanupUtterance();
-      };
+      const utterances: SpeechSynthesisUtterance[] = textChunks.map((chunk, index) => {
+        const u = new SpeechSynthesisUtterance(chunk);
+        u.rate = ttsSpeed || 1.0;
+        u.pitch = 1.0;
+        if (selectedVoice) {
+          u.voice = selectedVoice;
+          u.lang = selectedVoice.lang || targetLang;
+        } else {
+          u.lang = targetLang;
+        }
 
-      // Keep reference to avoid Chromium garbage collection bug during speech
-      activeUtteranceRef.current = utterance;
+        // Only cleanup when the last sentence chunk completes
+        if (index === textChunks.length - 1) {
+          u.onend = () => {
+            cleanupUtterance();
+          };
+        } else {
+          u.onend = () => {
+            // Point activeUtteranceRef to next utterance in queue
+            activeUtteranceRef.current = utterances[index + 1] || null;
+          };
+        }
+
+        u.onerror = (e) => {
+          console.warn("Local TTS error on chunk", index, e);
+          cleanupUtterance();
+        };
+
+        return u;
+      });
+
+      // Keep strong references in queue to prevent Chromium garbage collection bug
+      activeUtteranceQueueRef.current = utterances;
+      activeUtteranceRef.current = utterances[0] || null;
 
       // Chrome speech synthesis paused bug workaround: keep resume pulsing during playback
       if (ttsSpeakingTimeoutRef.current) {
@@ -2058,7 +2125,7 @@ export function App() {
         if (window.speechSynthesis.speaking) {
           window.speechSynthesis.pause();
           window.speechSynthesis.resume();
-        } else {
+        } else if (!window.speechSynthesis.pending && !window.speechSynthesis.speaking) {
           if (ttsSpeakingTimeoutRef.current) {
             clearInterval(ttsSpeakingTimeoutRef.current);
             ttsSpeakingTimeoutRef.current = null;
@@ -2066,20 +2133,22 @@ export function App() {
         }
       }, 10000);
 
-      // In Chrome/Edge, calling cancel() immediately followed by speak() in the same microtask
-      // can cancel network-based voices like Google voice. A slight delay avoids this race.
+      // In Chrome/Edge, cancel preceding utterance then speak queue with a safe delay
       try {
         window.speechSynthesis.cancel();
       } catch {}
+
       setTimeout(() => {
         try {
           window.speechSynthesis.resume();
-          window.speechSynthesis.speak(utterance);
+          utterances.forEach((u) => {
+            window.speechSynthesis.speak(u);
+          });
         } catch (err) {
           console.error("speechSynthesis.speak error:", err);
           cleanupUtterance();
         }
-      }, 40);
+      }, 50);
       return;
     }
 
