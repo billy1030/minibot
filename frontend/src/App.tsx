@@ -2524,7 +2524,7 @@ export function App() {
           justifyContent: "space-between",
           padding: "0 16px",
           flexWrap: "nowrap",
-          overflowX: "auto",
+          overflow: "visible",
           zIndex: 100,
           gap: 12,
           boxSizing: "border-box",
