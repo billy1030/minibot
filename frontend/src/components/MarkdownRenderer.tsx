@@ -14,6 +14,7 @@ marked.setOptions({
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  disableDiagrams?: boolean;
 }
 
 interface ContentSegment {
@@ -22,7 +23,7 @@ interface ContentSegment {
   html?: string;
 }
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className = "" }) => {
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className = "", disableDiagrams = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const segments = useMemo<ContentSegment[]>(() => {
@@ -32,6 +33,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     // Clean outer markdown fence wrapper if message wrapped completely
     if (clean.startsWith("```markdown") && clean.endsWith("```")) {
       clean = clean.slice(11, -3).trim();
+    }
+
+    if (disableDiagrams) {
+      try {
+        const rawParsed = marked.parse(clean, { async: false }) as string;
+        return [{ type: 'markdown', content: clean, html: rawParsed }];
+      } catch {
+        return [{ type: 'markdown', content: clean, html: clean }];
+      }
     }
 
     // Isolate Draw.io diagram blocks (````drawio, ````draw.io, ````xml with mxfile, or standalone <mxfile> tags)

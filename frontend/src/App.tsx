@@ -6025,7 +6025,7 @@ export function App() {
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <MarkdownRenderer content={m.content} />
+                        <MarkdownRenderer content={m.content} disableDiagrams />
                       </div>
                       <button
                         type="button"

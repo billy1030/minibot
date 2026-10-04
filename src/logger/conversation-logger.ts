@@ -25,6 +25,18 @@ interface ConversationSession {
 }
 
 /**
+ * Strips injected system instructions and skill directives to keep user prompts clean
+ */
+export function cleanUserPrompt(prompt: string): string {
+  if (!prompt) return "";
+  return prompt
+    .replace(/\r?\n\r?\n\[System Instruction:[\s\S]*?\](?=\r?\n|$)/g, "")
+    .replace(/\r?\n\r?\n\[Explicit User Skill Directive:[\s\S]*?\](?=\r?\n|$)/g, "")
+    .replace(/\r?\n\r?\n?- \*\*Active Skills\*\*: `[^`]+`(?=\r?\n|$)/g, "")
+    .trim();
+}
+
+/**
  * Format a Date object into YYYY-MM-DD_HH-mm-ss
  */
 function formatDateForFilename(d: Date): string {
@@ -272,7 +284,7 @@ export function saveConversationLog(session: ConversationSession, baseDir: strin
       "---",
       "",
       "## Turn 1: User Prompt",
-      session.userPrompt,
+      cleanUserPrompt(session.userPrompt),
       "",
       ...(session.activeSkills && session.activeSkills.length > 0 ? [`- **Active Skills**: \`${JSON.stringify(session.activeSkills)}\``, ""] : []),
       "---",
@@ -331,7 +343,7 @@ export function saveConversationLog(session: ConversationSession, baseDir: strin
       "---",
       "",
       `## Turn ${turnNumber}: User Prompt`,
-      session.userPrompt,
+      cleanUserPrompt(session.userPrompt),
       "",
       ...(session.activeSkills && session.activeSkills.length > 0 ? [`- **Active Skills**: \`${JSON.stringify(session.activeSkills)}\``, ""] : []),
       "---",
@@ -761,7 +773,7 @@ export function parseConversationLog(filename: string, workspace: string = "defa
     if (!turnHeaderMatch) continue;
 
     const turnNum = parseInt(turnHeaderMatch[1], 10);
-    const userPrompt = turnHeaderMatch[2].trim();
+    const userPrompt = cleanUserPrompt(turnHeaderMatch[2]);
 
     const answerMatch = turnBlock.match(/## (?:Turn \d+: )?(?:Final )?Synthesized Answer\r?\n\r?\n([\s\S]*?)$/);
     let answer = answerMatch ? answerMatch[1].trim() : "";
