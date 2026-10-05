@@ -32,7 +32,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "web_search",
         description:
-          "Search the internet for current news, documentation, information, or answers to queries. Returns relevant snippets and titles.",
+          "Search the internet for current news, documentation, information, or answers to queries. Returns relevant snippets and titles. When querying for recent or latest events, formulate queries using the current year/date provided in system prompt rather than outdated training dates.",
         inputSchema: {
           type: "object",
           properties: {

@@ -112,12 +112,20 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
       return cleanSvgStr.replace(/&(?!(?:amp|lt|gt|quot|apos|#\d+|#[xX][0-9a-fA-F]+);)/g, '&amp;');
     };
 
-    // First capture fenced SVG blocks (both completed and unclosed/truncated fences)
-    clean = clean.replace(/`{3,}(?:xml|html|svg)?\s*([\s\S]*?<svg[\s\S]*?(?:<\/svg>)?)\s*(?:`{3,}|$)/gi, (match, svgContent) => {
-      // Only treat as SVG if it has <svg tag
-      if (!svgContent.includes('<svg')) return match;
+    // Capture fenced SVG blocks in two passes to avoid false positives in tech-doc markdown.
+    // Pass 1: explicit ```svg fences - always a full SVG diagram
+    clean = clean.replace(/`{3,}svg\s*([\s\S]*?)(?:`{3,}|$)/gi, (_match, svgContent) => {
       const token = `MINIBOTSVGBLOCKTOKEN${svgBlocks.length}ENDTOKEN`;
       svgBlocks.push(sanitizeSvgXML(svgContent.trim()));
+      return `\n\n${token}\n\n`;
+    });
+
+    // Pass 2: ```xml / ```html fences - only if block starts with <svg (not code snippets like <text>/<tspan>)
+    clean = clean.replace(/`{3,}(?:xml|html)\s*([\s\S]*?)(?:`{3,}|$)/gi, (match, svgContent) => {
+      const trimmed = svgContent.trimStart();
+      if (!trimmed.match(/^<svg[\s>]/i)) return match;
+      const token = `MINIBOTSVGBLOCKTOKEN${svgBlocks.length}ENDTOKEN`;
+      svgBlocks.push(sanitizeSvgXML(trimmed));
       return `\n\n${token}\n\n`;
     });
 

@@ -482,7 +482,7 @@ export const BUILTIN_INPROCESS_TOOLS: DiscoveredTool[] = [
   {
     serverName: "web-search",
     name: "web_search",
-    description: "Search the internet for current news, documentation, information, or answers to queries.",
+    description: "Search the internet for current news, documentation, information, or answers to queries. When querying for recent or latest events, formulate queries using the current year/date provided in system prompt rather than outdated training dates.",
     inputSchema: {
       type: "object",
       properties: {

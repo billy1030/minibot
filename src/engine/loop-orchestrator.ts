@@ -57,8 +57,21 @@ export class LoopOrchestrator {
     maxIterationsOverride?: number,
     depth: number = 0
   ): Promise<{ answer: string; iterations: number; history: OpenAI.Chat.Completions.ChatCompletionMessageParam[]; activeSkills?: string[]; limitReached?: boolean }> {
-    // 1. Build initial system message combining system prompt, attached docs, and AI skills
-    const systemPromptParts = [this.config.prompts.systemPrompt];
+    // 1. Build initial system message combining system prompt, temporal context, attached docs, and AI skills
+    const now = new Date();
+    const isoTime = now.toISOString();
+    const localTimeStr = new Intl.DateTimeFormat("en-US", {
+      dateStyle: "full",
+      timeStyle: "long",
+    }).format(now);
+
+    const systemPromptParts = [
+      this.config.prompts.systemPrompt,
+      `\n--- Current System Time & Temporal Context ---\n` +
+      `Current Local Date & Time: ${localTimeStr}\n` +
+      `Current ISO Timestamp: ${isoTime}\n` +
+      `Temporal Anchor Rule: When answering queries, evaluating "latest", "recent", "today", or "this year", or constructing search queries with web_search, you MUST anchor your temporal understanding to this current date/time. Do not assume outdated training cutoff dates.\n`
+    ];
 
     if (attachedContext && attachedContext.trim().length > 0) {
       systemPromptParts.push(
