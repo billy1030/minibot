@@ -1,0 +1,13 @@
+{
+  "kimi_webbridge": {
+    "type": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "kimi-webbridge",
+      "mcp"
+    ],
+    "enabled": true,
+    "installedAt": "2026-10-05T08:17:43.951Z"
+  }
+}
