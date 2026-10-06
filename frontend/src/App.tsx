@@ -58,6 +58,7 @@ import {
   ArrowUp,
   ArrowDown,
   Save,
+  BookmarkCheck,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
@@ -192,6 +193,9 @@ export function App() {
       }
       if (quickModelMenuRef.current && !quickModelMenuRef.current.contains(e.target as Node)) {
         setShowQuickModelMenu(false);
+      }
+      if (presetPromptsMenuRef.current && !presetPromptsMenuRef.current.contains(e.target as Node)) {
+        setShowPresetPromptsMenu(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -335,6 +339,12 @@ export function App() {
     color: string;
   } | null>(null);
   const mermaidMenuRef = useRef<HTMLDivElement>(null);
+  const [showPresetPromptsMenu, setShowPresetPromptsMenu] = useState<boolean>(false);
+  const [presetPrompts, setPresetPrompts] = useState<{ id: string; title: string; prompt: string }[]>([]);
+  const [isAddingNewPreset, setIsAddingNewPreset] = useState<boolean>(false);
+  const [newPresetTitle, setNewPresetTitle] = useState<string>("");
+  const [newPresetPrompt, setNewPresetPrompt] = useState<string>("");
+  const presetPromptsMenuRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
@@ -580,6 +590,106 @@ export function App() {
     setTimeout(() => {
       chatInputRef.current?.focus();
     }, 50);
+  };
+
+  // 📝 Load preset prompts from backend JSON file on local disk
+  const loadPresetPrompts = async () => {
+    try {
+      const res = await fetch("/api/preset-prompts", { credentials: "include" });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.prompts)) {
+        setPresetPrompts(data.prompts);
+      }
+    } catch (err) {
+      console.warn("Failed to load preset prompts from disk:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadPresetPrompts();
+  }, []);
+
+  const handleSelectPresetPrompt = (promptText: string) => {
+    if (inputPrompt.trim()) {
+      setInputPrompt((prev) => `${prev}\n\n${promptText}`);
+    } else {
+      setInputPrompt(promptText);
+    }
+    setShowPresetPromptsMenu(false);
+    setTimeout(() => {
+      chatInputRef.current?.focus();
+    }, 50);
+  };
+
+  const handleSaveNewPresetPrompt = async () => {
+    if (!newPresetTitle.trim() || !newPresetPrompt.trim()) {
+      showAlert("Please enter both a title and prompt text.", "info", "Missing Fields");
+      return;
+    }
+    const newEntry = {
+      id: `custom-${Date.now()}`,
+      title: newPresetTitle.trim(),
+      prompt: newPresetPrompt.trim(),
+    };
+    const updated = [...presetPrompts, newEntry];
+    setPresetPrompts(updated);
+    setIsAddingNewPreset(false);
+    setNewPresetTitle("");
+    setNewPresetPrompt("");
+
+    try {
+      const res = await fetch("/api/preset-prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ prompts: updated }),
+      });
+      if (!res.ok) {
+        let errMsg = `Server returned HTTP ${res.status}`;
+        try {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errData = await res.json();
+            errMsg = errData.error || errMsg;
+          } else {
+            const text = await res.text();
+            if (text && !text.includes("<!doctype html>")) {
+              errMsg = text.slice(0, 150);
+            } else {
+              errMsg = `Backend endpoint /api/preset-prompts not reachable or server needs restart (HTTP ${res.status}).`;
+            }
+          }
+        } catch (_) {}
+        showAlert(errMsg, "error", "Save Failed");
+        return;
+      }
+      const data = await res.json();
+      if (!data.success) {
+        showAlert(data.error || "Failed to save preset to disk.", "error", "Save Failed");
+      }
+    } catch (err: any) {
+      console.error("Failed to save preset prompt to disk:", err);
+      showAlert(err.message, "error", "Network Error");
+    }
+  };
+
+  const handleDeletePresetPrompt = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = presetPrompts.filter((p) => p.id !== id);
+    setPresetPrompts(updated);
+    try {
+      const res = await fetch("/api/preset-prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ prompts: updated }),
+      });
+      if (!res.ok) {
+        console.warn(`Failed to delete preset prompt: HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.error("Failed to delete preset prompt from disk:", err);
+    }
   };
 
   const handleReorderSessions = async (newOrderedSessions: any[]) => {
@@ -7868,6 +7978,232 @@ export function App() {
                     <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Paste editable code directly into input</div>
                   </div>
                 </button>
+              </div>
+            )}
+          </div>
+
+          {/* 🔖 Preset Prompts (Saved to Local Disk JSON) Button & Menu */}
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowPresetPromptsMenu((v) => !v);
+                setIsAddingNewPreset(false);
+              }}
+              title="Useful Prompt Presets (Saved to local disk config/preset-prompts.json)"
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 7,
+                background: showPresetPromptsMenu ? "rgba(2, 132, 199, 0.15)" : "var(--bg-card)",
+                border: showPresetPromptsMenu ? "1.5px solid var(--accent, #0284c7)" : "1px solid var(--border-color)",
+                color: showPresetPromptsMenu ? "var(--accent, #0284c7)" : "var(--text-muted)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                position: "relative",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                if (!showPresetPromptsMenu) {
+                  e.currentTarget.style.borderColor = "var(--accent, #0284c7)";
+                  e.currentTarget.style.color = "var(--accent, #0284c7)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!showPresetPromptsMenu) {
+                  e.currentTarget.style.borderColor = "var(--border-color)";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }
+              }}
+            >
+              <Bookmark size={15} color={showPresetPromptsMenu ? "var(--accent, #0284c7)" : "var(--text-muted)"} />
+            </button>
+
+            {showPresetPromptsMenu && (
+              <div
+                ref={presetPromptsMenuRef}
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 8px)",
+                  left: 0,
+                  zIndex: 1150,
+                  background: "var(--bg-secondary)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: 12,
+                  padding: "10px 12px",
+                  boxShadow: "0 14px 32px rgba(0,0,0,0.22)",
+                  minWidth: 340,
+                  maxWidth: "92vw",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 6, borderBottom: "1px solid var(--border-color)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <BookmarkCheck size={14} color="var(--accent, #0284c7)" />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-main)" }}>Useful Prompts</span>
+                    <span style={{ fontSize: 9.5, color: "var(--text-muted)", background: "rgba(2, 132, 199, 0.1)", padding: "1px 5px", borderRadius: 4 }}>
+                      Disk JSON
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingNewPreset((v) => !v)}
+                    title={isAddingNewPreset ? "Cancel adding" : "Add custom prompt preset to local disk"}
+                    style={{
+                      background: isAddingNewPreset ? "rgba(239, 68, 68, 0.12)" : "rgba(2, 132, 199, 0.12)",
+                      border: "none",
+                      color: isAddingNewPreset ? "#ef4444" : "var(--accent, #0284c7)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      padding: "2px 8px",
+                      borderRadius: 4,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    {isAddingNewPreset ? <X size={12} /> : <Plus size={12} />}
+                    {isAddingNewPreset ? "Cancel" : "Add New"}
+                  </button>
+                </div>
+
+                {isAddingNewPreset && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 8, background: "var(--bg-card)", borderRadius: 8, border: "1px solid var(--border-color)", marginTop: 4 }}>
+                    <input
+                      type="text"
+                      placeholder="Title (e.g. ⚡ Optimize Query)"
+                      value={newPresetTitle}
+                      onChange={(e) => setNewPresetTitle(e.target.value)}
+                      style={{
+                        padding: "6px 8px",
+                        fontSize: 12,
+                        background: "var(--bg-secondary)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: 6,
+                        color: "var(--text-main)",
+                        outline: "none",
+                      }}
+                    />
+                    <textarea
+                      placeholder="Enter preset prompt instructions..."
+                      rows={3}
+                      value={newPresetPrompt}
+                      onChange={(e) => setNewPresetPrompt(e.target.value)}
+                      style={{
+                        padding: "6px 8px",
+                        fontSize: 12,
+                        background: "var(--bg-secondary)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: 6,
+                        color: "var(--text-main)",
+                        outline: "none",
+                        resize: "vertical",
+                      }}
+                    />
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddingNewPreset(false)}
+                        style={{
+                          padding: "4px 10px",
+                          fontSize: 11.5,
+                          background: "transparent",
+                          border: "1px solid var(--border-color)",
+                          color: "var(--text-muted)",
+                          borderRadius: 5,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveNewPresetPrompt}
+                        style={{
+                          padding: "4px 10px",
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          background: "var(--accent, #0284c7)",
+                          border: "none",
+                          color: "#ffffff",
+                          borderRadius: 5,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Save to Disk
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, marginTop: 2 }}>
+                  {presetPrompts.length === 0 ? (
+                    <div style={{ padding: "16px", textAlign: "center", fontSize: 11.5, color: "var(--text-muted)" }}>
+                      No preset prompts found. Click "Add New" to create one.
+                    </div>
+                  ) : (
+                    presetPrompts.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => handleSelectPresetPrompt(item.prompt)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "7px 10px",
+                          borderRadius: 6,
+                          cursor: "pointer",
+                          background: "transparent",
+                          border: "1px solid transparent",
+                          transition: "all 0.15s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "var(--bg-card)";
+                          e.currentTarget.style.borderColor = "var(--border-color)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.borderColor = "transparent";
+                        }}
+                      >
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1, marginRight: 8 }}>
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {item.title}
+                          </span>
+                          <span style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {item.prompt.split("\n")[0]}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeletePresetPrompt(item.id, e)}
+                            title="Delete this preset from disk"
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "var(--text-muted)",
+                              cursor: "pointer",
+                              padding: 2,
+                              borderRadius: 4,
+                              display: "flex",
+                              alignItems: "center",
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = "#ef4444")}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </div>

@@ -1247,6 +1247,68 @@ app.post("/api/agents-rules", requireAuth, (req, res) => {
   }
 });
 
+// ==========================================
+// 3e. Preset Prompts Local Disk JSON Storage
+// ==========================================
+const PRESET_PROMPTS_FILE = path.resolve(process.cwd(), "config", "preset-prompts.json");
+
+app.get("/api/preset-prompts", requireAuth, (req, res) => {
+  try {
+    if (!fs.existsSync(PRESET_PROMPTS_FILE)) {
+      const defaultPresets = [
+        {
+          id: "code-review",
+          title: "🔍 Code Review & Refactor",
+          prompt: "Please perform a comprehensive code review on the provided code/files. Focus on:\n1. Potential bugs, edge cases, and concurrency risks\n2. Performance bottlenecks and memory leaks\n3. Code readability, idiomatic style, and maintainability\n4. Specific refactoring suggestions with diff/code examples"
+        },
+        {
+          id: "debug-fix",
+          title: "🐞 Debug & Root Cause Analysis",
+          prompt: "Please help diagnose and fix the following issue:\n1. Analyze the root cause and failure chain based on logs/error stack\n2. Pinpoint the exact faulty files and lines\n3. Provide the minimal, cleanest fix without breaking existing functionality\n4. Recommend preventive checks or regression tests"
+        },
+        {
+          id: "arch-diagram",
+          title: "🏗️ System Architecture & Diagram",
+          prompt: "Please break down the system architecture for this feature/service. Detail:\n1. Core components and their specific responsibilities\n2. Data flow and inter-service communication protocols\n3. An Editorial SVG architecture diagram or Mermaid flowchart visualizing the topology\n4. Key scalability and high-availability considerations"
+        },
+        {
+          id: "tech-spec",
+          title: "📝 Technical Design Specification",
+          prompt: "Please draft a structured Technical Design Spec (RFC) for this project:\n- Background & Business Objective\n- Non-Goals\n- Architecture & Component Design\n- Data Schema / API Contracts\n- Security, 2FA, and Audit Considerations\n- Rollout, Migration, and Rollback Plan"
+        },
+        {
+          id: "unit-tests",
+          title: "⚡ Generate Unit & Integration Tests",
+          prompt: "Please write high-coverage unit and edge-case integration tests for this implementation:\n1. Happy path scenarios\n2. Edge cases (null/undefined, boundary values, network timeouts)\n3. Error handling and fail-fast behaviors\n4. Clear assertions and mock setups"
+        }
+      ];
+      fs.mkdirSync(path.dirname(PRESET_PROMPTS_FILE), { recursive: true });
+      fs.writeFileSync(PRESET_PROMPTS_FILE, JSON.stringify(defaultPresets, null, 2), "utf-8");
+      return res.json({ success: true, prompts: defaultPresets });
+    }
+    const raw = fs.readFileSync(PRESET_PROMPTS_FILE, "utf-8");
+    const prompts = JSON.parse(raw);
+    res.json({ success: true, prompts });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/preset-prompts", requireAuth, (req, res) => {
+  try {
+    const { prompts } = req.body;
+    if (!Array.isArray(prompts)) {
+      return res.status(400).json({ success: false, error: "Prompts must be an array." });
+    }
+    fs.mkdirSync(path.dirname(PRESET_PROMPTS_FILE), { recursive: true });
+    fs.writeFileSync(PRESET_PROMPTS_FILE, JSON.stringify(prompts, null, 2), "utf-8");
+    res.json({ success: true, message: "Preset prompts saved successfully to local disk." });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+
 
 
 // 3b. Server-side LLM Proxy & Health Test (Bypasses all client-side CORS and protects API keys)
