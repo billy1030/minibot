@@ -8147,7 +8147,7 @@ export function App() {
                       No preset prompts found. Click "Add New" to create one.
                     </div>
                   ) : (
-                    presetPrompts.map((item) => (
+                    presetPrompts.map((item, idx) => (
                       <div
                         key={item.id}
                         onClick={() => handleSelectPresetPrompt(item.prompt)}
@@ -8171,13 +8171,30 @@ export function App() {
                           e.currentTarget.style.borderColor = "transparent";
                         }}
                       >
-                        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1, marginRight: 8 }}>
-                          <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {item.title}
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0, flex: 1, marginRight: 8 }}>
+                          <span
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: 700,
+                              color: "var(--accent, #0284c7)",
+                              background: "rgba(2, 132, 199, 0.1)",
+                              padding: "1px 5px",
+                              borderRadius: 4,
+                              flexShrink: 0,
+                              marginTop: 1,
+                              lineHeight: "14px",
+                            }}
+                          >
+                            #{idx + 1}
                           </span>
-                          <span style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {item.prompt.split("\n")[0]}
-                          </span>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
+                            <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {item.title}
+                            </span>
+                            <span style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {item.prompt.split("\n")[0]}
+                            </span>
+                          </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                           <button
