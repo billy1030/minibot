@@ -4879,10 +4879,38 @@ export function App() {
                   }
                 });
 
+                // Build Hierarchical Display Order Mapping (Root: #1, #2... Child: #32.1, #32.2... Grandchild: #32.1.1)
+                const sessionIndexMap = new Map<string, string>();
+                rootSessions.forEach((root, rootIdx) => {
+                  const rootNum = (rootIdx + 1).toString();
+                  sessionIndexMap.set(root.filename, rootNum);
+                  const assignChildren = (parentFile: string, prefix: string) => {
+                    const children = childrenMap.get(parentFile) || [];
+                    children.forEach((child, cIdx) => {
+                      const childNum = `${prefix}.${cIdx + 1}`;
+                      sessionIndexMap.set(child.filename, childNum);
+                      assignChildren(child.filename, childNum);
+                    });
+                  };
+                  assignChildren(root.filename, rootNum);
+                });
+
                 // Render session card with multi-level depth support (Level 0: Root, Level 1: Sub, Level 2: Sub-sub/3rd level, etc.)
-                const renderSessionCard = (session: any, depth: number = 0) => {
+                const renderSessionCard = (
+                  session: any,
+                  depth: number = 0,
+                  overrideIndex?: string | number,
+                  customChildrenMap?: Map<string, any[]>,
+                  customIndexMap?: Map<string, string>
+                ) => {
                   const isActive = activeSessionFile === session.filename;
-                  const children = childrenMap.get(session.filename) || [];
+                  const itemIndex =
+                    overrideIndex !== undefined
+                      ? overrideIndex
+                      : customIndexMap
+                      ? customIndexMap.get(session.filename)
+                      : sessionIndexMap.get(session.filename);
+                  const children = (customChildrenMap ? customChildrenMap.get(session.filename) : childrenMap.get(session.filename)) || [];
                   const hasChildren = children.length > 0;
                   const isChild = depth > 0;
 
@@ -5154,7 +5182,7 @@ export function App() {
                           )}
                         </div>
 
-                        {/* Second Line: Metadata (Timestamp on Far Left, Badges & Action Icons on Far Right) */}
+                        {/* Second Line: Metadata (Numbering + Timestamp on Far Left, Badges & Action Icons on Far Right) */}
                         <div
                           style={{
                             fontSize: 9.5,
@@ -5167,8 +5195,26 @@ export function App() {
                             gap: 2,
                           }}
                         >
-                          {/* Left Side: Timestamp / Filename (Click to copy to clipboard) */}
-                          <div style={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
+                          {/* Left Side: Numbering (#1 to #N) + Timestamp / Filename (Click to copy to clipboard) */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, overflow: "hidden" }}>
+                            {itemIndex !== undefined && (
+                              <span
+                                style={{
+                                  fontSize: 9,
+                                  fontFamily: "ui-monospace, monospace",
+                                  color: "var(--text-muted)",
+                                  fontWeight: 700,
+                                  padding: "0 3px",
+                                  borderRadius: 3,
+                                  backgroundColor: "rgba(100, 116, 139, 0.12)",
+                                  flexShrink: 0,
+                                  lineHeight: "13px",
+                                }}
+                                title={`Log #${itemIndex}`}
+                              >
+                                #{itemIndex}
+                              </span>
+                            )}
                             <span
                               onClick={async (e) => {
                                 e.stopPropagation();
@@ -5411,7 +5457,9 @@ export function App() {
                             marginBottom: 3,
                           }}
                         >
-                          {children.map((child) => renderSessionCard(child, depth + 1))}
+                          {children.map((child) =>
+                            renderSessionCard(child, depth + 1, undefined, customChildrenMap, customIndexMap)
+                          )}
                         </div>
                       )}
                     </div>
@@ -5441,6 +5489,47 @@ export function App() {
                         const colSessions = col.sessionFiles
                           .map((f) => sessionMap.get(f))
                           .filter(Boolean);
+
+                        // Build scoped tree for this collection so forks render hierarchically
+                        const colScopedMap = new Map<string, any>();
+                        const colScopedChildrenMap = new Map<string, any[]>();
+                        const colScopedRoots: any[] = [];
+                        colSessions.forEach((s) => colScopedMap.set(s.filename, s));
+                        colSessions.forEach((s) => {
+                          const parent = s.clonedFrom?.parentFilename;
+                          if (parent && colScopedMap.has(parent)) {
+                            if (!colScopedChildrenMap.has(parent)) colScopedChildrenMap.set(parent, []);
+                            colScopedChildrenMap.get(parent)!.push(s);
+                          } else {
+                            colScopedRoots.push(s);
+                          }
+                        });
+
+                        // Build Hierarchical numbering for collection cards (Root: #1, #2... Child: #1.1, etc.)
+                        const colIndexMap = new Map<string, string>();
+                        colScopedRoots.forEach((root, rootIdx) => {
+                          const rootNum = (rootIdx + 1).toString();
+                          colIndexMap.set(root.filename, rootNum);
+                          const assignColChildren = (parentFile: string, prefix: string) => {
+                            const children = colScopedChildrenMap.get(parentFile) || [];
+                            children.forEach((child, cIdx) => {
+                              const childNum = `${prefix}.${cIdx + 1}`;
+                              colIndexMap.set(child.filename, childNum);
+                              assignColChildren(child.filename, childNum);
+                            });
+                          };
+                          assignColChildren(root.filename, rootNum);
+                        });
+
+                        const renderColCard = (session: any, depth: number = 0): React.ReactNode => {
+                          return renderSessionCard(
+                            session,
+                            depth,
+                            colIndexMap.get(session.filename),
+                            colScopedChildrenMap,
+                            colIndexMap
+                          );
+                        };
 
                         return (
                           <div
@@ -5619,7 +5708,7 @@ export function App() {
                                     or the bookmark icon on any card.
                                   </div>
                                 ) : (
-                                  colSessions.map((s) => renderSessionCard(s, 0))
+                                  colScopedRoots.map((root) => renderColCard(root, 0))
                                 )}
                               </div>
                             )}
@@ -5628,79 +5717,121 @@ export function App() {
                       })}
 
                       {/* Uncategorized Section */}
-                      {unassignedSessions.length > 0 && (
-                        <div
-                          style={{
-                            borderRadius: 6,
-                            border: "1px dashed var(--border-color)",
-                            background: "transparent",
-                            overflow: "hidden",
-                            marginTop: 4,
-                          }}
-                        >
+                      {unassignedSessions.length > 0 && (() => {
+                        const unScopedMap = new Map<string, any>();
+                        const unScopedChildrenMap = new Map<string, any[]>();
+                        const unScopedRoots: any[] = [];
+                        unassignedSessions.forEach((s) => unScopedMap.set(s.filename, s));
+                        unassignedSessions.forEach((s) => {
+                          const parent = s.clonedFrom?.parentFilename;
+                          if (parent && unScopedMap.has(parent)) {
+                            if (!unScopedChildrenMap.has(parent)) unScopedChildrenMap.set(parent, []);
+                            unScopedChildrenMap.get(parent)!.push(s);
+                          } else {
+                            unScopedRoots.push(s);
+                          }
+                        });
+
+                        // Build Hierarchical numbering for uncategorized cards (Root: #1, #2... Child: #1.1, etc.)
+                        const unIndexMap = new Map<string, string>();
+                        unScopedRoots.forEach((root, rootIdx) => {
+                          const rootNum = (rootIdx + 1).toString();
+                          unIndexMap.set(root.filename, rootNum);
+                          const assignUnChildren = (parentFile: string, prefix: string) => {
+                            const children = unScopedChildrenMap.get(parentFile) || [];
+                            children.forEach((child, cIdx) => {
+                              const childNum = `${prefix}.${cIdx + 1}`;
+                              unIndexMap.set(child.filename, childNum);
+                              assignUnChildren(child.filename, childNum);
+                            });
+                          };
+                          assignUnChildren(root.filename, rootNum);
+                        });
+
+                        const renderUnCard = (session: any, depth: number = 0): React.ReactNode => {
+                          return renderSessionCard(
+                            session,
+                            depth,
+                            unIndexMap.get(session.filename),
+                            unScopedChildrenMap,
+                            unIndexMap
+                          );
+                        };
+
+                        return (
                           <div
-                            onClick={() => {
-                              const isUncatExpanded = !!expandedCollections.__uncategorized;
-                              setExpandedCollections((prev) => {
-                                const next = { ...prev, __uncategorized: !isUncatExpanded };
-                                try {
-                                  localStorage.setItem("minibot_expanded_collections", JSON.stringify(next));
-                                } catch {}
-                                return next;
-                              });
-                            }}
                             style={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              padding: "6px 8px",
-                              background: "rgba(0,0,0,0.03)",
-                              cursor: "pointer",
-                              userSelect: "none",
-                              borderBottom:
-                                expandedCollections.__uncategorized
-                                  ? "1px dashed var(--border-color)"
-                                  : "none",
+                              borderRadius: 6,
+                              border: "1px dashed var(--border-color)",
+                              background: "transparent",
+                              overflow: "hidden",
+                              marginTop: 4,
                             }}
                           >
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              {expandedCollections.__uncategorized ? (
-                                <ChevronDown size={13} color="var(--text-muted)" />
-                              ) : (
-                                <ChevronRight size={13} color="var(--text-muted)" />
-                              )}
-                              <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)" }}>
-                                Uncategorized
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: 9.5,
-                                  padding: "0 5px",
-                                  borderRadius: 4,
-                                  background: "rgba(100, 116, 139, 0.12)",
-                                  color: "var(--text-muted)",
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {unassignedSessions.length}
-                              </span>
-                            </div>
-                          </div>
-
-                          {expandedCollections.__uncategorized && (
                             <div
+                              onClick={() => {
+                                const isUncatExpanded = !!expandedCollections.__uncategorized;
+                                setExpandedCollections((prev) => {
+                                  const next = { ...prev, __uncategorized: !isUncatExpanded };
+                                  try {
+                                    localStorage.setItem("minibot_expanded_collections", JSON.stringify(next));
+                                  } catch {}
+                                  return next;
+                                });
+                              }}
                               style={{
-                                padding: "4px",
                                 display: "flex",
-                                flexDirection: "column",
-                                gap: 4,
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "6px 8px",
+                                background: "rgba(0,0,0,0.03)",
+                                cursor: "pointer",
+                                userSelect: "none",
+                                borderBottom:
+                                  expandedCollections.__uncategorized
+                                    ? "1px dashed var(--border-color)"
+                                    : "none",
                               }}
                             >
-                              {unassignedSessions.map((s) => renderSessionCard(s, 0))}
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                {expandedCollections.__uncategorized ? (
+                                  <ChevronDown size={13} color="var(--text-muted)" />
+                                ) : (
+                                  <ChevronRight size={13} color="var(--text-muted)" />
+                                )}
+                                <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-muted)" }}>
+                                  Uncategorized
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: 9.5,
+                                    padding: "0 5px",
+                                    borderRadius: 4,
+                                    background: "rgba(100, 116, 139, 0.12)",
+                                    color: "var(--text-muted)",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {unassignedSessions.length}
+                                </span>
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      )}
+
+                            {expandedCollections.__uncategorized && (
+                              <div
+                                style={{
+                                  padding: "4px",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 4,
+                                }}
+                              >
+                                {unScopedRoots.map((root) => renderUnCard(root, 0))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 }
