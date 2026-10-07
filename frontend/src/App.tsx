@@ -345,7 +345,7 @@ export function App() {
   const [newPresetTitle, setNewPresetTitle] = useState<string>("");
   const [newPresetPrompt, setNewPresetPrompt] = useState<string>("");
   const presetPromptsMenuRef = useRef<HTMLDivElement>(null);
-  const chatInputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   // 🎯 Track actively focused/selected conversation turn during navigation
@@ -2694,30 +2694,30 @@ export function App() {
       <header
         style={{
           width: "100%",
-          height: 56,
+          height: 48,
           flexShrink: 0,
           background: "var(--bg-secondary)",
           borderBottom: "1px solid var(--border-color)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "0 16px",
+          padding: "0 10px",
           flexWrap: "nowrap",
           overflow: "visible",
           zIndex: 100,
-          gap: 12,
+          gap: 6,
           boxSizing: "border-box",
         }}
       >
-        {/* Left Side: Brand Logo Area (Configured so divider sits precisely at 325px from left screen edge: 16px padding + 309px width) */}
-        <div style={{ display: "flex", alignItems: "center", width: 309, flexShrink: 0 }}>
+        {/* Left Side: Brand Logo Area (Compact auto-width) */}
+        <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
           {/* Brand Logo & Name */}
-          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <div
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
+                width: 28,
+                height: 28,
+                borderRadius: 7,
                 background: "linear-gradient(135deg, var(--accent), var(--accent-purple))",
                 display: "flex",
                 alignItems: "center",
@@ -2725,10 +2725,10 @@ export function App() {
                 flexShrink: 0,
               }}
             >
-              <Cpu size={18} color="#fff" />
+              <Cpu size={16} color="#fff" />
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--text-main)", margin: 0, letterSpacing: "-0.2px" }}>Minibot</h2>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-main)", margin: 0, letterSpacing: "-0.2px" }}>Minibot</h2>
               <span
                 style={{
                   fontSize: 10,
@@ -2749,7 +2749,7 @@ export function App() {
               style={{
                 fontSize: 10,
                 fontWeight: 600,
-                padding: "1px 6px",
+                padding: "1px 5px",
                 borderRadius: 4,
                 background: "var(--bg-card)",
                 border: "1px solid var(--border-color)",
@@ -2761,12 +2761,12 @@ export function App() {
           </div>
         </div>
 
-        {/* Sidebar Boundary Vertical Line (Placed exactly at 325px from screen left) */}
-        <div style={{ width: 1, height: 26, background: "var(--border-color)", flexShrink: 0, margin: "0 2px 0 0" }} />
+        {/* Sidebar Boundary Vertical Line */}
+        <div style={{ width: 1, height: 20, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
 
-        {/* Right side of boundary line: Collapse/Expand Icon, Status Indicators & Step Badge (Sits precisely between 325px and 450px, width: 125px) */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, width: 125, flexShrink: 0 }}>
-          {/* Sidebar Toggle Button (Directly beside the divider line) */}
+        {/* Right side of boundary line: Collapse/Expand Icon, Status Indicators & Step Badge */}
+        <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+          {/* Sidebar Toggle Button */}
           <button
             type="button"
             onClick={() => {
@@ -2778,8 +2778,8 @@ export function App() {
             }}
             title={showSidebar ? "Hide left sidebar (Collapse)" : "Show left sidebar (Expand)"}
             style={{
-              width: 32,
-              height: 32,
+              width: 30,
+              height: 30,
               padding: 0,
               background: "var(--bg-card)",
               border: "1px solid var(--border-color)",
@@ -2801,30 +2801,30 @@ export function App() {
               e.currentTarget.style.color = "var(--text-main)";
             }}
           >
-            {showSidebar ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
+            {showSidebar ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
           </button>
 
           {/* Online Agent Engine Status Indicator */}
           <div
             style={{
-              width: 8,
-              height: 8,
+              width: 7,
+              height: 7,
               borderRadius: "50%",
               background: "var(--accent-emerald)",
-              boxShadow: "0 0 8px rgba(22, 163, 74, 0.6)",
+              boxShadow: "0 0 6px rgba(22, 163, 74, 0.6)",
               flexShrink: 0,
             }}
             title="Agent Engine Online"
           />
-          <Activity size={15} color="var(--accent-emerald)" style={{ flexShrink: 0 }} />
+          <Activity size={14} color="var(--accent-emerald)" style={{ flexShrink: 0 }} />
           {currentStep && (
             <span
               style={{
                 background: "var(--accent)",
                 color: "#fff",
-                padding: "2px 8px",
-                borderRadius: 12,
-                fontSize: 11,
+                padding: "1px 6px",
+                borderRadius: 10,
+                fontSize: 10,
                 fontWeight: 600,
                 whiteSpace: "nowrap",
                 flexShrink: 0,
@@ -2835,11 +2835,13 @@ export function App() {
           )}
         </div>
 
-        {/* Second Vertical Divider separating controls from Group 1 (Fixed at 450px: 325px + 125px) */}
-        <div style={{ width: 1, height: 20, background: "var(--border-color)", flexShrink: 0 }} />
+        {/* Second Vertical Divider separating sidebar toggle from Right-Hand Controls */}
+        <div style={{ width: 1, height: 18, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
 
+        {/* Right-Hand Side Controls Container (All aligned to the right) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto", flexShrink: 0 }}>
           {/* MCP & Thinking Response View Mode Controls (Group 1: View Modes) */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, background: "rgba(0, 0, 0, 0.03)", padding: "2px 4px", borderRadius: 10, border: "1px solid var(--border-color)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, background: "rgba(0, 0, 0, 0.03)", padding: "1px 3px", borderRadius: 8, border: "1px solid var(--border-color)" }}>
             {/* Thinking Response Segmented Switch */}
             <div
               style={{
@@ -3033,10 +3035,10 @@ export function App() {
           </div>
 
           {/* Group Divider 1 -> 2 */}
-          <div style={{ width: 1, height: 20, background: "var(--border-color)", flexShrink: 0 }} />
+          <div style={{ width: 1, height: 18, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
 
           {/* Group 2: Action & Inspection Tools (Sub-Convs, Mermaid, Git, Export, Tool Hub, Config) */}
-          <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
             {/* Sub-Conversation / Turns Inspector Button */}
             {activeSessionFile && (
               <button
@@ -3045,9 +3047,9 @@ export function App() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 5,
-                  padding: "5px 9px",
-                  borderRadius: 8,
+                  gap: 4,
+                  padding: "4px 7px",
+                  borderRadius: 6,
                   background: "rgba(37, 99, 235, 0.1)",
                   border: "1px solid var(--accent)",
                   color: "var(--accent)",
@@ -3064,7 +3066,7 @@ export function App() {
                   e.currentTarget.style.background = "rgba(37, 99, 235, 0.1)";
                 }}
               >
-                <GitFork size={13} />
+                <GitFork size={12} />
                 <span>Sub-Convs</span>
               </button>
             )}
@@ -3083,9 +3085,9 @@ export function App() {
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: 32,
-                height: 32,
-                borderRadius: 8,
+                width: 30,
+                height: 30,
+                borderRadius: 6,
                 background: showMermaidTools ? "rgba(2, 132, 199, 0.15)" : "var(--bg-card)",
                 border: showMermaidTools ? "1px solid var(--accent, #0284c7)" : "1px solid var(--border-color)",
                 color: showMermaidTools ? "var(--accent, #0284c7)" : "var(--text-muted)",
@@ -3105,7 +3107,7 @@ export function App() {
                 }
               }}
             >
-              <Palette size={15} />
+              <Palette size={14} />
             </button>
 
             {/* 🐙 Execute External Git CLI Sync (Sync update to/from GitHub repository) */}
@@ -3116,9 +3118,9 @@ export function App() {
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                width: 32,
-                height: 32,
-                borderRadius: 8,
+                width: 30,
+                height: 30,
+                borderRadius: 6,
                 background: isGitSyncing ? "rgba(16, 185, 129, 0.15)" : "var(--bg-card)",
                 border: isGitSyncing ? "1px solid #10b981" : "1px solid var(--border-color)",
                 color: isGitSyncing ? "#10b981" : "var(--text-muted)",
@@ -3139,21 +3141,21 @@ export function App() {
               }}
             >
               {isGitSyncing ? (
-                <Loader2 size={15} className="spin" color="#10b981" />
+                <Loader2 size={14} className="spin" color="#10b981" />
               ) : (
-                <GitBranch size={15} />
+                <GitBranch size={14} />
               )}
             </button>
 
-            {/* Export Entire Conversation as HTML (Icon-Only, 32x32) */}
+            {/* Export Entire Conversation as HTML (Icon-Only, 30x30) */}
             <button
               onClick={() => setShowExportModal(true)}
               title="Export complete chat session as standalone offline HTML report (with customizable filter options)"
               style={{
-                width: 32,
-                height: 32,
+                width: 30,
+                height: 30,
                 padding: 0,
-                borderRadius: 8,
+                borderRadius: 6,
                 background: "var(--bg-card)",
                 border: "1px solid var(--border-color)",
                 color: "var(--text-muted)",
@@ -3172,7 +3174,7 @@ export function App() {
                 e.currentTarget.style.color = "var(--text-muted)";
               }}
             >
-              <Download size={15} />
+              <Download size={14} />
             </button>
 
             {/* 🛠️ Agentic Tools & Skills Hub Button */}
@@ -3184,15 +3186,15 @@ export function App() {
               }}
               title={`Agentic Tools & Skills Hub (${activeToolsList.length || 29} Tools, ${activeSkillsList.length} Skills)`}
               style={{
-                height: 32,
-                padding: "0 9px",
-                borderRadius: 8,
+                height: 30,
+                padding: "0 7px",
+                borderRadius: 6,
                 background: showToolHubModal ? "rgba(59, 130, 246, 0.15)" : "var(--bg-card)",
                 border: showToolHubModal ? "1px solid #3b82f6" : "1px solid var(--border-color)",
                 color: showToolHubModal ? "#60a5fa" : "var(--text-muted)",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 5,
+                gap: 4,
                 cursor: "pointer",
                 transition: "all 0.15s ease",
               }}
@@ -3207,7 +3209,7 @@ export function App() {
                 }
               }}
             >
-              <Wrench size={14} />
+              <Wrench size={13} />
               <span
                 title={`${activeToolsList.length || 29} Active Tools`}
                 style={{
@@ -3215,8 +3217,8 @@ export function App() {
                   fontWeight: 700,
                   background: "rgba(59, 130, 246, 0.25)",
                   color: "#60a5fa",
-                  padding: "1px 5px",
-                  borderRadius: 10,
+                  padding: "1px 4px",
+                  borderRadius: 8,
                 }}
               >
                 {activeToolsList.length || 29}
@@ -3228,8 +3230,8 @@ export function App() {
                   fontWeight: 700,
                   background: "rgba(168, 85, 247, 0.25)",
                   color: "#c084fc",
-                  padding: "1px 5px",
-                  borderRadius: 10,
+                  padding: "1px 4px",
+                  borderRadius: 8,
                 }}
               >
                 {activeSkillsList.length}
@@ -3244,10 +3246,10 @@ export function App() {
               }}
               title="Parameters & AI Configuration (Max Loop Iterations, Temperature, Max Tokens, Model, MCP)"
               style={{
-                width: 32,
-                height: 32,
+                width: 30,
+                height: 30,
                 padding: 0,
-                borderRadius: 8,
+                borderRadius: 6,
                 background: showConfig ? "rgba(2, 132, 199, 0.15)" : "var(--bg-card)",
                 border: showConfig ? "1px solid var(--accent, #0284c7)" : "1px solid var(--border-color)",
                 color: showConfig ? "var(--accent, #0284c7)" : "var(--text-muted)",
@@ -3268,12 +3270,12 @@ export function App() {
                 }
               }}
             >
-              <Sliders size={15} />
+              <Sliders size={14} />
             </button>
           </div>
 
           {/* Group Divider 2 -> 3 */}
-          <div style={{ width: 1, height: 20, background: "var(--border-color)", flexShrink: 0 }} />
+          <div style={{ width: 1, height: 18, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
 
           {/* Group 3: Voice Synthesis & Audio Controls */}
           <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
@@ -3283,7 +3285,7 @@ export function App() {
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
-                  borderRadius: 8,
+                  borderRadius: 6,
                   border: playingMessageId ? "1px solid #10b981" : "1px solid var(--border-color)",
                   background: "var(--bg-card)",
                   overflow: "hidden",
@@ -3326,8 +3328,8 @@ export function App() {
                       : `Play latest answer (English | ${ttsSpeed}x)`
                   }
                   style={{
-                    height: 32,
-                    padding: "0 10px",
+                    height: 30,
+                    padding: "0 8px",
                     background: playingMessageId && !isTtsPaused ? "rgba(16, 185, 129, 0.2)" : "transparent",
                     border: "none",
                     color: playingMessageId && !isTtsPaused ? "#10b981" : "var(--text-main)",
@@ -3339,11 +3341,11 @@ export function App() {
                   }}
                 >
                   {isTtsLoading ? (
-                    <Loader2 size={15} className="spin" color="#10b981" />
+                    <Loader2 size={14} className="spin" color="#10b981" />
                   ) : playingMessageId && !isTtsPaused ? (
-                    <Volume2 size={15} color="#10b981" className="animate-pulse" />
+                    <Volume2 size={14} color="#10b981" className="animate-pulse" />
                   ) : (
-                    <Play size={15} color="var(--accent, #0284c7)" fill="var(--accent, #0284c7)" />
+                    <Play size={14} color="var(--accent, #0284c7)" fill="var(--accent, #0284c7)" />
                   )}
                 </button>
 
@@ -3367,8 +3369,8 @@ export function App() {
                       : "點擊暫停保留 (On-Hold)"
                   }
                   style={{
-                    height: 32,
-                    padding: "0 10px",
+                    height: 30,
+                    padding: "0 7px",
                     background: isTtsPaused ? "rgba(245, 158, 11, 0.2)" : "transparent",
                     border: "none",
                     borderLeft: "1px solid var(--border-color)",
@@ -3382,9 +3384,9 @@ export function App() {
                   }}
                 >
                   {isTtsPaused ? (
-                    <Play size={14} color="#f59e0b" fill="#f59e0b" />
+                    <Play size={13} color="#f59e0b" fill="#f59e0b" />
                   ) : (
-                    <Pause size={14} color={playingMessageId ? "var(--text-main)" : "var(--text-muted)"} />
+                    <Pause size={13} color={playingMessageId ? "var(--text-main)" : "var(--text-muted)"} />
                   )}
                 </button>
 
@@ -3400,8 +3402,8 @@ export function App() {
                       : "Repeat last speech (Instant zero-latency replay without regeneration)"
                   }
                   style={{
-                    height: 32,
-                    padding: "0 10px",
+                    height: 30,
+                    padding: "0 7px",
                     background: "transparent",
                     border: "none",
                     borderLeft: "1px solid var(--border-color)",
@@ -3419,7 +3421,7 @@ export function App() {
                     e.currentTarget.style.color = "var(--text-main)";
                   }}
                 >
-                  <RotateCcw size={14} color="var(--accent, #0284c7)" />
+                  <RotateCcw size={13} color="var(--accent, #0284c7)" />
                 </button>
 
                 {/* 4. Stop Button */}
@@ -3429,8 +3431,8 @@ export function App() {
                   onClick={stopTtsPlayback}
                   title="點擊停止播放 (Stop)"
                   style={{
-                    height: 32,
-                    padding: "0 10px",
+                    height: 30,
+                    padding: "0 7px",
                     background: "transparent",
                     border: "none",
                     borderLeft: "1px solid var(--border-color)",
@@ -3443,7 +3445,7 @@ export function App() {
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <Square size={13} fill={playingMessageId || isTtsLoading ? "#ef4444" : "var(--text-muted)"} />
+                  <Square size={12} fill={playingMessageId || isTtsLoading ? "#ef4444" : "var(--text-muted)"} />
                 </button>
 
                 {/* 5. Setup Dropdown Trigger */}
@@ -3458,15 +3460,15 @@ export function App() {
                       : `Voice Setup (Language: English | ${ttsEngine === "local" ? "Local" : "MiniMax"} | Timeout: ${ttsTimeout}s | ${ttsSpeed}x)`
                   }
                   style={{
-                    height: 32,
-                    padding: "0 8px",
+                    height: 30,
+                    padding: "0 7px",
                     background: showTtsMenu ? "rgba(16, 185, 129, 0.15)" : "transparent",
                     border: "none",
                     borderLeft: "1px solid var(--border-color)",
                     color: showTtsMenu ? "#10b981" : "var(--text-muted)",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: 4,
+                    gap: 3,
                     cursor: "pointer",
                     fontSize: 11,
                     fontWeight: 600,
@@ -3475,7 +3477,7 @@ export function App() {
                 >
                   <span>{ttsLang === "cantonese" ? "粵語" : ttsLang === "mandarin" ? "國語" : "English"}</span>
                   <ChevronDown
-                    size={12}
+                    size={11}
                     style={{
                       transform: showTtsMenu ? "rotate(180deg)" : "rotate(0deg)",
                       transition: "transform 0.2s ease",
@@ -4065,7 +4067,7 @@ export function App() {
           </div>
 
           {/* Group Divider 3 -> 4 */}
-          <div style={{ width: 1, height: 20, background: "var(--border-color)", flexShrink: 0 }} />
+          <div style={{ width: 1, height: 18, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
 
           {/* Group 4: User Profile & Session Controls */}
           <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
@@ -4076,8 +4078,8 @@ export function App() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
-                  padding: "4px 10px 4px 6px",
+                  gap: 6,
+                  padding: "3px 8px 3px 5px",
                   borderRadius: 20,
                   background: isUserMenuOpen ? "var(--bg-card)" : "var(--bg-card)",
                   border: isUserMenuOpen ? "1px solid var(--accent)" : "1px solid var(--border-color)",
@@ -4351,10 +4353,11 @@ export function App() {
               )}
             </div>
           </div>
+        </div>
       </header>
 
       {/* Row 2: Lower Workspace & Main Content Area */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "row", width: "100%", height: "calc(100vh - 56px)", minHeight: 0, overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "row", width: "100%", height: "calc(100vh - 48px)", minHeight: 0, overflow: "hidden" }}>
       {/* Sidebar Navigation (Widened and optimized padding to show maximum title information) */}
       <div
         style={{
@@ -5993,9 +5996,9 @@ export function App() {
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                 }}
-                title={config?.llm.model}
+                title={config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm?.model}
               >
-                Model {showModelPanel ? "" : `(${config?.llm.model || "Loading..."})`}
+                Model {showModelPanel ? "" : `(${config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm?.model || "Loading..."})`}
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -6178,11 +6181,11 @@ export function App() {
             boxSizing: "border-box",
           }}
         >
-          {/* Constrained 80% Content Column: Takes 80% of (Screen Width - Left Menu Bar) */}
+          {/* Responsive Content Column: Expands to use available horizontal space comfortably */}
           <div
             style={{
               width: "100%",
-              maxWidth: showSidebar ? "calc((100vw - 370px) * 0.8)" : "90%", transition: "max-width 0.22s ease",
+              maxWidth: "1400px",
               display: "flex",
               flexDirection: "column",
               gap: 20,
@@ -7102,12 +7105,12 @@ export function App() {
         {/* Input Dock Bar */}
         <div
           style={{
-            padding: "12px 16px",
+            padding: "8px 12px",
             borderTop: isFlashingComplete ? "1.5px solid #10b981" : "1px solid var(--border-color)",
             boxShadow: isFlashingComplete ? "0 -2px 12px rgba(16, 185, 129, 0.2)" : "none",
             background: "var(--bg-secondary)",
             display: "flex",
-            justifyContent: "center",
+            justifyContent: "flex-start",
             width: "100%",
             boxSizing: "border-box",
             transition: "border-color 0.3s ease, box-shadow 0.3s ease",
@@ -7116,10 +7119,10 @@ export function App() {
           <div
             style={{
               width: "100%",
-              maxWidth: showSidebar ? "calc((100vw - 370px) * 0.8)" : "90%", transition: "max-width 0.22s ease",
+              maxWidth: "100%",
               display: "flex",
-              gap: 8,
-              alignItems: "center",
+              gap: 6,
+              alignItems: "flex-end",
               minWidth: 0,
               boxSizing: "border-box",
             }}
@@ -7129,9 +7132,9 @@ export function App() {
             onClick={() => setShowDocModal(true)}
             title={activeDocHashes.length > 0 ? `${activeDocHashes.length} document(s) attached` : "Attach Multi-Tab Excel, PDF, Word, or Text Files"}
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: 7,
+              width: 30,
+              height: 30,
+              borderRadius: 6,
               background: activeDocHashes.length > 0 ? "rgba(16, 185, 129, 0.15)" : "var(--bg-card)",
               border: activeDocHashes.length > 0 ? "1.5px solid #10b981" : "1px solid var(--border-color)",
               color: activeDocHashes.length > 0 ? "#10b981" : "var(--text-muted)",
@@ -7156,7 +7159,7 @@ export function App() {
               }
             }}
           >
-            <Paperclip size={15} />
+            <Paperclip size={13} />
             {activeDocHashes.length > 0 && (
               <span
                 style={{
@@ -7167,13 +7170,13 @@ export function App() {
                   color: "#ffffff",
                   borderRadius: "8px",
                   padding: "0 4px",
-                  fontSize: 9,
+                  fontSize: 8.5,
                   fontWeight: 800,
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  minWidth: 14,
-                  height: 14,
+                  minWidth: 13,
+                  height: 13,
                   lineHeight: 1,
                   boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
                 }}
@@ -7199,9 +7202,9 @@ export function App() {
                 : "Thinking is OFF: Model answers directly without internal thought scratchpad. Click to turn ON."
             }
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: 7,
+              width: 30,
+              height: 30,
+              borderRadius: 6,
               background: enableThinking ? "rgba(168, 85, 247, 0.15)" : "var(--bg-card)",
               border: enableThinking ? "1.5px solid #a855f7" : "1px solid var(--border-color)",
               color: enableThinking ? "#a855f7" : "var(--text-muted)",
@@ -7226,52 +7229,56 @@ export function App() {
               }
             }}
           >
-            <Brain size={15} color={enableThinking ? "#a855f7" : "var(--text-muted)"} />
+            <Brain size={13} color={enableThinking ? "#a855f7" : "var(--text-muted)"} />
             <span
               style={{
                 position: "absolute",
                 bottom: 1,
                 right: 2,
-                fontSize: 7,
+                fontSize: 6.5,
                 padding: "0 2px",
                 borderRadius: 2,
                 background: enableThinking ? "#a855f7" : "rgba(100, 116, 139, 0.3)",
                 color: "#ffffff",
                 fontWeight: 800,
-                lineHeight: "9px",
+                lineHeight: "8px",
               }}
             >
               {enableThinking ? "ON" : "OFF"}
             </span>
           </button>
 
-          {/* ⚡ Quick LLM Model Switcher Dropdown Button */}
+          {/* ⚡ Quick LLM Model Switcher Dropdown Button (Icon-Only) */}
           <div style={{ position: "relative", flexShrink: 0 }}>
             <button
               type="button"
               onClick={() => setShowQuickModelMenu((v) => !v)}
-              title={`Current Model: ${config?.llm?.model || "Loading..."} (Click to switch model)`}
+              title={`Switch Model: ${config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm?.model || "Model"}`}
               style={{
-                height: 34,
-                padding: "0 10px",
-                borderRadius: 7,
+                width: 30,
+                height: 30,
+                borderRadius: 6,
                 background: showQuickModelMenu ? "rgba(2, 132, 199, 0.15)" : "var(--bg-card)",
                 border: showQuickModelMenu ? "1.5px solid var(--accent, #0284c7)" : "1px solid var(--border-color)",
                 color: "var(--accent, #0284c7)",
                 cursor: "pointer",
-                display: "inline-flex",
+                display: "flex",
                 alignItems: "center",
-                gap: 6,
-                fontSize: 12,
-                fontWeight: 700,
+                justifyContent: "center",
                 transition: "all 0.15s ease",
               }}
+              onMouseEnter={(e) => {
+                if (!showQuickModelMenu) {
+                  e.currentTarget.style.borderColor = "var(--accent, #0284c7)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!showQuickModelMenu) {
+                  e.currentTarget.style.borderColor = "var(--border-color)";
+                }
+              }}
             >
-              <Cpu size={14} />
-              <span style={{ maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm?.model || "Model"}
-              </span>
-              <ChevronDown size={12} color="var(--text-muted)" />
+              <Cpu size={13} />
             </button>
 
             {showQuickModelMenu && (
@@ -7407,9 +7414,9 @@ export function App() {
                   : "Select Architecture / Diagram Mode"
               }
               style={{
-                width: 34,
-                height: 34,
-                borderRadius: 7,
+                width: 30,
+                height: 30,
+                borderRadius: 6,
                 background: selectedDiagramMode
                   ? selectedDiagramMode.id === "no-diagram"
                     ? "rgba(100, 116, 139, 0.18)"
@@ -7431,19 +7438,19 @@ export function App() {
                 transition: "all 0.15s ease",
               }}
             >
-              <GitBranch size={15} color={selectedDiagramMode ? selectedDiagramMode.color : "#10b981"} />
+              <GitBranch size={13} color={selectedDiagramMode ? selectedDiagramMode.color : "#10b981"} />
               {selectedDiagramMode && (
                 <span
                   style={{
                     position: "absolute",
                     top: -3,
                     right: -3,
-                    fontSize: 8,
+                    fontSize: 7.5,
                     borderRadius: "8px",
                     background: selectedDiagramMode.color,
                     color: "#fff",
-                    width: 14,
-                    height: 14,
+                    width: 13,
+                    height: 13,
                     display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -7653,7 +7660,7 @@ export function App() {
                   <span
                     style={{
                       fontSize: 10,
-                      background: "rgba(16, 185, 129, 0.15)",
+                      background: "rgba(160, 185, 129, 0.15)",
                       color: "#10b981",
                       padding: "1px 6px",
                       borderRadius: 4,
@@ -7992,9 +7999,9 @@ export function App() {
               }}
               title="Useful Prompt Presets (Saved to local disk config/preset-prompts.json)"
               style={{
-                width: 34,
-                height: 34,
-                borderRadius: 7,
+                width: 30,
+                height: 30,
+                borderRadius: 6,
                 background: showPresetPromptsMenu ? "rgba(2, 132, 199, 0.15)" : "var(--bg-card)",
                 border: showPresetPromptsMenu ? "1.5px solid var(--accent, #0284c7)" : "1px solid var(--border-color)",
                 color: showPresetPromptsMenu ? "var(--accent, #0284c7)" : "var(--text-muted)",
@@ -8238,15 +8245,15 @@ export function App() {
               }}
               title={`Voice-to-Text Language: ${sttLang === "zh-HK" ? "Cantonese (粵語)" : sttLang === "zh-CN" ? "Mandarin (國語)" : "English (英語)"}`}
               style={{
-                height: 34,
-                width: 46,
+                height: 30,
+                width: 42,
                 padding: "0 2px",
                 textAlign: "center",
-                borderRadius: 7,
+                borderRadius: 6,
                 background: "var(--bg-card)",
                 border: "1px solid var(--border-color)",
                 color: "var(--text-main)",
-                fontSize: 13,
+                fontSize: 12,
                 cursor: "pointer",
                 outline: "none",
               }}
@@ -8543,13 +8550,16 @@ export function App() {
               );
             })()}
 
-            <input
+            <textarea
               ref={chatInputRef}
-              type="text"
+              rows={1}
               value={inputPrompt}
               onChange={(e) => {
                 const val = e.target.value;
                 setInputPrompt(val);
+                // Auto-adjust height to content (up to max-height 160px)
+                e.target.style.height = "auto";
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
                 // Check if user is typing a slash command at the start
                 if (val.startsWith("/")) {
                   if (activeSkillsList.length === 0) {
@@ -8630,21 +8640,27 @@ export function App() {
                   }
                 }
 
-                if (e.key === "Enter") {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
                   handleSend();
+                  if (chatInputRef.current) {
+                    chatInputRef.current.style.height = "30px";
+                  }
                 }
               }}
               placeholder={
                 selectedSkillBadge
-                  ? `[Skill /${selectedSkillBadge.name} attached] Type your prompt...`
+                  ? `[Skill /${selectedSkillBadge.name} attached] Type your prompt... (Shift+Enter for newline)`
                   : selectedDiagramMode
-                  ? `[${selectedDiagramMode.label} mode active] Type your prompt (or type "/" for skills)...`
-                  : "Ask anything, type \"/\" for skills, or query attached documents..."
+                  ? `[${selectedDiagramMode.label} mode active] Type your prompt... (Shift+Enter for newline)`
+                  : "Ask anything, type \"/\" for skills, or query attached documents... (Shift+Enter for newline)"
               }
               disabled={loading}
               style={{
                 width: "100%",
-                height: 34,
+                minHeight: 30,
+                maxHeight: 160,
+                lineHeight: "18px",
                 background: isListening
                   ? "rgba(239, 68, 68, 0.05)"
                   : selectedSkillBadge
@@ -8659,11 +8675,14 @@ export function App() {
                   : selectedDiagramMode
                   ? `1.5px solid ${selectedDiagramMode.color}`
                   : "1px solid var(--border-color)",
-                borderRadius: 7,
-                padding: "0 36px 0 12px",
+                borderRadius: 6,
+                padding: "5px 32px 5px 10px",
                 color: "var(--text-main)",
-                fontSize: 13,
+                fontSize: 12.5,
                 outline: "none",
+                resize: "none",
+                overflowY: "auto",
+                fontFamily: "inherit",
                 transition: "border-color 0.2s, background-color 0.2s",
                 boxSizing: "border-box",
               }}
@@ -8692,8 +8711,8 @@ export function App() {
                 background: "transparent",
                 border: "none",
                 cursor: "pointer",
-                padding: "3px",
-                borderRadius: 5,
+                padding: "2px",
+                borderRadius: 4,
                 color: "var(--text-muted)",
                 display: "flex",
                 alignItems: "center",
@@ -8709,7 +8728,7 @@ export function App() {
                 e.currentTarget.style.background = "transparent";
               }}
             >
-              <ClipboardPaste size={14} />
+              <ClipboardPaste size={13} />
             </button>
             {sttStatusText && (
               <div
@@ -8749,9 +8768,9 @@ export function App() {
             title={isListening ? "Click to stop voice input (Listening...)" : "Voice Input (Click to speak)"}
             className={isListening ? "voice-recording-pulse" : ""}
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: 7,
+              width: 30,
+              height: 30,
+              borderRadius: 6,
               background: isListening ? "#ef4444" : "var(--bg-card)",
               color: isListening ? "#ffffff" : "var(--text-main)",
               border: isListening ? "1px solid #ef4444" : "1px solid var(--border-color)",
@@ -8763,7 +8782,7 @@ export function App() {
               flexShrink: 0,
             }}
           >
-            {isListening ? <MicOff size={15} /> : <Mic size={15} />}
+            {isListening ? <MicOff size={13} /> : <Mic size={13} />}
           </button>
 
           {/* 🚀 / ⏹️ Dynamic Send or Stop Button (Same Icon Position) */}
@@ -8773,17 +8792,17 @@ export function App() {
               onClick={handleStopSend}
               title="Stop sending / Cancel LLM response"
               style={{
-                height: 34,
-                padding: "0 12px",
-                borderRadius: 7,
+                height: 30,
+                padding: "0 10px",
+                borderRadius: 6,
                 background: "linear-gradient(135deg, #ef4444, #dc2626)",
                 color: "#ffffff",
                 border: "1px solid #b91c1c",
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: 6,
-                fontSize: 12.5,
+                gap: 5,
+                fontSize: 12,
                 fontWeight: 700,
                 boxShadow: "0 2px 8px rgba(239, 68, 68, 0.45)",
                 transition: "all 0.15s ease",
@@ -8800,7 +8819,7 @@ export function App() {
                 e.currentTarget.style.transform = "none";
               }}
             >
-              <Square size={12} fill="#ffffff" />
+              <Square size={11} fill="#ffffff" />
               <span>Stop</span>
             </button>
           ) : (
@@ -8810,9 +8829,9 @@ export function App() {
               title={isFlashingComplete ? "Output Ready! (Enter to send next)" : "Send message (Enter)"}
               className={isFlashingComplete ? "complete-flash-btn" : ""}
               style={{
-                width: 36,
-                height: 34,
-                borderRadius: 7,
+                width: 32,
+                height: 30,
+                borderRadius: 6,
                 background: isFlashingComplete
                   ? "#10b981"
                   : !inputPrompt.trim()
@@ -8833,7 +8852,7 @@ export function App() {
                 flexShrink: 0,
               }}
             >
-              {isFlashingComplete ? <Check size={16} strokeWidth={2.5} /> : <Send size={15} />}
+              {isFlashingComplete ? <Check size={14} strokeWidth={2.5} /> : <Send size={13} />}
             </button>
           )}
 
@@ -8844,9 +8863,9 @@ export function App() {
             onClick={() => navigateTurn("up")}
             title="Jump to previous turn (click repeatedly to step up)"
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: 7,
+              width: 30,
+              height: 30,
+              borderRadius: 6,
               background: "var(--bg-card)",
               border: "1px solid var(--border-color)",
               color: "var(--text-main)",
@@ -8868,7 +8887,7 @@ export function App() {
               e.currentTarget.style.background = "var(--bg-card)";
             }}
           >
-            <ArrowUp size={15} />
+            <ArrowUp size={13} />
           </button>
 
           {/* ⬇️ Down Arrow Button: Step / Jump down to next turn or bottom */}
@@ -8878,9 +8897,9 @@ export function App() {
             onClick={() => navigateTurn("down")}
             title="Jump to next turn / bottom (click repeatedly to step down)"
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: 7,
+              width: 30,
+              height: 30,
+              borderRadius: 6,
               background: "var(--bg-card)",
               border: "1px solid var(--border-color)",
               color: "var(--text-main)",
@@ -8902,7 +8921,7 @@ export function App() {
               e.currentTarget.style.background = "var(--bg-card)";
             }}
           >
-            <ArrowDown size={15} />
+            <ArrowDown size={13} />
           </button>
           </div>
         </div>
