@@ -1129,6 +1129,8 @@ export function App() {
         if (manageCollectionModal && manageCollectionModal.id === colId) {
           setManageCollectionModal(data.collection);
         }
+        // Refresh logs so parent-child relationships and clonedFrom metadata are immediately synced
+        fetchLogs(currentWorkspace);
       } else {
         showAlert(`Failed to update collection: ${data.error || "Unknown error"}`, "error");
       }
@@ -1148,6 +1150,8 @@ export function App() {
     const updatedFiles = Array.from(new Set([...targetCol.sessionFiles, ...filesToAdd]));
 
     await handleUpdateCollection(colId, { sessionFiles: updatedFiles });
+    // Refresh logs to guarantee hierarchical parent-child relationships render instantly
+    fetchLogs(currentWorkspace);
     setSelectedSessionFiles(new Set());
     setIsMultiSelectMode(false);
     setShowBatchAssignModal(false);
