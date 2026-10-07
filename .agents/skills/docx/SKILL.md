@@ -89,3 +89,40 @@ The script writes `comments.xml`, `commentsExtended.xml`, `commentsIds.xml`, `co
 ## Dependencies
 
 `docx` (npm, preinstalled — install only if `require('docx')` fails) · `pandoc` · LibreOffice (`soffice`) · `pdftoppm` (Poppler)
+
+## OpenXML (.docx) Low-Level Manipulation & Packaging Guardrails
+
+When modifying, translating, or repairing existing `.docx` files at the OpenXML/ZIP container level:
+
+1. **Canonical Namespace Registration (MANDATORY)**:
+   - **Never serialize OpenXML parts using synthetic namespace prefixes** (e.g., `ns0:`, `ns1:`, `ns4:`).
+   - Before parsing or re-serializing XML (especially with `lxml` or `xml.etree`), explicitly register canonical Office OpenXML prefixes:
+     ```python
+     namespaces = {
+         "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+         "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+         "m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
+         "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+         "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+         "pic": "http://schemas.openxmlformats.org/drawingml/2006/picture",
+         "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+         "w14": "http://schemas.microsoft.com/office/word/2010/wordml",
+         "w15": "http://schemas.microsoft.com/office/word/2012/wordml",
+         "wp14": "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing",
+     }
+     for prefix, uri in namespaces.items():
+         etree.register_namespace(prefix, uri)
+     ```
+   - Ensure the root `<w:document>` element maintains all prefixes declared in `mc:Ignorable` (e.g. `mc:Ignorable="w14 w15 w16se wp14"`). Word flags missing prefix bindings as corrupt unmapped namespaces.
+
+2. **External Template Sanitization**:
+   - Always inspect `word/settings.xml` and `word/_rels/settings.xml.rels`.
+   - Strip any `<w:attachedTemplate>` referencing local file URIs (e.g., `file:///C:/.../*.dotx`) or unreachable intranet paths. Remove the associated relationship ID from `settings.xml.rels` to prevent Microsoft Word's Protected View recovery prompt.
+
+3. **OPC Root Relationship & Archive Integrity**:
+   - Verify that the root relationship file `_rels/.rels` exists at the archive root and points `Target="word/document.xml"` with `Type=".../officeDocument"`.
+   - Verify that `[Content_Types].xml` has explicit overrides for all parts (`document.xml`, `styles.xml`, `settings.xml`, etc.).
+   - When using Python `zipfile`, always specify `compression=zipfile.ZIP_DEFLATED` and ensure relative paths do not prepend `./` or absolute slashes. Store `[Content_Types].xml` uncompressed (`ZIP_STORED`) or deflated properly at root.
+
+4. **Inline Media & Drawing Preservation**:
+   - When modifying text content, only edit `<w:t>` inner text. Never delete, rewrite, or split sibling elements containing `<w:drawing>`, `<w:pict>`, or `<w:object>`, ensuring all `r:embed` references in `word/_rels/document.xml.rels` remain intact.
