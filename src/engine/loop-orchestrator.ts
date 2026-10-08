@@ -55,7 +55,8 @@ export class LoopOrchestrator {
     workspace: string = "default",
     userNumber: string = "00000",
     maxIterationsOverride?: number,
-    depth: number = 0
+    depth: number = 0,
+    sessionFile?: string
   ): Promise<{ answer: string; iterations: number; history: OpenAI.Chat.Completions.ChatCompletionMessageParam[]; activeSkills?: string[]; limitReached?: boolean }> {
     // 1. Build initial system message combining system prompt, temporal context, attached docs, and AI skills
     const now = new Date();
@@ -65,13 +66,26 @@ export class LoopOrchestrator {
       timeStyle: "long",
     }).format(now);
 
+    const sessionIdentifier = sessionFile ? path.basename(sessionFile).replace(/\.md$/i, "") : "";
+
     const systemPromptParts = [
       this.config.prompts.systemPrompt,
       `\n--- Current System Time & Temporal Context ---\n` +
       `Current Local Date & Time: ${localTimeStr}\n` +
       `Current ISO Timestamp: ${isoTime}\n` +
+      (sessionIdentifier ? `Active Session Timestamp ID: ${sessionIdentifier}\n` : "") +
       `Temporal Anchor Rule: When answering queries, evaluating "latest", "recent", "today", or "this year", or constructing search queries with web_search, you MUST anchor your temporal understanding to this current date/time. Do not assume outdated training cutoff dates.\n`
     ];
+
+    if (sessionIdentifier) {
+      systemPromptParts.push(
+        `\n--- Environment Hygiene: Mandatory Working Sub-Directory Directive ---\n` +
+        `CURRENT_SESSION_ID: \`${sessionIdentifier}\`\n` +
+        `RULE: Any new build document, report (.docx, .xlsx, .pdf, .md), or script created during this session MUST use \`${sessionIdentifier}\` as its dedicated sub-directory under the workspace.\n` +
+        `- When invoking \`run_python_code\`, pass \`subDirectory: "${sessionIdentifier}"\`.\n` +
+        `- Inside Python scripts: DO NOT create another nested subfolder with the same name. Files written to current working directory \`./\` will automatically reside inside \`workspace/.../${sessionIdentifier}/\`.\n`
+      );
+    }
 
     if (attachedContext && attachedContext.trim().length > 0) {
       systemPromptParts.push(
@@ -218,6 +232,7 @@ export class LoopOrchestrator {
                 workspace,
                 userNumber,
                 depth,
+                sessionFile,
                 parentCallbacks: callbacks,
                 loopConfig: this.config,
               });
@@ -238,8 +253,19 @@ export class LoopOrchestrator {
           continue;
         }
 
-        // If no tool call, this is the final answer
-        const finalAnswer = convertLatexToUnicode(message.content || "(No response content)");
+        // If no tool call, determine final answer text
+        let contentText = message.content?.trim();
+        if (!contentText) {
+          // If the model finished after tool invocations without emitting text, synthesize from tool outputs
+          const lastToolMsg = [...messages].reverse().find((m) => m.role === "tool" && m.content);
+          if (lastToolMsg?.content) {
+            contentText = typeof lastToolMsg.content === "string" ? lastToolMsg.content : JSON.stringify(lastToolMsg.content);
+          } else {
+            contentText = "(No response content)";
+          }
+        }
+
+        const finalAnswer = convertLatexToUnicode(contentText);
         callbacks?.onComplete?.(finalAnswer, iteration, activeSkillNames, false);
         return { answer: finalAnswer, iterations: iteration, history: messages, activeSkills: activeSkillNames, limitReached: false };
       } catch (err: any) {

@@ -42,6 +42,7 @@ import {
   updateCollection,
   deleteCollection,
   toggleSessionInCollection,
+  formatDateForFilename,
 } from "./logger/conversation-logger.js";
 import { DocumentManager } from "./documents/document-manager.js";
 import { globalSkillManager } from "./skills/skill-manager.js";
@@ -1543,6 +1544,10 @@ app.post("/api/chat", requireAuth, async (req, res) => {
 
     let activatedSkillNames: string[] = [];
 
+    const effectiveSessionFile = sessionFile && sessionFile.endsWith(".md")
+      ? path.basename(sessionFile)
+      : `${formatDateForFilename(startTime)}.md`;
+
     await orchestrator.run(
       message,
       {
@@ -1609,7 +1614,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
           try {
             savedFile = saveConversationLog(
               {
-                sessionFile,
+                sessionFile: effectiveSessionFile,
                 workspace: workspace || "default",
                 userNumber,
                 userPrompt: message,
@@ -1655,7 +1660,9 @@ app.post("/api/chat", requireAuth, async (req, res) => {
       enableThinking,
       workspace || "default",
       userNumber,
-      typeof maxIterations === "number" && maxIterations > 0 ? maxIterations : undefined
+      typeof maxIterations === "number" && maxIterations > 0 ? maxIterations : undefined,
+      0,
+      effectiveSessionFile
     );
   } catch (err: any) {
     sendEvent("error", { message: err.message });
@@ -2104,17 +2111,31 @@ app.get("/api/workspace/files", (req, res) => {
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
     }
-    const items = fs.readdirSync(targetDir);
-    const files = items.map((name) => {
-      const fullPath = path.join(targetDir, name);
-      const stat = fs.statSync(fullPath);
-      return {
-        name,
-        size: stat.size,
-        modifiedAt: stat.mtime.toISOString(),
-        isDirectory: stat.isDirectory(),
-      };
-    }).sort((a, b) => (b.modifiedAt > a.modifiedAt ? 1 : -1));
+
+    const files: Array<{ name: string; relativePath: string; size: number; modifiedAt: string; isDirectory: boolean }> = [];
+    const collectFilesRecursive = (currentDir: string, relPrefix: string = "") => {
+      try {
+        const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+        for (const entry of entries) {
+          const entryRelPath = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
+          const fullPath = path.join(currentDir, entry.name);
+          const stat = fs.statSync(fullPath);
+          files.push({
+            name: entry.name,
+            relativePath: entryRelPath,
+            size: stat.size,
+            modifiedAt: stat.mtime.toISOString(),
+            isDirectory: entry.isDirectory(),
+          });
+          if (entry.isDirectory()) {
+            collectFilesRecursive(fullPath, entryRelPath);
+          }
+        }
+      } catch {}
+    };
+
+    collectFilesRecursive(targetDir);
+    files.sort((a, b) => (b.modifiedAt > a.modifiedAt ? 1 : -1));
 
     res.json({ success: true, files, workspace, userNumber });
   } catch (err: any) {

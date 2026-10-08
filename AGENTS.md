@@ -40,3 +40,14 @@ When the user explicitly or implicitly requests a specialized sub-agent (e.g., *
 2. **Step 2**: Receive observation `[Sub-Agent (coder) Output]: ...` containing calculated numbers and confirmed Excel path.
 3. **Step 3**: Call `delegate_task(role="reviewer", taskInstruction="Review the following VM cost calculation logic and verify formula correctness: ...", contextSnippet="[Coder Output...]")`
 4. **Step 4**: Synthesize final comprehensive response citing both sub-agents' verified findings.
+
+---
+
+## 4. Environment Hygiene & Sub-Directory Isolation Rule
+
+In order to maintain a clean, organized, and easily maintainable environment:
+1. **Dedicated Sub-directory Isolation**: Any newly generated build document, report, or script MUST reside within its own dedicated working sub-directory named strictly using the session timestamp identifier (e.g. if the active session is `2026-10-08_10-35-14.md`, you MUST use `2026-10-08_10-35-14/` as the sub-directory name). Never invent custom descriptive names like `2026-10-08_project_topic/`.
+2. **No Root Cluttering & No Double-Nesting**:
+   - Do not place new transient build documents or scripts directly into the root workspace directory.
+   - When running scripts in `run_python_code`, the sandbox already executes with `cwd` set to that sub-directory; scripts must output directly to `./` to prevent creating double-nested folders.
+

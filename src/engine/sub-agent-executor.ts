@@ -12,6 +12,7 @@ export interface SubAgentTaskArgs {
   workspace?: string;
   userNumber?: string;
   maxIterations?: number;
+  sessionFile?: string;
 }
 
 export interface SubAgentEventCallbacks {
@@ -36,10 +37,14 @@ Protocol:
   coder: `You are a Specialized Software Engineer & Data Processing Sub-Agent.
 Your job is to write, execute, and verify code or process data spreadsheets.
 Protocol:
-1. When computing, running scripts, or creating charts, invoke run_python_code with required dependencies.
-2. If processing spreadsheets, inspect files or invoke create_excel_spreadsheet.
-3. Handle errors autonomously by reading execution output and fixing bugs.
-4. Conclude with a clear technical breakdown and confirm output file locations.`,
+1. Environment Hygiene & Sub-Directory Isolation (STRICT ENFORCEMENT):
+   - You MUST place all newly created build documents, reports, and scripts in a dedicated working sub-directory named strictly using the session timestamp identifier (e.g. \`YYYY-MM-DD_HH-mm-ss\`, matching \`CURRENT_SESSION_ID\`). Never invent custom descriptive directory names.
+   - When invoking \`run_python_code\`, pass \`subDirectory: "YYYY-MM-DD_HH-mm-ss"\`.
+   - IMPORTANT: The sandbox runner already executes inside this sub-directory as its current working directory (\`cwd\`). Inside Python scripts, DO NOT run \`os.makedirs(sub_dir)\` or join with \`sub_dir\` again—write files directly to \`./filename.docx\`, otherwise double-nested folders will be created.
+2. When computing, running scripts, or creating charts, invoke run_python_code with required dependencies.
+3. If processing spreadsheets, inspect files or invoke create_excel_spreadsheet.
+4. Handle errors autonomously by reading execution output and fixing bugs.
+5. Conclude with a clear technical breakdown and confirm output file locations including the exact sub-directory path.`,
 
   designer: `You are a Specialized UI/UX & Editorial SVG Diagram Designer Sub-Agent.
 Your job is to generate high-fidelity vector architecture posters, pipelines, or flowcharts.
@@ -194,7 +199,8 @@ export class SubAgentExecutor {
         args.workspace || "default",
         args.userNumber || "00000",
         maxIterations,
-        currentDepth + 1 // increment depth
+        currentDepth + 1, // increment depth
+        args.sessionFile
       );
 
       return {
@@ -220,6 +226,18 @@ export class SubAgentExecutor {
   ): MCPClientManager {
     return new Proxy(baseManager, {
       get(target: any, prop: string | symbol) {
+        if (prop === "getOpenAIToolsForContext") {
+          return async (ws?: string, uNum?: string) => {
+            const allTools = "getOpenAIToolsForContext" in target
+              ? await target.getOpenAIToolsForContext(ws, uNum)
+              : (target.getOpenAITools() as OpenAIToolDefinition[]);
+            const filtered = allTools.filter((t: any) => t.function?.name !== "delegate_task");
+            if (!allowedTools || allowedTools.length === 0) {
+              return filtered;
+            }
+            return filtered.filter((t: any) => allowedTools.includes(t.function?.name));
+          };
+        }
         if (prop === "getOpenAITools") {
           return () => {
             const allTools = target.getOpenAITools() as OpenAIToolDefinition[];

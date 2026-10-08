@@ -39,7 +39,7 @@ export function cleanUserPrompt(prompt: string): string {
 /**
  * Format a Date object into YYYY-MM-DD_HH-mm-ss
  */
-function formatDateForFilename(d: Date): string {
+export function formatDateForFilename(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   const year = d.getFullYear();
   const month = pad(d.getMonth() + 1);

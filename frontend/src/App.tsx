@@ -2628,6 +2628,9 @@ export function App() {
               setIsFlashingComplete(false);
               setJustFinishedMessageId(null);
             }, 5000);
+          } else if (event === "end") {
+            try { reader.cancel(); } catch {}
+            break;
           }
         }
       }
@@ -2645,16 +2648,19 @@ export function App() {
           )
         );
       } else {
+        // If we already received a valid completed answer or tools, do not overwrite with transient socket close error
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMessageId
-              ? {
-                  ...m,
-                  content: `[Loop Error]: ${err.message}`,
-                  isStreaming: false,
-                }
-              : m
-          )
+          prev.map((m) => {
+            if (m.id !== assistantMessageId) return m;
+            if (m.content && m.content !== "(No response content)") {
+              return { ...m, isStreaming: false };
+            }
+            return {
+              ...m,
+              content: `[Loop Error]: ${err.message}`,
+              isStreaming: false,
+            };
+          })
         );
       }
     } finally {
