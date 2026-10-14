@@ -8,7 +8,8 @@ import {
   Loader2,
   Paperclip,
   CheckCircle2,
-  Info
+  Info,
+  Image as ImageIcon
 } from "lucide-react";
 
 export interface DocumentItem {
@@ -175,6 +176,9 @@ export const UploadDocModal: React.FC<UploadDocModalProps> = ({
     if (ext.includes("xls") || ext.includes("csv")) {
       return <FileSpreadsheet size={16} color="#10b981" />;
     }
+    if (ext.includes("png") || ext.includes("jpg") || ext.includes("jpeg") || ext.includes("webp") || ext.includes("gif") || ext.includes("svg")) {
+      return <ImageIcon size={16} color="#8b5cf6" />;
+    }
     return <FileText size={16} color="var(--accent)" />;
   };
 
@@ -222,7 +226,7 @@ export const UploadDocModal: React.FC<UploadDocModalProps> = ({
                 </span>
               </h2>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                Documents uploaded here are strictly attached to this conversation session.
+                Documents & screenshots uploaded here are attached to this conversation session (Excel, Word, PDF, Text, and Images).
               </div>
             </div>
           </div>
@@ -289,7 +293,7 @@ export const UploadDocModal: React.FC<UploadDocModalProps> = ({
             <input
               type="file"
               multiple
-              accept=".xlsx,.xls,.csv,.pdf,.docx,.txt,.md,.json,.html"
+              accept=".xlsx,.xls,.csv,.pdf,.docx,.txt,.md,.json,.html,.png,.jpg,.jpeg,.webp,.gif"
               style={{ display: "none" }}
               disabled={isUploading}
               onChange={(e) => handleFileUpload(e.target.files)}

@@ -706,6 +706,7 @@ app.post("/api/config", requireAuth, async (req, res) => {
           model: matchedProfile.model || config.llm.model,
           temperature: matchedProfile.temperature ?? config.llm.temperature,
           maxTokens: matchedProfile.maxTokens ?? config.llm.maxTokens,
+          supportsVision: matchedProfile.supportsVision ?? config.llm.supportsVision ?? true,
         };
       }
     }
@@ -731,6 +732,7 @@ app.post("/api/config", requireAuth, async (req, res) => {
             model: config.llm.model,
             temperature: config.llm.temperature,
             maxTokens: config.llm.maxTokens,
+            supportsVision: config.llm.supportsVision ?? true,
           };
         }
       }
@@ -1347,6 +1349,7 @@ app.all("/api/llm/test", async (req, res) => {
           model: profile.model || targetLLM.model,
           temperature: profile.temperature ?? targetLLM.temperature,
           maxTokens: profile.maxTokens ?? targetLLM.maxTokens,
+          supportsVision: profile.supportsVision ?? targetLLM.supportsVision ?? true,
         };
       }
     } else if (payload?.baseUrl || payload?.model) {
@@ -1356,6 +1359,7 @@ app.all("/api/llm/test", async (req, res) => {
         model: payload.model || targetLLM.model,
         temperature: parseFloat(payload.temperature) || targetLLM.temperature,
         maxTokens: parseInt(payload.maxTokens, 10) || targetLLM.maxTokens,
+        supportsVision: payload.supportsVision !== undefined ? Boolean(payload.supportsVision) : (targetLLM.supportsVision ?? true),
       };
     }
 
@@ -1477,9 +1481,9 @@ function getDocManager(req: express.Request): DocumentManager {
 // 4. Chat with Streaming Events (SSE) and Multi-Turn History, Document Attachment & Workspace Support
 app.post("/api/chat", requireAuth, async (req, res) => {
   const { userNumber } = getAuthContext(req);
-  const { message, history, attachedDocHashes, sessionFile, workspace, enableThinking = true, maxIterations, modelId, model } = req.body;
-  if (!message) {
-    return res.status(400).json({ error: "Message is required." });
+  const { message, history, attachedDocHashes, sessionFile, workspace, enableThinking = true, maxIterations, modelId, model, attachedImages } = req.body;
+  if (!message && (!attachedImages || attachedImages.length === 0)) {
+    return res.status(400).json({ error: "Message or image attachment is required." });
   }
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -1514,6 +1518,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
           model: matchedProfile.model || currentConfig.llm.model,
           temperature: matchedProfile.temperature ?? currentConfig.llm.temperature,
           maxTokens: matchedProfile.maxTokens ?? currentConfig.llm.maxTokens,
+          supportsVision: matchedProfile.supportsVision ?? currentConfig.llm.supportsVision ?? true,
         };
       }
     } else if (model) {
@@ -1528,6 +1533,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
           model: matchedByName.model,
           temperature: matchedByName.temperature ?? currentConfig.llm.temperature,
           maxTokens: matchedByName.maxTokens ?? currentConfig.llm.maxTokens,
+          supportsVision: matchedByName.supportsVision ?? currentConfig.llm.supportsVision ?? true,
         };
       } else {
         currentConfig.llm.model = model;
@@ -1541,6 +1547,11 @@ app.post("/api/chat", requireAuth, async (req, res) => {
     // Retrieve preprocessed document context if hashes provided
     const docContextResult = docManager.getPreprocessedContext(attachedDocHashes || []);
     const attachedContext = docContextResult.context;
+
+    // Retrieve attached images from DocumentManager + directly attached images
+    const docImages = docManager.getAttachedImages(attachedDocHashes || []);
+    const directImages = Array.isArray(attachedImages) ? attachedImages : [];
+    const allAttachedImages = [...docImages, ...directImages];
 
     let activatedSkillNames: string[] = [];
 
@@ -1625,6 +1636,7 @@ app.post("/api/chat", requireAuth, async (req, res) => {
                 startTime,
                 endTime: new Date(),
                 attachedDocHashes: attachedDocHashes || [],
+                attachedImages: allAttachedImages,
                 activeSkills: finalSkills,
               },
               "logs",
@@ -1662,7 +1674,8 @@ app.post("/api/chat", requireAuth, async (req, res) => {
       userNumber,
       typeof maxIterations === "number" && maxIterations > 0 ? maxIterations : undefined,
       0,
-      effectiveSessionFile
+      effectiveSessionFile,
+      allAttachedImages
     );
   } catch (err: any) {
     sendEvent("error", { message: err.message });

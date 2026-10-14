@@ -49,14 +49,15 @@ export class LoopOrchestrator {
   async run(
     userPrompt: string,
     callbacks?: LoopEventCallbacks,
-    history?: Array<{ role: "user" | "assistant"; content: string }>,
+    history?: Array<{ role: "user" | "assistant"; content: any }>,
     attachedContext?: string,
     enableThinking: boolean = true,
     workspace: string = "default",
     userNumber: string = "00000",
     maxIterationsOverride?: number,
     depth: number = 0,
-    sessionFile?: string
+    sessionFile?: string,
+    attachedImages?: Array<{ dataUrl: string; name?: string }>
   ): Promise<{ answer: string; iterations: number; history: OpenAI.Chat.Completions.ChatCompletionMessageParam[]; activeSkills?: string[]; limitReached?: boolean }> {
     // 1. Build initial system message combining system prompt, temporal context, attached docs, and AI skills
     const now = new Date();
@@ -169,8 +170,25 @@ export class LoopOrchestrator {
       }
     }
 
-    // 3. Append current user query
-    messages.push({ role: "user", content: userPrompt });
+    // 3. Append current user query (with multimodal vision support if images attached)
+    if (attachedImages && attachedImages.length > 0) {
+      const userParts: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
+        { type: "text", text: userPrompt || "Please analyze the attached image(s)." },
+      ];
+      for (const img of attachedImages) {
+        if (img?.dataUrl) {
+          userParts.push({
+            type: "image_url",
+            image_url: {
+              url: img.dataUrl,
+            },
+          });
+        }
+      }
+      messages.push({ role: "user", content: userParts });
+    } else {
+      messages.push({ role: "user", content: userPrompt });
+    }
 
     let iteration = 0;
     const maxIterations = (typeof maxIterationsOverride === "number" && maxIterationsOverride > 0)

@@ -59,6 +59,7 @@ import {
   ArrowDown,
   Save,
   BookmarkCheck,
+  Image as ImageIcon,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
@@ -117,6 +118,7 @@ interface Message {
   timestamp?: number;
   turnIndex?: number;
   limitReached?: boolean;
+  images?: Array<{ id: string; name: string; dataUrl: string }>;
 }
 
 interface ConfigState {
@@ -211,6 +213,8 @@ export function App() {
     },
   ]);
   const [inputPrompt, setInputPrompt] = useState("");
+  const [pendingImages, setPendingImages] = useState<Array<{ id: string; name: string; dataUrl: string }>>([]);
+  const imageFileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState<number | null>(null);
   const [activeRunStartTime, setActiveRunStartTime] = useState<number | null>(null);
@@ -218,6 +222,25 @@ export function App() {
   const [justFinishedMessageId, setJustFinishedMessageId] = useState<string | null>(null);
   const [isFlashingComplete, setIsFlashingComplete] = useState<boolean>(false);
   const flashTimerRef = useRef<any>(null);
+
+  const handleAddImageFile = (file: File) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (dataUrl) {
+        setPendingImages((prev) => [
+          ...prev,
+          {
+            id: "img-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+            name: file.name || `Pasted Image ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+            dataUrl,
+          },
+        ]);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Live timer tick during inference & tool execution
   useEffect(() => {
@@ -2390,16 +2413,17 @@ export function App() {
 
   const handleSend = async (textOverride?: string, extraIterationsOverride?: number) => {
     const rawQuery = textOverride !== undefined ? textOverride : inputPrompt;
-    if (!rawQuery.trim() || loading) return;
+    if ((!rawQuery.trim() && pendingImages.length === 0) || loading) return;
 
     // 若送出時仍在錄音，先行停止
     if (isListening) {
       stopVoiceRecognition();
     }
 
+    const currentImages = [...pendingImages];
     const userMessageId = "user-" + Date.now();
     const assistantMessageId = "asst-" + Date.now();
-    const baseQuery = rawQuery.trim();
+    const baseQuery = rawQuery.trim() || (currentImages.length > 0 ? "Please analyze the attached image(s)." : "");
 
     // If an explicit skill is selected via "/" slash command, inject its direct instruction
     let finalQuery = baseQuery;
@@ -2419,7 +2443,14 @@ export function App() {
 
     setMessages((prev) => [
       ...prev,
-      { id: userMessageId, role: "user", content: baseQuery, timestamp: now, turnIndex: nextTurn },
+      {
+        id: userMessageId,
+        role: "user",
+        content: baseQuery,
+        timestamp: now,
+        turnIndex: nextTurn,
+        images: currentImages.length > 0 ? currentImages : undefined,
+      },
       {
         id: assistantMessageId,
         role: "assistant",
@@ -2432,6 +2463,7 @@ export function App() {
     ]);
 
     setInputPrompt("");
+    setPendingImages([]);
     setSelectedDiagramMode(null);
     setSelectedSkillBadge(null);
     setLoading(true);
@@ -2479,6 +2511,7 @@ export function App() {
           maxIterations: extraIterationsOverride,
           modelId: config?.activeModelId,
           model: config?.llm?.model,
+          attachedImages: currentImages.map((img) => ({ dataUrl: img.dataUrl, name: img.name })),
         }),
       });
 
@@ -6279,6 +6312,34 @@ export function App() {
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
+                        {m.images && m.images.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: m.content ? 8 : 0 }}>
+                            {m.images.map((img, idx) => (
+                              <div
+                                key={img.id || idx}
+                                style={{
+                                  position: "relative",
+                                  borderRadius: 8,
+                                  overflow: "hidden",
+                                  border: "1px solid rgba(3, 105, 161, 0.25)",
+                                  boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
+                                  maxWidth: 240,
+                                  maxHeight: 180,
+                                  cursor: "pointer",
+                                  background: "#ffffff",
+                                }}
+                                onClick={() => window.open(img.dataUrl, "_blank")}
+                                title={`${img.name} (Click to open full size)`}
+                              >
+                                <img
+                                  src={img.dataUrl}
+                                  alt={img.name}
+                                  style={{ maxWidth: 240, maxHeight: 180, objectFit: "cover", display: "block" }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <MarkdownRenderer content={m.content} disableDiagrams />
                       </div>
                       <button
@@ -8560,10 +8621,74 @@ export function App() {
               );
             })()}
 
+            {/* 🖼️ Attached Image Chips Preview */}
+            {pendingImages.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 6,
+                  padding: "6px 8px",
+                  background: "rgba(139, 92, 246, 0.08)",
+                  borderRadius: "6px 6px 0 0",
+                  borderBottom: "1px dashed rgba(139, 92, 246, 0.25)",
+                }}
+              >
+                {pendingImages.map((img) => (
+                  <div
+                    key={img.id}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "2px 8px 2px 4px",
+                      borderRadius: 6,
+                      background: "var(--bg-primary)",
+                      border: "1px solid rgba(139, 92, 246, 0.35)",
+                      fontSize: 11,
+                      color: "var(--text-main)",
+                    }}
+                  >
+                    <img
+                      src={img.dataUrl}
+                      alt={img.name}
+                      style={{ width: 22, height: 22, borderRadius: 4, objectFit: "cover" }}
+                    />
+                    <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>
+                      {img.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPendingImages((prev) => prev.filter((p) => p.id !== img.id))}
+                      style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "1px", display: "flex" }}
+                      title="Remove image"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <textarea
               ref={chatInputRef}
               rows={1}
               value={inputPrompt}
+              onPaste={(e) => {
+                const items = e.clipboardData?.items;
+                if (items) {
+                  for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.type.startsWith("image/")) {
+                      e.preventDefault();
+                      const file = item.getAsFile();
+                      if (file) {
+                        handleAddImageFile(file);
+                      }
+                    }
+                  }
+                }
+              }}
               onChange={(e) => {
                 const val = e.target.value;
                 setInputPrompt(val);
@@ -8770,6 +8895,69 @@ export function App() {
             )}
           </div>
 
+          {/* 🖼️ Attach Image / Screenshot Button */}
+          <input
+            ref={imageFileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const files = e.target.files;
+              if (files && files.length > 0) {
+                for (let i = 0; i < files.length; i++) {
+                  handleAddImageFile(files[i]);
+                }
+                e.target.value = "";
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => imageFileInputRef.current?.click()}
+            disabled={loading}
+            title="Attach Image / Screenshot (or paste directly into input with Ctrl+V)"
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 6,
+              background: pendingImages.length > 0 ? "rgba(139, 92, 246, 0.15)" : "var(--bg-card)",
+              color: pendingImages.length > 0 ? "#8b5cf6" : "var(--text-main)",
+              border: pendingImages.length > 0 ? "1px solid #8b5cf6" : "1px solid var(--border-color)",
+              cursor: loading ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s ease",
+              flexShrink: 0,
+              position: "relative",
+            }}
+          >
+            <ImageIcon size={13} />
+            {pendingImages.length > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: -4,
+                  right: -4,
+                  background: "#8b5cf6",
+                  color: "#ffffff",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  lineHeight: 1,
+                }}
+              >
+                {pendingImages.length}
+              </span>
+            )}
+          </button>
+
           {/* 🎙️ Voice-to-Text Microphone Trigger Button (Compact Icon) */}
           <button
             type="button"
@@ -8835,7 +9023,7 @@ export function App() {
           ) : (
             <button
               onClick={() => handleSend()}
-              disabled={!inputPrompt.trim()}
+              disabled={!inputPrompt.trim() && pendingImages.length === 0}
               title={isFlashingComplete ? "Output Ready! (Enter to send next)" : "Send message (Enter)"}
               className={isFlashingComplete ? "complete-flash-btn" : ""}
               style={{
@@ -8844,12 +9032,12 @@ export function App() {
                 borderRadius: 6,
                 background: isFlashingComplete
                   ? "#10b981"
-                  : !inputPrompt.trim()
+                  : (!inputPrompt.trim() && pendingImages.length === 0)
                   ? "#94a3b8"
                   : "#1f6feb",
                 color: "#ffffff",
                 border: isFlashingComplete ? "1.5px solid #059669" : "none",
-                cursor: !inputPrompt.trim() ? "not-allowed" : "pointer",
+                cursor: (!inputPrompt.trim() && pendingImages.length === 0) ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

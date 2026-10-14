@@ -39,6 +39,7 @@ export function loadConfig(configPath?: string): LoopConfig {
     model: (fileContent.llm?.model && !fileContent.llm.model.startsWith("${")) ? fileContent.llm.model : (process.env.LLM_MODEL || "gemini-3.8-flash-low"),
     temperature: fileContent.llm?.temperature ?? 0.7,
     maxTokens: fileContent.llm?.maxTokens ?? 4096,
+    supportsVision: fileContent.llm?.supportsVision ?? true,
   };
 
   // Seed or parse models profiles list
@@ -59,6 +60,7 @@ export function loadConfig(configPath?: string): LoopConfig {
       model: baseLLM.model,
       temperature: baseLLM.temperature,
       maxTokens: baseLLM.maxTokens,
+      supportsVision: baseLLM.supportsVision,
       description: "Current configured LLM model",
     };
 
@@ -75,6 +77,7 @@ export function loadConfig(configPath?: string): LoopConfig {
       baseLLM.model = activeProfile.model || baseLLM.model;
       baseLLM.temperature = activeProfile.temperature ?? baseLLM.temperature;
       baseLLM.maxTokens = activeProfile.maxTokens ?? baseLLM.maxTokens;
+      baseLLM.supportsVision = activeProfile.supportsVision ?? baseLLM.supportsVision;
     }
   } else if (modelsList.length > 0) {
     activeModelId = modelsList[0].id;
@@ -144,6 +147,7 @@ export function saveConfigToDisk(updatedConfig: Partial<LoopConfig>, configPath?
       model: updatedConfig.llm?.model ?? existing.llm?.model ?? "MiniMax-M3",
       temperature: updatedConfig.llm?.temperature ?? existing.llm?.temperature ?? 0.7,
       maxTokens: updatedConfig.llm?.maxTokens ?? existing.llm?.maxTokens ?? 4096,
+      supportsVision: updatedConfig.llm?.supportsVision ?? existing.llm?.supportsVision ?? true,
     },
     models: sanitizedModels ?? [],
     activeModelId: updatedConfig.activeModelId ?? existing.activeModelId,

@@ -22,6 +22,7 @@ export interface LLMProfile {
   model: string;
   temperature: number;
   maxTokens?: number;
+  supportsVision?: boolean;
   description?: string;
 }
 
@@ -87,6 +88,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
       model: "",
       temperature: baseRef?.temperature ?? 0.7,
       maxTokens: baseRef?.maxTokens ?? 4096,
+      supportsVision: baseRef?.supportsVision ?? true,
       description: "",
       provider: "custom",
     });
@@ -448,6 +450,21 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                               ACTIVE
                             </span>
                           )}
+                          {p.supportsVision !== false && (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                padding: "1px 6px",
+                                borderRadius: 4,
+                                background: "rgba(139, 92, 246, 0.15)",
+                                color: "#8b5cf6",
+                              }}
+                              title="Multimodal Image Recognition (Vision) Supported"
+                            >
+                              👁️ Vision
+                            </span>
+                          )}
                         </div>
 
                         {/* Action buttons */}
@@ -721,6 +738,39 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                     }}
                   />
                 </div>
+              </div>
+
+              {/* Multimodal Vision Toggle */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 12px",
+                  borderRadius: 6,
+                  background: "var(--bg-primary)",
+                  border: "1px solid var(--border-color)",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-main)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>👁️ Vision / Image Recognition</span>
+                    <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: "rgba(139, 92, 246, 0.15)", color: "#8b5cf6", fontWeight: 700 }}>
+                      Multimodal
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                    Enable for models that accept image attachments
+                  </div>
+                </div>
+                <label style={{ display: "inline-flex", alignItems: "center", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={editingProfile.supportsVision !== false}
+                    onChange={(e) => setEditingProfile({ ...editingProfile, supportsVision: e.target.checked })}
+                    style={{ width: 16, height: 16, accentColor: "#8b5cf6", cursor: "pointer" }}
+                  />
+                </label>
               </div>
 
               {/* Test in Editor Action */}

@@ -186,11 +186,36 @@ export function preprocessText(buffer: Buffer, fileName: string): PreprocessResu
 }
 
 /**
+ * Preprocess Image attachments (.png, .jpg, .jpeg, .webp, .gif)
+ */
+export function preprocessImage(buffer: Buffer, fileName: string): PreprocessResult {
+  const sizeKb = (buffer.length / 1024).toFixed(1);
+  const header = `================================================================================\n🖼️ [Attached Image File]: ${fileName}\n⏰ [Processed At]: ${new Date().toISOString()}\n================================================================================\n\n`;
+  const info = `[Visual Image: ${fileName} (${sizeKb} KB)]\nThis image has been ingested and forwarded directly to the multimodal vision LLM pipeline for high-fidelity visual recognition and analysis.\n`;
+  const fullText = header + info;
+
+  return {
+    text: fullText,
+    charCount: fullText.length,
+    previewSnippet: `[Attached Image: ${fileName} (${sizeKb} KB) - Multimodal Vision Enabled]`,
+  };
+}
+
+/**
  * Master dispatcher for document conversion
  */
 export async function preprocessDocument(buffer: Buffer, fileName: string): Promise<PreprocessResult> {
   const lowerName = fileName.toLowerCase();
 
+  if (
+    lowerName.endsWith(".png") ||
+    lowerName.endsWith(".jpg") ||
+    lowerName.endsWith(".jpeg") ||
+    lowerName.endsWith(".webp") ||
+    lowerName.endsWith(".gif")
+  ) {
+    return preprocessImage(buffer, fileName);
+  }
   if (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls") || lowerName.endsWith(".csv")) {
     return preprocessExcel(buffer, fileName);
   }

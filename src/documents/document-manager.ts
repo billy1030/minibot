@@ -231,8 +231,51 @@ export class DocumentManager {
     return Object.values(index).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
+  /**
+   * Extract attached images as Base64 data URLs for vision-enabled LLMs
+   */
+  public getAttachedImages(hashes: string[]): Array<{ dataUrl: string; name: string }> {
+    if (!hashes || hashes.length === 0) return [];
+    const index = this.getIndex();
+    const images: Array<{ dataUrl: string; name: string }> = [];
+    const imageExtensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
+
+    for (const hash of hashes) {
+      const doc = index[hash];
+      if (!doc) continue;
+      if (imageExtensions.includes(doc.extension.toLowerCase())) {
+        const rawPath = this.resolveRawPath(doc);
+        if (rawPath && fs.existsSync(rawPath)) {
+          try {
+            const buffer = fs.readFileSync(rawPath);
+            const mime = doc.mimeType || this.guessMimeType(doc.extension);
+            const base64 = buffer.toString("base64");
+            images.push({
+              dataUrl: `data:${mime};base64,${base64}`,
+              name: doc.originalName,
+            });
+          } catch (readErr: any) {
+            console.warn(`[DocumentManager] Failed to read attached image ${doc.originalName}:`, readErr.message);
+          }
+        }
+      }
+    }
+    return images;
+  }
+
   private guessMimeType(ext: string): string {
     switch (ext) {
+      case ".png":
+        return "image/png";
+      case ".jpg":
+      case ".jpeg":
+        return "image/jpeg";
+      case ".webp":
+        return "image/webp";
+      case ".gif":
+        return "image/gif";
+      case ".svg":
+        return "image/svg+xml";
       case ".xlsx":
         return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
       case ".xls":

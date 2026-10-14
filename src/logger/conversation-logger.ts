@@ -9,6 +9,12 @@ interface ToolExecutionLog {
   timestamp: number;
 }
 
+interface AttachedImageItem {
+  id?: string;
+  name?: string;
+  dataUrl: string;
+}
+
 interface ConversationSession {
   sessionFile?: string; // If provided, append to this session file instead of creating a new one
   workspace?: string;    // Target workspace folder (defaults to "default")
@@ -21,15 +27,17 @@ interface ConversationSession {
   startTime: Date;
   endTime: Date;
   attachedDocHashes?: string[];
+  attachedImages?: AttachedImageItem[];
   activeSkills?: string[];
 }
 
 /**
- * Strips injected system instructions and skill directives to keep user prompts clean
+ * Strips injected system instructions, skill directives, and serialized image metadata to keep user prompts clean
  */
 export function cleanUserPrompt(prompt: string): string {
   if (!prompt) return "";
   return prompt
+    .replace(/<!-- ATTACHED_IMAGES:[\s\S]*?-->/g, "")
     .replace(/\r?\n\r?\n\[System Instruction:[\s\S]*?\](?=\r?\n|$)/g, "")
     .replace(/\r?\n\r?\n\[Explicit User Skill Directive:[\s\S]*?\](?=\r?\n|$)/g, "")
     .replace(/\r?\n\r?\n?- \*\*Active Skills\*\*: `[^`]+`(?=\r?\n|$)/g, "")
@@ -285,6 +293,9 @@ export function saveConversationLog(session: ConversationSession, baseDir: strin
       "",
       "## Turn 1: User Prompt",
       cleanUserPrompt(session.userPrompt),
+      ...(session.attachedImages && session.attachedImages.length > 0
+        ? [`<!-- ATTACHED_IMAGES: ${JSON.stringify(session.attachedImages)} -->`]
+        : []),
       "",
       ...(session.activeSkills && session.activeSkills.length > 0 ? [`- **Active Skills**: \`${JSON.stringify(session.activeSkills)}\``, ""] : []),
       "---",
@@ -344,6 +355,9 @@ export function saveConversationLog(session: ConversationSession, baseDir: strin
       "",
       `## Turn ${turnNumber}: User Prompt`,
       cleanUserPrompt(session.userPrompt),
+      ...(session.attachedImages && session.attachedImages.length > 0
+        ? [`<!-- ATTACHED_IMAGES: ${JSON.stringify(session.attachedImages)} -->`]
+        : []),
       "",
       ...(session.activeSkills && session.activeSkills.length > 0 ? [`- **Active Skills**: \`${JSON.stringify(session.activeSkills)}\``, ""] : []),
       "---",
@@ -815,12 +829,29 @@ export function parseConversationLog(filename: string, workspace: string = "defa
       } catch {}
     }
 
+    // Extract attached images if present
+    const imagesMatch = turnBlock.match(/<!-- ATTACHED_IMAGES: ([\s\S]*?) -->/);
+    let turnImages: any[] | undefined = undefined;
+    if (imagesMatch) {
+      try {
+        const parsed = JSON.parse(imagesMatch[1]);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          turnImages = parsed.map((img: any, imgIdx: number) => ({
+            id: img.id || `img-restored-${turnNum}-${imgIdx}`,
+            name: img.name || `Image ${imgIdx + 1}`,
+            dataUrl: img.dataUrl,
+          }));
+        }
+      } catch {}
+    }
+
     if (userPrompt) {
       messages.push({
         id: `user-turn-${turnNum}`,
         role: "user",
         content: userPrompt,
         turnIndex: turnNum,
+        images: turnImages,
       });
     }
 
@@ -1046,6 +1077,9 @@ export function cloneConversationTurn(
     mdParts.push("");
     mdParts.push(`## Turn ${seqNum}: User Prompt`);
     mdParts.push(t.user?.content || "");
+    if (t.user?.images && t.user.images.length > 0) {
+      mdParts.push(`<!-- ATTACHED_IMAGES: ${JSON.stringify(t.user.images)} -->`);
+    }
     mdParts.push("");
     mdParts.push("---");
     mdParts.push("");
@@ -1204,6 +1238,9 @@ export function rollbackConversationTurn(
     mdParts.push("");
     mdParts.push(`## Turn ${seqNum}: User Prompt`);
     mdParts.push(t.user?.content || "");
+    if (t.user?.images && t.user.images.length > 0) {
+      mdParts.push(`<!-- ATTACHED_IMAGES: ${JSON.stringify(t.user.images)} -->`);
+    }
     mdParts.push("");
     mdParts.push("---");
     mdParts.push("");
