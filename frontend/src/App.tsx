@@ -6325,10 +6325,13 @@ export function App() {
                                   overflow: "hidden",
                                   border: "1px solid rgba(3, 105, 161, 0.25)",
                                   boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
-                                  maxWidth: 240,
-                                  maxHeight: 180,
+                                  maxWidth: 320,
+                                  maxHeight: 260,
                                   cursor: "pointer",
-                                  background: "#ffffff",
+                                  background: "rgba(0,0,0,0.03)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
                                 }}
                                 onClick={() => window.open(img.dataUrl, "_blank")}
                                 title={`${img.name} (Click to open full size)`}
@@ -6336,7 +6339,14 @@ export function App() {
                                 <img
                                   src={img.dataUrl}
                                   alt={img.name}
-                                  style={{ maxWidth: 240, maxHeight: 180, objectFit: "cover", display: "block" }}
+                                  style={{
+                                    maxWidth: 320,
+                                    maxHeight: 260,
+                                    width: "auto",
+                                    height: "auto",
+                                    objectFit: "contain",
+                                    display: "block",
+                                  }}
                                 />
                               </div>
                             ))}
