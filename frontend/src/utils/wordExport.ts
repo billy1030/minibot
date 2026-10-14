@@ -490,6 +490,56 @@ export async function generateDocxDocument(markdownContent: string, title: strin
           }
         }
 
+        // Check if paragraph contains markdown images (e.g. ![alt](data:image/...) or ![alt](url))
+        let hasRenderedImage = false;
+        if (paraToken.tokens && paraToken.tokens.length > 0) {
+          for (const inlineToken of paraToken.tokens) {
+            if (inlineToken.type === 'image') {
+              const imgToken = inlineToken as Tokens.Image;
+              const imgData = await fetchImageToBytes(imgToken.href);
+              if (imgData) {
+                elements.push(
+                  new Paragraph({
+                    children: [
+                      new ImageRun({
+                        type: 'png',
+                        data: imgData.data,
+                        transformation: {
+                          width: imgData.width,
+                          height: imgData.height,
+                        },
+                      }),
+                    ],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 180, after: 180 },
+                  })
+                );
+                if (imgToken.text) {
+                  elements.push(
+                    new Paragraph({
+                      children: [
+                        new TextRun({
+                          text: decodeHtmlEntities(imgToken.text),
+                          italics: true,
+                          size: 18, // 9pt
+                          color: '64748b',
+                        }),
+                      ],
+                      alignment: AlignmentType.CENTER,
+                      spacing: { before: 40, after: 120 },
+                    })
+                  );
+                }
+                hasRenderedImage = true;
+              }
+            }
+          }
+        }
+
+        if (hasRenderedImage) {
+          break;
+        }
+
         // Standard paragraph
         const runs = buildRunsFromTokens(paraToken.tokens);
         if (runs.length > 0) {

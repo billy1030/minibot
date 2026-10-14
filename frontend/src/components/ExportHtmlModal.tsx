@@ -7,6 +7,7 @@ export interface ExportMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  images?: Array<{ id: string; name: string; dataUrl: string }>;
 }
 
 interface ExportHtmlModalProps {
@@ -71,15 +72,33 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
       ? sessionFileName.replace(/\.md$/i, "")
       : "Chat Session Export";
 
+    // Helper: format message content with any attached images
+    const formatMessageWithImages = (m: ExportMessage, headerText: string) => {
+      let text = `### ${headerText}\n\n${m.content}`;
+      if (m.images && m.images.length > 0) {
+        const imageMarkdown = m.images
+          .map((img) => `\n\n![${img.name || "Attached Image"}](${img.dataUrl})`)
+          .join("");
+        text += imageMarkdown;
+      }
+      return text;
+    };
+
     // Build markdown representation
     let combinedMarkdown = "";
     if (excludeUserQueries) {
       combinedMarkdown = filteredMessages
-        .map((m, i) => (filteredMessages.length > 1 ? `### 🤖 Assistant Response #${i + 1}\n\n${m.content}` : m.content))
+        .map((m, i) => {
+          const header = filteredMessages.length > 1 ? `🤖 Assistant Response #${i + 1}` : "🤖 Assistant Response";
+          return formatMessageWithImages(m, header);
+        })
         .join("\n\n---\n\n");
     } else {
       combinedMarkdown = filteredMessages
-        .map((m) => `### ${m.role === "user" ? "👤 User Query" : "🤖 Assistant Response"}\n\n${m.content}`)
+        .map((m) => {
+          const header = m.role === "user" ? "👤 User Query" : "🤖 Assistant Response";
+          return formatMessageWithImages(m, header);
+        })
         .join("\n\n---\n\n");
     }
 
