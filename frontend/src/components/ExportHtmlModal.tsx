@@ -1,6 +1,7 @@
 import React, { useState, useId } from "react";
-import { Download, X, FileText, Filter } from "lucide-react";
+import { Download, X, FileText, Filter, FileCode2, FileSpreadsheet, Loader2 } from "lucide-react";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "../utils/htmlExport";
+import { exportToWord } from "../utils/wordExport";
 
 export interface ExportMessage {
   id: string;
@@ -31,6 +32,10 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
   // Option 2: Remove all user queries (keep only assistant responses / reports)
   const [excludeUserQueries, setExcludeUserQueries] = useState<boolean>(false);
 
+  // Export Format: "html" or "docx"
+  const [exportFormat, setExportFormat] = useState<"html" | "docx">("html");
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+
   // Close on Escape key
   React.useEffect(() => {
     if (!isOpen) return;
@@ -59,8 +64,8 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
   const filteredAssistantCount = filteredMessages.filter((m) => m.role === "assistant").length;
   const filteredUserCount = filteredMessages.filter((m) => m.role === "user").length;
 
-  const handleExport = () => {
-    if (filteredMessages.length === 0) return;
+  const handleExport = async () => {
+    if (filteredMessages.length === 0 || isExporting) return;
 
     const baseTitle = sessionFileName
       ? sessionFileName.replace(/\.md$/i, "")
@@ -69,7 +74,6 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
     // Build markdown representation
     let combinedMarkdown = "";
     if (excludeUserQueries) {
-      // Clean export of assistant responses without repetitive user query dividers if desired
       combinedMarkdown = filteredMessages
         .map((m, i) => (filteredMessages.length > 1 ? `### 🤖 Assistant Response #${i + 1}\n\n${m.content}` : m.content))
         .join("\n\n---\n\n");
@@ -79,10 +83,26 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
         .join("\n\n---\n\n");
     }
 
-    const html = generateStandaloneExportHtml(combinedMarkdown, baseTitle);
-    const filename = `${baseTitle.replace(/[^a-zA-Z0-9_\u4e00-\u9fa5-]/g, "_")}.html`;
-    downloadHtmlFile(html, filename);
-    onClose();
+    const cleanBaseName = baseTitle.replace(/[^a-zA-Z0-9_\u4e00-\u9fa5-]/g, "_");
+
+    if (exportFormat === "docx") {
+      try {
+        setIsExporting(true);
+        const filename = `${cleanBaseName}.docx`;
+        await exportToWord(combinedMarkdown, filename, baseTitle);
+        onClose();
+      } catch (err) {
+        console.error("Docx export failed:", err);
+        alert(`Failed to export Word document: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setIsExporting(false);
+      }
+    } else {
+      const html = generateStandaloneExportHtml(combinedMarkdown, baseTitle);
+      const filename = `${cleanBaseName}.html`;
+      downloadHtmlFile(html, filename);
+      onClose();
+    }
   };
 
   return (
@@ -153,7 +173,7 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
                   color: "var(--text-main, #f8fafc)",
                 }}
               >
-                Export HTML Report
+                Export Conversation
               </h3>
               <p
                 style={{
@@ -162,7 +182,7 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
                   color: "var(--text-muted, #94a3b8)",
                 }}
               >
-                Customize contents included in your offline HTML file
+                Download as Standalone HTML or MS Word Document (.docx)
               </p>
             </div>
           </div>
@@ -196,6 +216,62 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
 
         {/* Modal Body */}
         <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {/* Export Format Selector */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text-muted, #94a3b8)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Export Format
+            </span>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={() => setExportFormat("html")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.6rem",
+                  padding: "0.75rem 0.85rem",
+                  borderRadius: "10px",
+                  border: exportFormat === "html" ? "1.5px solid var(--accent, #0284c7)" : "1px solid var(--border-color, rgba(255,255,255,0.08))",
+                  background: exportFormat === "html" ? "rgba(2, 132, 199, 0.12)" : "var(--bg-card-subtle, rgba(255, 255, 255, 0.02))",
+                  color: exportFormat === "html" ? "var(--accent, #0284c7)" : "var(--text-main, #f8fafc)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <FileCode2 size={20} color={exportFormat === "html" ? "var(--accent, #0284c7)" : "#94a3b8"} />
+                <div>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 700 }}>Standalone HTML</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted, #94a3b8)" }}>Interactive, offline vector diagrams</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setExportFormat("docx")}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.6rem",
+                  padding: "0.75rem 0.85rem",
+                  borderRadius: "10px",
+                  border: exportFormat === "docx" ? "1.5px solid #2563eb" : "1px solid var(--border-color, rgba(255,255,255,0.08))",
+                  background: exportFormat === "docx" ? "rgba(37, 99, 235, 0.12)" : "var(--bg-card-subtle, rgba(255, 255, 255, 0.02))",
+                  color: exportFormat === "docx" ? "#3b82f6" : "var(--text-main, #f8fafc)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <FileSpreadsheet size={20} color={exportFormat === "docx" ? "#3b82f6" : "#94a3b8"} />
+                <div>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 700 }}>MS Word (.docx)</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-muted, #94a3b8)" }}>Native OpenXML, embedded images</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
           {/* Options List */}
           <div
             style={{
@@ -386,26 +462,41 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
 
           <button
             type="button"
-            disabled={filteredMessages.length === 0}
+            disabled={filteredMessages.length === 0 || isExporting}
             onClick={handleExport}
             style={{
               padding: "0.5rem 1.25rem",
               borderRadius: "8px",
               border: "none",
-              background: filteredMessages.length > 0 ? "var(--accent, #0284c7)" : "#475569",
+              background: isExporting
+                ? "#64748b"
+                : filteredMessages.length > 0
+                ? exportFormat === "docx"
+                  ? "#2563eb"
+                  : "var(--accent, #0284c7)"
+                : "#475569",
               color: "#ffffff",
-              cursor: filteredMessages.length > 0 ? "pointer" : "not-allowed",
+              cursor: filteredMessages.length > 0 && !isExporting ? "pointer" : "not-allowed",
               fontSize: "0.85rem",
               fontWeight: 600,
               display: "flex",
               alignItems: "center",
               gap: "0.5rem",
-              boxShadow: filteredMessages.length > 0 ? "0 2px 8px rgba(2, 132, 199, 0.3)" : "none",
+              boxShadow: filteredMessages.length > 0 && !isExporting ? `0 2px 8px ${exportFormat === "docx" ? "rgba(37, 99, 235, 0.35)" : "rgba(2, 132, 199, 0.3)"}` : "none",
               transition: "all 0.15s ease",
             }}
           >
-            <Download size={15} />
-            Export HTML
+            {isExporting ? (
+              <>
+                <Loader2 size={15} className="spin" />
+                Generating Word Doc...
+              </>
+            ) : (
+              <>
+                <Download size={15} />
+                {exportFormat === "docx" ? "Export Word (.docx)" : "Export HTML"}
+              </>
+            )}
           </button>
         </div>
       </div>

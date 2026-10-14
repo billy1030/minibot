@@ -3190,10 +3190,10 @@ export function App() {
               )}
             </button>
 
-            {/* Export Entire Conversation as HTML (Icon-Only, 30x30) */}
+            {/* Export Entire Conversation as HTML / Word (Icon-Only, 30x30) */}
             <button
               onClick={() => setShowExportModal(true)}
-              title="Export complete chat session as standalone offline HTML report (with customizable filter options)"
+              title="Export complete chat session as standalone HTML report or MS Word document (.docx)"
               style={{
                 width: 30,
                 height: 30,
@@ -7257,6 +7257,69 @@ export function App() {
             )}
           </button>
 
+          {/* 🖼️ Attach Image / Screenshot Button (Adjacent to Paperclip) */}
+          <input
+            ref={imageFileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const files = e.target.files;
+              if (files && files.length > 0) {
+                for (let i = 0; i < files.length; i++) {
+                  handleAddImageFile(files[i]);
+                }
+                e.target.value = "";
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => imageFileInputRef.current?.click()}
+            disabled={loading}
+            title="Attach Image / Screenshot (or paste directly into input with Ctrl+V)"
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 6,
+              background: pendingImages.length > 0 ? "rgba(139, 92, 246, 0.15)" : "var(--bg-card)",
+              color: pendingImages.length > 0 ? "#8b5cf6" : "var(--text-main)",
+              border: pendingImages.length > 0 ? "1px solid #8b5cf6" : "1px solid var(--border-color)",
+              cursor: loading ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s ease",
+              flexShrink: 0,
+              position: "relative",
+            }}
+          >
+            <ImageIcon size={13} />
+            {pendingImages.length > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: -4,
+                  right: -4,
+                  background: "#8b5cf6",
+                  color: "#ffffff",
+                  fontSize: 9,
+                  fontWeight: 700,
+                  width: 14,
+                  height: 14,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  lineHeight: 1,
+                }}
+              >
+                {pendingImages.length}
+              </span>
+            )}
+          </button>
+
           {/* 🧠 Thinking Mode Toggle Button (Compact Icon with ON/OFF badge) */}
           <button
             type="button"
@@ -8895,68 +8958,6 @@ export function App() {
             )}
           </div>
 
-          {/* 🖼️ Attach Image / Screenshot Button */}
-          <input
-            ref={imageFileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const files = e.target.files;
-              if (files && files.length > 0) {
-                for (let i = 0; i < files.length; i++) {
-                  handleAddImageFile(files[i]);
-                }
-                e.target.value = "";
-              }
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => imageFileInputRef.current?.click()}
-            disabled={loading}
-            title="Attach Image / Screenshot (or paste directly into input with Ctrl+V)"
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 6,
-              background: pendingImages.length > 0 ? "rgba(139, 92, 246, 0.15)" : "var(--bg-card)",
-              color: pendingImages.length > 0 ? "#8b5cf6" : "var(--text-main)",
-              border: pendingImages.length > 0 ? "1px solid #8b5cf6" : "1px solid var(--border-color)",
-              cursor: loading ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "all 0.2s ease",
-              flexShrink: 0,
-              position: "relative",
-            }}
-          >
-            <ImageIcon size={13} />
-            {pendingImages.length > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: -4,
-                  right: -4,
-                  background: "#8b5cf6",
-                  color: "#ffffff",
-                  fontSize: 9,
-                  fontWeight: 700,
-                  width: 14,
-                  height: 14,
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  lineHeight: 1,
-                }}
-              >
-                {pendingImages.length}
-              </span>
-            )}
-          </button>
 
           {/* 🎙️ Voice-to-Text Microphone Trigger Button (Compact Icon) */}
           <button

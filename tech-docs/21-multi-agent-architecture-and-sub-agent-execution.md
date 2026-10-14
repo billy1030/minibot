@@ -175,3 +175,43 @@ The Web UI Configuration & AI Skills modal provides a dedicated tab: **"Multi-Ag
 - **`GET /api/agents-rules`**: Authenticated endpoint to retrieve the current markdown content of `AGENTS.md`.
 - **`POST /api/agents-rules`**: Authenticated endpoint to update and persist edits to `AGENTS.md` directly from the web interface without touching disk files manually.
 - **Visual Modal Ergonomics**: The Configuration & AI Skills modal has been expanded (+100px) with responsive code-font editor areas and syntax guidance to ensure comfortable reading and editing of agent system rules.
+
+---
+
+## 8. Agentic Design Paradigm Comparison & Architectural Trade-offs
+
+MiniBot's adoption of the **Agent-as-a-Tool / MCP Service** pattern is an intentional architectural design choice. Below is an engineering evaluation comparing the four primary multi-agent orchestration paradigms, their respective trade-offs, and decision criteria.
+
+### 8.1 Architectural Paradigms Overview
+
+```
+Paradigm 1: Agent-as-a-Tool / In-Process MCP Service (Current MiniBot Pattern)
+  [Supervisor Agent] ──(delegate_task tool call)──> [Sub-Agent Sandbox] ──(Returns text synthesis)──> [Supervisor]
+
+Paradigm 2: Deterministic State Graph / State Machine (LangGraph, AutoGen StateGraph, CrewAI Flows)
+  [State Store] ──> [Node A: Researcher] ──(State Transition / Router)──> [Node B: Coder] ──> [Node C: Reviewer]
+
+Paradigm 3: Multi-Agent Peer Debate / Blackboard (Chat Room / Pub-Sub Broadcast)
+  [Shared Conversation Stream / Event Bus] <──> [Agent A] / [Agent B] / [Agent C] (Turn-based debate/voting)
+
+Paradigm 4: Independent Standalone Microservices (A2A REST/gRPC/SSE Services)
+  [Gateway / Orchestrator] ──(POST /agent/researcher)──> [Container A]
+                           ──(POST /agent/coder)──────> [Container B]
+```
+
+### 8.2 Comprehensive Trade-Off Matrix
+
+| Paradigm | Architecture Mechanics | Pros (優點) | Cons (缺點) | Ideal Use Cases (適用場景) |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. Agent-as-a-Tool via MCP** *(Current MiniBot)* | Supervisor treats sub-agents as standard function tools (`delegate_task`). Supervisor decides when to delegate based on natural language and context. Sub-agent runs in an isolated context loop and returns a synthesized summary. | • **Maximum LLM Autonomy**: The model decides when delegation is truly needed.<br>• **Zero Context Contamination**: Sub-agent iterates in its own sandbox without filling the main conversation history.<br>• **Protocol Simplicity**: Reuses existing tool-calling standard (MCP / OpenAI function spec).<br>• **Unified Protocol**: Local or remote agents expose identical tool contracts. | • **Context Squeeze at Handoff**: Complex multi-turn state must be summarized into the tool return value.<br>• **Supervisor Bottleneck**: Single point of failure; if the supervisor hallucinates or forgets to call `delegate_task`, delegation doesn't trigger.<br>• **Sequential Latency**: Sub-agent loops can take 10–30s before the supervisor can proceed. | Desktop AI assistants, exploratory tasks, conversational interfaces, and multi-skill workspaces where queries vary widely. |
+| **2. Deterministic State Graph** *(LangGraph, AutoGen)* | Nodes represent specific tasks/agents, and edges define strict state transitions (e.g., `Start -> Plan -> Code -> Review -> Output` with conditional branches). | • **Deterministic & Predictable**: Execution flow is strictly controlled by code, reducing unpredictable deviations.<br>• **Built-in Checkpointing**: Can pause, inspect state, and resume (human-in-the-loop approvals).<br>• **Easy Error Recovery**: If "Reviewer" fails, edge can loop back directly to "Coder" without re-asking the supervisor. | • **Rigid / Inflexible**: Harder to handle open-ended, dynamic user queries outside predefined graph topologies.<br>• **Developer Overhead**: Requires defining schemas, edge routing conditions, and state transitions for each workflow.<br>• **Steep Learning Curve**: High framework lock-in and debugging complexity. | Strict, repeatable business workflows (e.g. Monthly Financial Reports, CI/CD pipeline automation, automated document parsing). |
+| **3. Multi-Agent Peer Debate / Blackboard** *(GroupChat / Pub-Sub)* | Agents share a single round-robin or broadcast discussion bus. Agents review each other's outputs in real-time, disagree, critique, and iterate collaboratively. | • **Deep Multi-Perspective Analysis**: Ideal for auditing, red-teaming, brainstorming, and complex debate.<br>• **Natural Emergent Solutions**: Agents challenge each other's assumptions and verify findings dynamically.<br>• **Interactive UI**: Users can watch agents talking to each other step-by-step. | • **Massive Token Consumption**: Full chat logs are broadcast to all agents across every turn.<br>• **Conversation Looping & Drifting**: Agents can enter repetitive pleasantries or circular arguments ("I agree with your point...").<br>• **Hard to Guarantee Termination**: Requires complex moderator logic to stop the conversation cleanly. | Code security audits, contract review, architectural consensus, and adversarial red-teaming. |
+| **4. Independent Standalone Microservices (A2A)** | Each agent runs as an isolated network microservice (e.g. `POST https://agent-coder.internal/execute`) with its own database, queue, and scaling rules. | • **Independent Scalability**: Heavy agents (e.g. GPU-based vision or code sandboxes) scale horizontally without impacting lightweight agents.<br>• **Language Agnostic**: Coder agent can be in Python/FastAPI, while Orchestrator is in TypeScript/Node.js.<br>• **Team Autonomy**: Different teams can own and deploy different agents independently. | • **High Infrastructure Complexity**: Requires service meshes, ingress, API gateways, retries, and network monitoring.<br>• **Cold Starts & Network Latency**: Cross-network round-trips add latency compared to in-process memory calls.<br>• **Security Surface**: Demands authentication, token rotation, and secret management across multiple endpoints. | Enterprise SaaS, multi-tenant cloud platforms, distributed AI agent networks with heterogeneous compute requirements. |
+
+### 8.3 MiniBot Architectural Decision Justification
+
+MiniBot deliberately selects **Paradigm 1 (Agent-as-a-Tool via MCP)** because:
+1. **Lightweight Desktop Footprint**: MiniBot runs as a desktop-native application (Node.js + Tauri). Running in-process MCP tools avoids external infrastructure overhead (Docker containers, service meshes).
+2. **Context Hygiene as Top Priority**: In long research or coding tasks, intermediate web pages and Python stdout would quickly exhaust the LLM's context window. Isolating sub-agents into scoped sandboxes with synthesized handoffs guarantees that the user's primary conversation remains crisp and responsive.
+3. **Open Standards Alignment**: Because sub-agents are packaged as MCP tools, external tools, local tools, and remote agents all use the same unified Model Context Protocol interface.
+
