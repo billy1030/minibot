@@ -7104,6 +7104,48 @@ export function App() {
 
                             <button
                               type="button"
+                              onClick={async () => {
+                                const cleanTitle = m.content
+                                  .replace(/^[#\s\-_*>`~]+/, "")
+                                  .slice(0, 45)
+                                  .replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]+/g, "_")
+                                  .replace(/^_+|_+$/g, "") || "Answer";
+                                try {
+                                  await exportToWord(m.content, `${cleanTitle}.docx`, cleanTitle);
+                                } catch (err) {
+                                  console.error("Word export failed:", err);
+                                  alert(`Word export failed: ${err instanceof Error ? err.message : String(err)}`);
+                                }
+                              }}
+                              title="Export this specific answer as MS Word Document (.docx)"
+                              style={{
+                                background: "transparent",
+                                border: "1px solid var(--border-color)",
+                                borderRadius: 4,
+                                padding: "2px 8px",
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: "var(--text-muted)",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = "#2563eb";
+                                e.currentTarget.style.color = "#2563eb";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = "var(--border-color)";
+                                e.currentTarget.style.color = "var(--text-muted)";
+                              }}
+                            >
+                              <FileSpreadsheet size={11} /> Export Word
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={() => handleRollbackTurn(m.id)}
                               title="Reject this response and roll back to previous state, restoring your prompt to edit"
                               style={{
