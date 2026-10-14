@@ -60,9 +60,11 @@ import {
   Save,
   BookmarkCheck,
   Image as ImageIcon,
+  FileSpreadsheet,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
+import { exportToWord } from "./utils/wordExport";
 import { AlertModal, type ModalAlertProps } from "./components/AlertModal";
 import { UploadDocModal } from "./components/UploadDocModal";
 import { SubConversationModal } from "./components/SubConversationModal";
