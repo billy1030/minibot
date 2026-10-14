@@ -72,12 +72,12 @@ export const ExportHtmlModal: React.FC<ExportHtmlModalProps> = ({
       ? sessionFileName.replace(/\.md$/i, "")
       : "Chat Session Export";
 
-    // Helper: format message content with any attached images
+    // Helper: format message content with any attached images (without showing filename/caption)
     const formatMessageWithImages = (m: ExportMessage, headerText: string) => {
       let text = `### ${headerText}\n\n${m.content}`;
       if (m.images && m.images.length > 0) {
         const imageMarkdown = m.images
-          .map((img) => `\n\n![${img.name || "Attached Image"}](${img.dataUrl})`)
+          .map((img) => `\n\n![](${img.dataUrl})`)
           .join("");
         text += imageMarkdown;
       }

@@ -559,22 +559,6 @@ export async function generateDocxDocument(markdownContent: string, title: strin
                     spacing: { before: 180, after: 180 },
                   })
                 );
-                if (imgToken.text) {
-                  elements.push(
-                    new Paragraph({
-                      children: [
-                        new TextRun({
-                          text: decodeHtmlEntities(imgToken.text),
-                          italics: true,
-                          size: 18, // 9pt
-                          color: '64748b',
-                        }),
-                      ],
-                      alignment: AlignmentType.CENTER,
-                      spacing: { before: 40, after: 120 },
-                    })
-                  );
-                }
                 hasRenderedImage = true;
               }
             }
