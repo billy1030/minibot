@@ -57,7 +57,8 @@ export class LoopOrchestrator {
     maxIterationsOverride?: number,
     depth: number = 0,
     sessionFile?: string,
-    attachedImages?: Array<{ dataUrl: string; name?: string }>
+    attachedImages?: Array<{ dataUrl: string; name?: string }>,
+    enableCompaction?: boolean
   ): Promise<{ answer: string; iterations: number; history: OpenAI.Chat.Completions.ChatCompletionMessageParam[]; activeSkills?: string[]; limitReached?: boolean }> {
     // 1. Build initial system message combining system prompt, temporal context, attached docs, and AI skills
     const now = new Date();
@@ -159,9 +160,44 @@ export class LoopOrchestrator {
     ];
 
     // 2. Inject prior conversation turns if provided
+    // Context Compaction Protocol:
+    // If compaction is enabled (either via run parameter override or config.contextCompaction.enabled),
+    // retain only the most recent N turns and summarize older turns into a structured digest to prevent context overflow.
+    const isCompactionActive = typeof enableCompaction === "boolean" 
+      ? enableCompaction 
+      : Boolean(this.config.contextCompaction?.enabled);
+    const windowSize = Math.max(2, this.config.contextCompaction?.windowSize || 10);
+
     if (history && history.length > 0) {
-      for (const turn of history) {
-        if (turn.role === "user" || turn.role === "assistant") {
+      const validTurns = history.filter((t) => t.role === "user" || t.role === "assistant");
+      if (isCompactionActive && validTurns.length > windowSize) {
+        const olderTurns = validTurns.slice(0, validTurns.length - windowSize);
+        const recentTurns = validTurns.slice(validTurns.length - windowSize);
+
+        // Build compact summary digest of evicted turns
+        const summaryLines: string[] = [
+          `[Prior Dialogue Context Compaction - ${olderTurns.length} earlier turns compressed]`,
+        ];
+        for (const t of olderTurns) {
+          const rawText = typeof t.content === "string" ? t.content : JSON.stringify(t.content);
+          const snippet = rawText.replace(/\s+/g, " ").slice(0, 140);
+          summaryLines.push(`• ${t.role.toUpperCase()}: ${snippet}${rawText.length > 140 ? "..." : ""}`);
+        }
+        summaryLines.push(`[End of Compressed Prior Context - ${recentTurns.length} full recent turns follow]`);
+
+        messages.push({
+          role: "system",
+          content: summaryLines.join("\n"),
+        });
+
+        for (const turn of recentTurns) {
+          messages.push({
+            role: turn.role,
+            content: turn.content,
+          });
+        }
+      } else {
+        for (const turn of validTurns) {
           messages.push({
             role: turn.role,
             content: turn.content,
@@ -260,11 +296,21 @@ export class LoopOrchestrator {
 
             callbacks?.onToolResult?.(toolName, toolOutput, serverName);
 
+            // Guardrail: Apply Head-Tail Truncation if tool output exceeds character budget
+            const maxToolChars = this.config.contextCompaction?.maxToolOutputChars || 16000;
+            let finalToolContent = toolOutput;
+            if (isCompactionActive && toolOutput.length > maxToolChars) {
+              const headLen = Math.floor(maxToolChars * 0.6);
+              const tailLen = Math.floor(maxToolChars * 0.35);
+              const omittedCount = toolOutput.length - headLen - tailLen;
+              finalToolContent = `${toolOutput.slice(0, headLen)}\n\n... [⚠️ Context Guard: ${omittedCount} characters omitted to protect context window. Key tail output follows] ...\n\n${toolOutput.slice(-tailLen)}`;
+            }
+
             // Append tool response to message history
             messages.push({
               role: "tool",
               tool_call_id: toolCall.id,
-              content: toolOutput,
+              content: finalToolContent,
             });
           }
           // Loop continues to next iteration to let LLM read tool output

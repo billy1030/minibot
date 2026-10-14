@@ -1481,7 +1481,7 @@ function getDocManager(req: express.Request): DocumentManager {
 // 4. Chat with Streaming Events (SSE) and Multi-Turn History, Document Attachment & Workspace Support
 app.post("/api/chat", requireAuth, async (req, res) => {
   const { userNumber } = getAuthContext(req);
-  const { message, history, attachedDocHashes, sessionFile, workspace, enableThinking = true, maxIterations, modelId, model, attachedImages } = req.body;
+  const { message, history, attachedDocHashes, sessionFile, workspace, enableThinking = true, maxIterations, modelId, model, attachedImages, enableCompaction } = req.body;
   if (!message && (!attachedImages || attachedImages.length === 0)) {
     return res.status(400).json({ error: "Message or image attachment is required." });
   }
@@ -1675,7 +1675,8 @@ app.post("/api/chat", requireAuth, async (req, res) => {
       typeof maxIterations === "number" && maxIterations > 0 ? maxIterations : undefined,
       0,
       effectiveSessionFile,
-      allAttachedImages
+      allAttachedImages,
+      enableCompaction
     );
   } catch (err: any) {
     sendEvent("error", { message: err.message });

@@ -11,6 +11,7 @@ import {
   X,
   Eye,
   EyeOff,
+  Minimize2,
 } from "lucide-react";
 
 export interface LLMProfile {
@@ -33,6 +34,8 @@ interface ModelSelectorModalProps {
   activeModelId?: string;
   onSelectActiveModel: (modelId: string) => Promise<void>;
   onSaveProfiles: (models: LLMProfile[], activeModelId?: string) => Promise<void>;
+  enableCompaction?: boolean;
+  onToggleCompaction?: (enabled: boolean) => void;
 }
 
 export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
@@ -42,6 +45,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   activeModelId,
   onSelectActiveModel,
   onSaveProfiles,
+  enableCompaction = false,
+  onToggleCompaction,
 }) => {
   const [localProfiles, setLocalProfiles] = useState<LLMProfile[]>(models || []);
   const [currentActiveId, setCurrentActiveId] = useState<string>(activeModelId || (models[0]?.id || ""));
@@ -51,6 +56,11 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
   const [testResult, setTestResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
   const [isTesting, setIsTesting] = useState<boolean>(false);
   const [searchFilter, setSearchFilter] = useState<string>("");
+  const [compactionActive, setCompactionActive] = useState<boolean>(enableCompaction);
+
+  React.useEffect(() => {
+    setCompactionActive(enableCompaction);
+  }, [enableCompaction]);
 
   React.useEffect(() => {
     if (models && models.length > 0) {
@@ -377,6 +387,102 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
                 }}
               >
                 <Plus size={14} /> Add Model
+              </button>
+            </div>
+
+            {/* 🗜️ Context Window & Compaction Settings Card */}
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: 8,
+                background: compactionActive ? "rgba(16, 185, 129, 0.08)" : "var(--bg-card)",
+                border: compactionActive ? "1.5px solid #10b981" : "1px solid var(--border-color)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 6,
+                    background: compactionActive ? "rgba(16, 185, 129, 0.2)" : "rgba(100, 116, 139, 0.15)",
+                    color: compactionActive ? "#10b981" : "var(--text-muted)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Minimize2 size={16} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-main)" }}>
+                      Sliding Window Context Compaction
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        fontWeight: 800,
+                        padding: "1px 6px",
+                        borderRadius: 3,
+                        background: compactionActive ? "#10b981" : "rgba(100, 116, 139, 0.25)",
+                        color: compactionActive ? "#ffffff" : "var(--text-muted)",
+                      }}
+                    >
+                      {compactionActive ? "ACTIVE" : "DISABLED"}
+                    </span>
+                  </div>
+                  <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "var(--text-muted)", lineHeight: 1.35 }}>
+                    {compactionActive
+                      ? "Automatically retains recent turns and condenses earlier dialogue into a compact summary to prevent token overflows."
+                      : "Sends complete linear conversation history (Standard). Click switch to enable auto-compaction."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Toggle Switch */}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !compactionActive;
+                  setCompactionActive(next);
+                  onToggleCompaction?.(next);
+                  try {
+                    localStorage.setItem("minibot_enable_compaction", next ? "1" : "0");
+                  } catch {}
+                }}
+                style={{
+                  width: 44,
+                  height: 24,
+                  borderRadius: 12,
+                  background: compactionActive ? "#10b981" : "var(--border-color)",
+                  border: "none",
+                  cursor: "pointer",
+                  position: "relative",
+                  padding: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  flexShrink: 0,
+                  transition: "background 0.2s ease",
+                }}
+              >
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: "50%",
+                    background: "#ffffff",
+                    transform: compactionActive ? "translateX(20px)" : "translateX(0px)",
+                    transition: "transform 0.2s ease",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                  }}
+                />
               </button>
             </div>
 

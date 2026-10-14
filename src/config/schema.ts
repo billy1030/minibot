@@ -18,6 +18,12 @@ export const VoiceConfigSchema = z.object({
   enabled: z.boolean().default(true),
 });
 
+export const ContextCompactionConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  windowSize: z.number().min(2).max(100).default(10), // keep latest N dialogue turns
+  maxToolOutputChars: z.number().min(1000).max(100000).default(16000), // head-tail truncate huge tool outputs
+});
+
 export const PromptsConfigSchema = z.object({
   systemPrompt: z.string().default(
     "You are an expert Mini Chat Bot Assistant. You have access to external tools via the Model Context Protocol (MCP). " +
@@ -154,6 +160,7 @@ export const LoopConfigSchema = z.object({
   models: z.array(LLMProfileSchema).default([]),
   activeModelId: z.string().optional(),
   voice: VoiceConfigSchema.optional(),
+  contextCompaction: ContextCompactionConfigSchema.optional().default({ enabled: true, windowSize: 10, maxToolOutputChars: 16000 }),
   prompts: PromptsConfigSchema,
   mcpServers: z.record(z.string(), MCPServerDefSchema),
   maxLoopIterations: z.number().min(1).max(100).default(50),
@@ -162,6 +169,8 @@ export const LoopConfigSchema = z.object({
 export type LLMConfig = z.infer<typeof LLMConfigSchema>;
 export type LLMProfile = z.infer<typeof LLMProfileSchema>;
 export type VoiceConfig = z.infer<typeof VoiceConfigSchema>;
+export type ContextCompactionConfig = z.infer<typeof ContextCompactionConfigSchema>;
 export type PromptsConfig = z.infer<typeof PromptsConfigSchema>;
 export type MCPServerDef = z.infer<typeof MCPServerDefSchema>;
 export type LoopConfig = z.infer<typeof LoopConfigSchema>;
+

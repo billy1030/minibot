@@ -336,6 +336,15 @@ export function App() {
       return false;
     }
   });
+  const [enableCompaction, setEnableCompaction] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("minibot_enable_compaction");
+      if (saved === null) return true; // Default ON
+      return saved === "1";
+    } catch {
+      return true;
+    }
+  });
   const [showDocModal, setShowDocModal] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showGitSyncModal, setShowGitSyncModal] = useState<boolean>(false);
@@ -2510,6 +2519,7 @@ export function App() {
           sessionFile: activeSessionFile,
           workspace: currentWorkspace,
           enableThinking,
+          enableCompaction,
           maxIterations: extraIterationsOverride,
           modelId: config?.activeModelId,
           model: config?.llm?.model,
@@ -10371,6 +10381,8 @@ export function App() {
         activeModelId={config?.activeModelId}
         onSelectActiveModel={handleSelectActiveModel}
         onSaveProfiles={handleSaveProfiles}
+        enableCompaction={enableCompaction}
+        onToggleCompaction={(val) => setEnableCompaction(val)}
       />
 
       {/* 📁 Create / Edit Collection Modal */}
