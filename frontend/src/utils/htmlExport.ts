@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Generates a standalone, beautiful, self-contained HTML document
  * with robust, deterministic SVG/Mermaid rendering architecture:
  *
@@ -127,6 +127,15 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
       padding: 0;
       font-size: 0.88rem;
       line-height: 1.6;
+    }
+    .markdown-body img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      margin: 1rem 0;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+      display: block;
     }
     .markdown-body table {
       width: 100%;
@@ -415,25 +424,34 @@ export function generateStandaloneExportHtml(markdownContent: string, title: str
     }
     .btn.primary:hover { opacity: 0.92; }
 
-    /* Print & PDF Rules */
-    @page { size: A4; margin: 15mm 15mm; }
+    /* Print & PDF Rules (Standard A4 Default) */
+    @page { size: A4 portrait; margin: 15mm 15mm; }
     @media print {
-      body { background: #fff !important; color: #000 !important; font-size: 12pt; line-height: 1.5; }
+      body { background: #fff !important; color: #000 !important; font-size: 11pt; line-height: 1.5; padding: 0 !important; }
       .toolbar, .diagram-code-panel { display: none !important; }
       .diagram-topbar { display: flex !important; background: #f8fafc !important; border-bottom: 1px solid #cbd5e1 !important; padding: 4px 10px !important; }
       .diagram-topbar-title { display: flex !important; color: #0284c7 !important; font-weight: 700 !important; font-size: 0.82rem !important; }
       .diagram-tools-group, .diag-btn { display: none !important; }
-      .main { border: none; box-shadow: none; margin: 0; padding: 0; max-width: 100%; }
+      .main { border: none; box-shadow: none; margin: 0; padding: 0; max-width: 100%; width: 100%; }
       .svg-diagram-wrapper, .mermaid-wrapper {
         page-break-inside: avoid !important;
         break-inside: avoid !important;
         border: 1px solid #cbd5e1;
         box-shadow: none;
-        margin: 1.5rem 0;
+        margin: 1.2rem 0;
         background: #fff !important;
+        max-width: 100% !important;
       }
-      .diagram-viewport { padding: 0.5rem; background: #fff !important; }
+      .diagram-viewport { padding: 0.5rem; background: #fff !important; overflow: visible !important; }
       .diagram-viewport svg { max-width: 100% !important; height: auto !important; }
+      .markdown-body img {
+        max-width: 100% !important;
+        height: auto !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        display: block !important;
+        margin: 1rem auto !important;
+      }
       pre, table, blockquote { page-break-inside: avoid; break-inside: avoid; border: 1px solid #e2e8f0; }
     }
   </style>

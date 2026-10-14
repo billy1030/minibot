@@ -33,11 +33,11 @@ function decodeHtmlEntities(str: string): string {
 }
 
 /**
- * Utility: Convert SVG string to PNG Uint8Array using browser Canvas
+ * Utility: Convert SVG string to PNG Uint8Array using browser Canvas constrained to standard A4 width
  */
 export async function svgToPngData(
   svgString: string,
-  maxWidth = 600
+  maxWidth = 560
 ): Promise<{ data: Uint8Array; width: number; height: number } | null> {
   if (typeof window === 'undefined') return null;
   try {
@@ -157,10 +157,16 @@ async function renderMermaidToPng(code: string, id: number): Promise<{ data: Uin
 }
 
 /**
- * Utility: Fetch external or base64 image data to Uint8Array
+ * Utility: Fetch external or base64 image data to Uint8Array while preserving natural aspect ratio
  */
-export async function fetchImageToBytes(src: string): Promise<{ data: Uint8Array; width: number; height: number } | null> {
+export async function fetchImageToBytes(
+  src: string,
+  maxWidth = 560,
+  maxHeight = 500
+): Promise<{ data: Uint8Array; width: number; height: number } | null> {
   try {
+    let rawBytes: Uint8Array | null = null;
+
     if (src.startsWith('data:image/')) {
       const commaIdx = src.indexOf(',');
       if (commaIdx !== -1) {
@@ -170,16 +176,55 @@ export async function fetchImageToBytes(src: string): Promise<{ data: Uint8Array
         for (let i = 0; i < binary.length; i++) {
           bytes[i] = binary.charCodeAt(i);
         }
-        return { data: bytes, width: 450, height: 280 };
+        rawBytes = bytes;
       }
-    }
-    if (src.startsWith('http://') || src.startsWith('https://')) {
+    } else if (src.startsWith('http://') || src.startsWith('https://')) {
       const resp = await fetch(src);
       if (resp.ok) {
         const buf = await resp.arrayBuffer();
-        return { data: new Uint8Array(buf), width: 450, height: 280 };
+        rawBytes = new Uint8Array(buf);
       }
     }
+
+    if (!rawBytes) return null;
+
+    // Detect actual natural dimensions via Image element to preserve strict aspect ratio
+    if (typeof window !== 'undefined') {
+      const dimensions = await new Promise<{ width: number; height: number }>((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          resolve({
+            width: img.naturalWidth || 450,
+            height: img.naturalHeight || 280,
+          });
+        };
+        img.onerror = () => {
+          resolve({ width: 450, height: 280 });
+        };
+        img.src = src;
+      });
+
+      let renderWidth = dimensions.width;
+      let renderHeight = dimensions.height;
+
+      // Scale proportionally if exceeding maxWidth
+      if (renderWidth > maxWidth) {
+        const ratio = maxWidth / renderWidth;
+        renderWidth = maxWidth;
+        renderHeight = Math.round(renderHeight * ratio);
+      }
+
+      // Scale proportionally if still exceeding maxHeight
+      if (renderHeight > maxHeight) {
+        const ratio = maxHeight / renderHeight;
+        renderHeight = maxHeight;
+        renderWidth = Math.round(renderWidth * ratio);
+      }
+
+      return { data: rawBytes, width: renderWidth, height: renderHeight };
+    }
+
+    return { data: rawBytes, width: 450, height: 280 };
   } catch (err) {
     console.warn('Failed to fetch image for docx:', err);
   }
@@ -816,11 +861,15 @@ export async function generateDocxDocument(markdownContent: string, title: strin
       {
         properties: {
           page: {
+            size: {
+              width: 11906, // Standard A4 width in dxa (210mm)
+              height: 16838, // Standard A4 height in dxa (297mm)
+            },
             margin: {
-              top: 1440, // 1 inch
-              right: 1440,
-              bottom: 1440,
-              left: 1440,
+              top: 1134, // 20mm in dxa
+              right: 1134, // 20mm in dxa
+              bottom: 1134, // 20mm in dxa
+              left: 1134, // 20mm in dxa
             },
           },
         },
