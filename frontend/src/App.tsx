@@ -511,6 +511,15 @@ export function App() {
   const [showVoiceKeyEditor, setShowVoiceKeyEditor] = useState<boolean>(false);
   const [customVoiceApiKey, setCustomVoiceApiKey] = useState<string>("");
   const [isSavingVoiceKey, setIsSavingVoiceKey] = useState<boolean>(false);
+  const [ttsCurrentChunkInfo, setTtsCurrentChunkInfo] = useState<{ current: number; total: number } | null>(null);
+  const ttsAudioQueueRef = useRef<{
+    chunks: string[];
+    currentIndex: number;
+    audioBlobs: Map<number, string>; // index -> blobUrl
+    isFetching: Set<number>;
+    messageId: string;
+    abortController: AbortController | null;
+  } | null>(null);
 
   // 載入瀏覽器原生語音庫 (Web Speech API)
   useEffect(() => {
@@ -1976,6 +1985,23 @@ export function App() {
       ttsAbortControllerRef.current = null;
     }
 
+    // Abort and clear MiniMax chunk queue
+    if (ttsAudioQueueRef.current) {
+      if (ttsAudioQueueRef.current.abortController) {
+        try {
+          ttsAudioQueueRef.current.abortController.abort();
+        } catch {}
+      }
+      // Revoke any preloaded blob URLs
+      ttsAudioQueueRef.current.audioBlobs.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {}
+      });
+      ttsAudioQueueRef.current = null;
+    }
+    setTtsCurrentChunkInfo(null);
+
     // Clear speaking keepalive interval if any
     if (ttsSpeakingTimeoutRef.current) {
       clearInterval(ttsSpeakingTimeoutRef.current);
@@ -2301,123 +2327,238 @@ export function App() {
     }
 
     // Mode 2: MiniMax Speech-2.8-HD Neural Voice API
+    // 智能語意斷句（目標約 400 ~ 550 字/段，切在標點符號處，避免超長導致截斷）
+    const splitForMiniMax = (str: string, targetLen = 450, hardMax = 650): string[] => {
+      // 優先依據段落換行切分
+      const paragraphs = str.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+      const chunks: string[] = [];
+      let cur = "";
+
+      for (const p of paragraphs) {
+        if ((cur + " " + p).length <= targetLen) {
+          cur += (cur ? "\n" : "") + p;
+        } else {
+          // 若當前段落累積已足夠，推入 chunks
+          if (cur) {
+            chunks.push(cur);
+            cur = "";
+          }
+
+          // 如果此單個段落超過 hardMax，依句子標點符號切分
+          if (p.length > hardMax) {
+            const sentenceRegex = /[^。！？!?；;\n]+[。！？!?；;\n]+|[^。！？!?；;\n]+$/g;
+            const sentences = p.match(sentenceRegex) || [p];
+            let sub = "";
+            for (const s of sentences) {
+              if ((sub + s).length <= targetLen) {
+                sub += s;
+              } else {
+                if (sub) chunks.push(sub.trim());
+                if (s.length > hardMax) {
+                  // 超長無句號文本以逗號/頓號切分
+                  const clauses = s.split(/([，,、])/);
+                  let clauseBuf = "";
+                  for (const c of clauses) {
+                    if ((clauseBuf + c).length <= targetLen) {
+                      clauseBuf += c;
+                    } else {
+                      if (clauseBuf) chunks.push(clauseBuf.trim());
+                      clauseBuf = c;
+                    }
+                  }
+                  sub = clauseBuf;
+                } else {
+                  sub = s;
+                }
+              }
+            }
+            if (sub.trim()) chunks.push(sub.trim());
+          } else {
+            cur = p;
+          }
+        }
+      }
+      if (cur.trim()) chunks.push(cur.trim());
+      return chunks.length > 0 ? chunks : [str];
+    };
+
+    const minimaxChunks = splitForMiniMax(cleanText);
+    const totalChunks = minimaxChunks.length;
+
     const abortController = new AbortController();
     ttsAbortControllerRef.current = abortController;
 
+    const queueState = {
+      chunks: minimaxChunks,
+      currentIndex: 0,
+      audioBlobs: new Map<number, string>(),
+      isFetching: new Set<number>(),
+      messageId,
+      abortController,
+    };
+    ttsAudioQueueRef.current = queueState;
+    setPlayingMessageId(messageId);
+    setTtsCurrentChunkInfo({ current: 1, total: totalChunks });
+
+    // 單段音訊請求輔助函數
+    const fetchChunkAudio = async (index: number): Promise<string | null> => {
+      if (index >= totalChunks || queueState.abortController?.signal.aborted) return null;
+      if (queueState.audioBlobs.has(index)) {
+        return queueState.audioBlobs.get(index)!;
+      }
+      if (queueState.isFetching.has(index)) {
+        // 等待正在請求中的完成
+        while (queueState.isFetching.has(index) && !queueState.abortController?.signal.aborted) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        return queueState.audioBlobs.get(index) || null;
+      }
+
+      queueState.isFetching.add(index);
+      try {
+        const res = await fetch("/api/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          signal: queueState.abortController?.signal,
+          body: JSON.stringify({
+            text: minimaxChunks[index],
+            voiceId: ttsVoiceId || "Cantonese_CuteGirl",
+            speed: ttsSpeed || 1.0,
+            vol: 1.0,
+            pitch: 0,
+            timeout: ttsTimeout || 30,
+          }),
+        });
+
+        if (queueState.abortController?.signal.aborted) return null;
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.error || `HTTP ${res.status}`);
+        }
+
+        const blob = await res.blob();
+        if (queueState.abortController?.signal.aborted) return null;
+        if (!blob || blob.size === 0) throw new Error("Empty audio response");
+
+        const blobUrl = URL.createObjectURL(blob);
+        queueState.audioBlobs.set(index, blobUrl);
+        return blobUrl;
+      } catch (err: any) {
+        if (queueState.abortController?.signal.aborted) return null;
+        console.error(`Failed to fetch TTS chunk ${index + 1}/${totalChunks}:`, err);
+        throw err;
+      } finally {
+        queueState.isFetching.delete(index);
+      }
+    };
+
+    // 播放指定段落，並同時在背景預載下一段落（Pipeline Double Buffering）
+    const playChunkAt = async (index: number) => {
+      if (queueState.abortController?.signal.aborted) return;
+      if (index >= totalChunks) {
+        // 全文朗讀完成
+        setPlayingMessageId(null);
+        setIsTtsPaused(false);
+        setTtsCurrentChunkInfo(null);
+        return;
+      }
+
+      queueState.currentIndex = index;
+      setTtsCurrentChunkInfo({ current: index + 1, total: totalChunks });
+
+      try {
+        let currentBlobUrl = queueState.audioBlobs.get(index);
+        if (!currentBlobUrl) {
+          setIsTtsLoading(true);
+          currentBlobUrl = (await fetchChunkAudio(index)) || undefined;
+          setIsTtsLoading(false);
+        }
+
+        if (queueState.abortController?.signal.aborted || !currentBlobUrl) return;
+
+        // 建立 Audio 實例
+        const audio = new Audio();
+        ttsAudioRef.current = audio;
+        ttsAudioBlobUrlRef.current = currentBlobUrl;
+
+        // 快取以支援立即重播
+        lastTtsPlaybackRef.current = {
+          messageId,
+          text: cleanText,
+          engine: "minimax",
+          audioBlobUrl: currentBlobUrl,
+        };
+
+        // ⚡ 雙緩衝核心：當前段開始播放時，背景立即預載下一段 (index + 1)
+        if (index + 1 < totalChunks && !queueState.audioBlobs.has(index + 1)) {
+          fetchChunkAudio(index + 1).catch((preloadErr) => {
+            console.warn(`Background preload chunk ${index + 2} error:`, preloadErr);
+          });
+        }
+
+        audio.onended = () => {
+          if (queueState.abortController?.signal.aborted) return;
+          // 無縫切換播放下一段
+          playChunkAt(index + 1);
+        };
+
+        audio.onerror = (e) => {
+          if (queueState.abortController?.signal.aborted || !ttsAudioRef.current) return;
+          console.error(`Audio playback error at chunk ${index + 1}:`, e);
+          setPlayingMessageId(null);
+          setIsTtsPaused(false);
+          setTtsCurrentChunkInfo(null);
+          showAlert(
+            ttsLang === "english"
+              ? "Voice playback error occurred. Please try again."
+              : "語音播放發生錯誤，請稍後重試。",
+            "warning",
+            "Audio Playback Error"
+          );
+        };
+
+        audio.src = currentBlobUrl;
+        await audio.play();
+      } catch (err: any) {
+        if (queueState.abortController?.signal.aborted) return;
+        console.error(`Error in TTS playback at chunk ${index + 1}:`, err);
+        setPlayingMessageId(null);
+        setIsTtsLoading(false);
+        setTtsCurrentChunkInfo(null);
+        showAlert(
+          ttsLang === "english"
+            ? `Voice model timed out or generation failed (${err.message || err}).`
+            : `語音合成失敗 (${err.message || err})。建議稍候再試。`,
+          "warning",
+          "Voice Generation Failed"
+        );
+      }
+    };
+
     try {
       setIsTtsLoading(true);
-      setPlayingMessageId(messageId);
       showAlert(
-        ttsLang === "english"
-          ? `Generating voice audio, please wait... (timeout: ${ttsTimeout}s)`
-          : `語音模型生成中，請稍候... (限時 ${ttsTimeout}s)`,
+        totalChunks > 1
+          ? (ttsLang === "english"
+              ? `Preparing voice audio (1/${totalChunks})... Total ${cleanText.length} chars.`
+              : `長文智能分段朗讀準備中 (共 ${totalChunks} 段，${cleanText.length} 字)，即將播放...`)
+          : (ttsLang === "english"
+              ? `Generating voice audio, please wait...`
+              : `語音模型生成中，請稍候...`),
         "info",
         ttsLang === "english" ? "Generating Voice" : "生成語音中 (Generating Voice)"
       );
 
-      const response = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        signal: abortController.signal,
-        body: JSON.stringify({
-          text: cleanText.slice(0, 3000),
-          voiceId: ttsVoiceId || "Cantonese_CuteGirl",
-          speed: ttsSpeed || 1.0,
-          vol: 1.0,
-          pitch: 0,
-          timeout: ttsTimeout || 30,
-        }),
-      });
-
-      // If aborted while waiting for response, return quietly
-      if (abortController.signal.aborted) {
-        return;
-      }
-
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error || `Server response error (${response.status})`);
-      }
-
-      const audioBlob = await response.blob();
-      if (abortController.signal.aborted) {
-        return;
-      }
-      if (!audioBlob || audioBlob.size === 0) {
-        throw new Error("Received empty audio from voice model");
-      }
-
-      // Revoke older blob URL if replacing
-      if (lastTtsPlaybackRef.current?.audioBlobUrl) {
-        try {
-          URL.revokeObjectURL(lastTtsPlaybackRef.current.audioBlobUrl);
-        } catch {}
-      }
-
-      const audioUrl = URL.createObjectURL(audioBlob);
-      ttsAudioBlobUrlRef.current = audioUrl;
-
-      // Cache for instant zero-latency Repeat button!
-      lastTtsPlaybackRef.current = {
-        messageId,
-        text: cleanText,
-        engine: "minimax",
-        audioBlobUrl: audioUrl,
-      };
-
-      const audio = new Audio();
-      ttsAudioRef.current = audio;
-
-      audio.onended = () => {
-        setPlayingMessageId(null);
-        setIsTtsPaused(false);
-      };
-
-      audio.onerror = (e) => {
-        // If aborted or cleared by user stopping, do not popup error
-        if (abortController.signal.aborted || !ttsAudioRef.current) {
-          return;
-        }
-        console.error("Audio playback error:", e);
-        setPlayingMessageId(null);
-        setIsTtsPaused(false);
-        showAlert(
-          ttsLang === "english"
-            ? "Voice model timed out or audio failed to decode. Please try again."
-            : "語音模型回應未及時或音訊解碼失敗，請稍候重試。(Voice model timed out or audio failed to decode)",
-          "warning",
-          "Audio Playback Failed"
-        );
-      };
-
-      audio.src = audioUrl;
-      try {
-        await audio.play();
-      } catch (playErr: any) {
-        // If play() was aborted or interrupted by user clicking pause/stop, ignore
-        if (playErr.name === "AbortError" || abortController.signal.aborted) {
-          return;
-        }
-        throw playErr;
-      }
+      // 開始播放第一段
+      await playChunkAt(0);
     } catch (err: any) {
-      if (err.name === "AbortError" || abortController.signal.aborted) {
-        return;
-      }
-      console.error("MiniMax TTS error:", err);
+      if (abortController.signal.aborted) return;
+      console.error("MiniMax TTS initiation error:", err);
       setPlayingMessageId(null);
-      showAlert(
-        ttsLang === "english"
-          ? `Voice model timed out or generation failed (${err.message || err}). Please try again.`
-          : `語音大模型未及時反應或生成失敗 (${err.message || err})。建議稍候再試。`,
-        "warning",
-        "Voice Generation Failed"
-      );
+      setIsTtsLoading(false);
+      setTtsCurrentChunkInfo(null);
     } finally {
-      if (ttsAbortControllerRef.current === abortController) {
-        ttsAbortControllerRef.current = null;
-      }
       setIsTtsLoading(false);
     }
   };
@@ -6990,6 +7131,27 @@ export function App() {
                                 </>
                               )}
                             </button>
+
+                            {/* Long Text Chunk Progress Badge (e.g. [1/4 段]) */}
+                            {playingMessageId === m.id && ttsCurrentChunkInfo && ttsCurrentChunkInfo.total > 1 && (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: "#10b981",
+                                  background: "rgba(16, 185, 129, 0.12)",
+                                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                                  borderRadius: 4,
+                                  padding: "2px 6px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 2,
+                                }}
+                                title={`正在朗讀第 ${ttsCurrentChunkInfo.current} 段 (共 ${ttsCurrentChunkInfo.total} 段)`}
+                              >
+                                {ttsCurrentChunkInfo.current}/{ttsCurrentChunkInfo.total} 段
+                              </span>
+                            )}
 
                             {/* Message Row On-Hold / Resume Button */}
                             {playingMessageId === m.id && (
