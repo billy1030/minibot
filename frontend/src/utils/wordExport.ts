@@ -85,6 +85,53 @@ export async function svgToPngData(
       svgEl.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     }
 
+    // Inliner: Extract CSS rules from internal <style> blocks and inject directly onto elements as style/presentation attributes.
+    // This prevents browser Canvas/Image rasterizer from dropping CSS class rules and collapsing SVG text elements.
+    const styleEls = svgEl.querySelectorAll('style');
+    const classRules: Record<string, string> = {};
+    styleEls.forEach((styleTag) => {
+      const text = styleTag.textContent || '';
+      const ruleRegex = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
+      let rm: RegExpExecArray | null;
+      while ((rm = ruleRegex.exec(text)) !== null) {
+        classRules[rm[1]] = rm[2].trim();
+      }
+    });
+
+    if (Object.keys(classRules).length > 0) {
+      const allEls = svgEl.querySelectorAll('*');
+      allEls.forEach((el) => {
+        const cls = el.getAttribute('class');
+        if (!cls) return;
+        const classNames = cls.split(/\s+/);
+        let appliedCss = '';
+        for (const c of classNames) {
+          if (classRules[c]) {
+            appliedCss += (appliedCss ? '; ' : '') + classRules[c];
+          }
+        }
+        if (appliedCss) {
+          const prev = el.getAttribute('style') || '';
+          el.setAttribute('style', prev ? `${prev}; ${appliedCss}` : appliedCss);
+
+          // Also set direct presentation attributes if parsed
+          const pairs = appliedCss.split(';');
+          for (const pair of pairs) {
+            const colonIdx = pair.indexOf(':');
+            if (colonIdx !== -1) {
+              const prop = pair.slice(0, colonIdx).trim().toLowerCase();
+              const val = pair.slice(colonIdx + 1).trim();
+              if (['font-size', 'font-weight', 'font-family', 'fill', 'stroke', 'stroke-width'].includes(prop)) {
+                if (!el.getAttribute(prop)) {
+                  el.setAttribute(prop, val);
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
     const cleanSvgString = new XMLSerializer().serializeToString(svgEl);
     const svgBlob = new Blob([cleanSvgString], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(svgBlob);

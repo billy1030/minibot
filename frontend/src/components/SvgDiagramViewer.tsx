@@ -302,6 +302,59 @@ export const SvgDiagramViewer: React.FC<SvgDiagramViewerProps> = ({
       });
     }
 
+    // Inline CSS rules from internal <style> tags to guarantee text never collapses even in isolated rendering
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(isolated, "image/svg+xml");
+      const styleEls = doc.querySelectorAll("style");
+      const classRules: Record<string, string> = {};
+      styleEls.forEach((styleTag) => {
+        const text = styleTag.textContent || "";
+        const ruleRegex = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
+        let rm: RegExpExecArray | null;
+        while ((rm = ruleRegex.exec(text)) !== null) {
+          classRules[rm[1]] = rm[2].trim();
+        }
+      });
+
+      if (Object.keys(classRules).length > 0) {
+        const allEls = doc.querySelectorAll("*");
+        allEls.forEach((el) => {
+          const cls = el.getAttribute("class");
+          if (!cls) return;
+          const classNames = cls.split(/\s+/);
+          let appliedCss = "";
+          for (const c of classNames) {
+            if (classRules[c]) {
+              appliedCss += (appliedCss ? "; " : "") + classRules[c];
+            }
+          }
+          if (appliedCss) {
+            const prev = el.getAttribute("style") || "";
+            el.setAttribute("style", prev ? `${prev}; ${appliedCss}` : appliedCss);
+
+            const pairs = appliedCss.split(";");
+            for (const pair of pairs) {
+              const colonIdx = pair.indexOf(":");
+              if (colonIdx !== -1) {
+                const prop = pair.slice(0, colonIdx).trim().toLowerCase();
+                const val = pair.slice(colonIdx + 1).trim();
+                if (["font-size", "font-weight", "font-family", "fill", "stroke", "stroke-width"].includes(prop)) {
+                  if (!el.getAttribute(prop)) {
+                    el.setAttribute(prop, val);
+                  }
+                }
+              }
+            }
+          }
+        });
+        const serializer = new XMLSerializer();
+        isolated = serializer.serializeToString(doc.documentElement);
+      }
+    } catch (e) {
+      console.warn("SVG style inliner encountered error:", e);
+    }
+
     return recolorSvg(isolated, activeTheme);
   }, [svgContent, activeTheme]);
 
