@@ -37,7 +37,7 @@ function decodeHtmlEntities(str: string): string {
  */
 export async function svgToPngData(
   svgString: string,
-  maxWidth = 560
+  maxWidth = 640
 ): Promise<{ data: Uint8Array; width: number; height: number } | null> {
   if (typeof window === 'undefined') return null;
   try {
@@ -46,29 +46,37 @@ export async function svgToPngData(
     const svgEl = doc.querySelector('svg');
     if (!svgEl) return null;
 
-    let width = parseFloat(svgEl.getAttribute('width') || '0');
-    let height = parseFloat(svgEl.getAttribute('height') || '0');
-
-    if (!width || !height) {
-      const viewBox = svgEl.getAttribute('viewBox');
-      if (viewBox) {
-        const parts = viewBox.trim().split(/[\s,]+/).map(parseFloat);
-        if (parts.length >= 4 && parts[2] > 0 && parts[3] > 0) {
-          width = parts[2];
-          height = parts[3];
-        }
+    // Check viewBox first for authentic coordinate space dimensions
+    let width = 0;
+    let height = 0;
+    const viewBox = svgEl.getAttribute('viewBox');
+    if (viewBox) {
+      const parts = viewBox.trim().split(/[\s,]+/).map(parseFloat);
+      if (parts.length >= 4 && parts[2] > 0 && parts[3] > 0) {
+        width = parts[2];
+        height = parts[3];
       }
     }
 
-    if (!width || isNaN(width)) width = 600;
-    if (!height || isNaN(height)) height = 400;
+    // If viewBox wasn't present or valid, inspect width / height attributes
+    if (!width || !height) {
+      const rawW = svgEl.getAttribute('width') || '';
+      const rawH = svgEl.getAttribute('height') || '';
+      if (!rawW.includes('%')) width = parseFloat(rawW);
+      if (!rawH.includes('%')) height = parseFloat(rawH);
+    }
 
-    let renderWidth = width;
-    let renderHeight = height;
-    if (renderWidth > maxWidth) {
-      const ratio = maxWidth / renderWidth;
-      renderWidth = maxWidth;
-      renderHeight = Math.round(renderHeight * ratio);
+    if (!width || isNaN(width)) width = 800;
+    if (!height || isNaN(height)) height = 600;
+
+    // Scale to fill the printable A4 page width (maxWidth ~640px) while preserving exact aspect ratio
+    let renderWidth = maxWidth;
+    let renderHeight = Math.round((height / width) * maxWidth);
+
+    // If the SVG naturally has a smaller width than maxWidth (e.g. small icon/badge), cap at natural width
+    if (width < 320) {
+      renderWidth = width;
+      renderHeight = height;
     }
 
     svgEl.setAttribute('width', String(renderWidth));
@@ -368,6 +376,45 @@ function createCodeBlockElement(code: string, lang?: string): Table {
   const codeLines = code.split('\n');
   const paragraphs: Paragraph[] = [];
 
+  // Determine maximum line width to auto-scale font size for wide ASCII / text diagrams
+  let maxLineLength = 0;
+  for (const line of codeLines) {
+    if (line.length > maxLineLength) {
+      maxLineLength = line.length;
+    }
+  }
+
+  // Detect if this code block represents an ASCII / text diagram
+  const isAsciiDiagram =
+    /[+\-|═║╔╗╚╝╠╣╬┌┐└┘├┤┼─│▲▼◄►]/.test(code) ||
+    /[-=]{5,}/.test(code) ||
+    !lang ||
+    lang === 'text' ||
+    lang === 'ascii';
+
+  // Standard code size is 19 half-points (9.5pt).
+  // For wide text diagrams (> 70 chars), reduce by 2 levels (2-4 half-points / 1-2pt):
+  // - >= 90 chars: size 14 (~7pt, 2.5pt reduction)
+  // - >= 75 chars: size 15 (~7.5pt, 2pt reduction)
+  // - >= 65 chars: size 16 (~8pt, 1.5pt reduction)
+  // - default: size 18-19 (9-9.5pt)
+  let fontSize = 19;
+  let lineHeight = 280;
+
+  if (isAsciiDiagram && maxLineLength >= 90) {
+    fontSize = 14; // ~7pt
+    lineHeight = 210;
+  } else if (isAsciiDiagram && maxLineLength >= 75) {
+    fontSize = 15; // ~7.5pt (reduced by 2 levels)
+    lineHeight = 225;
+  } else if (isAsciiDiagram && maxLineLength >= 65) {
+    fontSize = 16; // ~8pt
+    lineHeight = 240;
+  } else if (maxLineLength >= 85) {
+    fontSize = 15; // for very wide code snippets
+    lineHeight = 225;
+  }
+
   // Language header badge
   if (lang) {
     paragraphs.push(
@@ -377,16 +424,16 @@ function createCodeBlockElement(code: string, lang?: string): Table {
             text: lang.toUpperCase(),
             font: 'Consolas',
             bold: true,
-            size: 16, // 8pt
+            size: Math.max(fontSize - 2, 13),
             color: '64748b',
           }),
         ],
-        spacing: { after: 60 },
+        spacing: { after: 40 },
       })
     );
   }
 
-  // Code lines with monospace font and line numbers/formatting
+  // Code lines with monospace font and formatting
   for (const line of codeLines) {
     paragraphs.push(
       new Paragraph({
@@ -394,11 +441,11 @@ function createCodeBlockElement(code: string, lang?: string): Table {
           new TextRun({
             text: line || ' ',
             font: 'Consolas',
-            size: 19, // 9.5pt
+            size: fontSize,
             color: '0f172a',
           }),
         ],
-        spacing: { line: 280, before: 0, after: 0 },
+        spacing: { line: lineHeight, before: 0, after: 0 },
       })
     );
   }
@@ -417,7 +464,7 @@ function createCodeBlockElement(code: string, lang?: string): Table {
               left: { style: BorderStyle.SINGLE, size: 16, color: '0284c7' }, // Accent border
               right: { style: BorderStyle.SINGLE, size: 4, color: 'e2e8f0' },
             },
-            margins: { top: 120, bottom: 120, left: 180, right: 180 },
+            margins: { top: 100, bottom: 100, left: 140, right: 140 },
           }),
         ],
       }),
@@ -447,6 +494,99 @@ function extractSpecialBlocks(markdown: string) {
   });
 
   return { cleanText: clean, svgBlocks };
+}
+
+/**
+ * Recursively processes list tokens and handles arbitrary nested levels (bullet / ordered)
+ */
+function processList(
+  listToken: Tokens.List,
+  level: number,
+  elements: (Paragraph | Table)[]
+) {
+  const isOrdered = listToken.ordered;
+  const clampedLevel = Math.min(level, 8);
+
+  listToken.items.forEach((item, index) => {
+    const itemRuns: (TextRun | ExternalHyperlink)[] = [];
+    const nestedLists: Tokens.List[] = [];
+
+    // Handle task list checkboxes
+    if (item.task) {
+      itemRuns.push(
+        new TextRun({
+          text: item.checked ? '☑ ' : '☐ ',
+          bold: true,
+          color: item.checked ? '0284c7' : '64748b',
+          font: 'Segoe UI Symbol',
+        })
+      );
+    }
+
+    // Process item tokens: collect text/paragraph runs and separate out nested lists
+    for (const itToken of item.tokens) {
+      if (itToken.type === 'list') {
+        nestedLists.push(itToken as Tokens.List);
+      } else if (itToken.type === 'text') {
+        const textIt = itToken as Tokens.Text;
+        if (textIt.tokens && textIt.tokens.length > 0) {
+          for (const sub of textIt.tokens) {
+            if (sub.type === 'list') {
+              nestedLists.push(sub as Tokens.List);
+            } else {
+              itemRuns.push(...buildRunsFromTokens([sub]));
+            }
+          }
+        } else {
+          itemRuns.push(new TextRun({ text: decodeHtmlEntities(textIt.text) }));
+        }
+      } else if (itToken.type === 'paragraph') {
+        const paraIt = itToken as Tokens.Paragraph;
+        if (paraIt.tokens && paraIt.tokens.length > 0) {
+          for (const sub of paraIt.tokens) {
+            if (sub.type === 'list') {
+              nestedLists.push(sub as Tokens.List);
+            } else {
+              itemRuns.push(...buildRunsFromTokens([sub]));
+            }
+          }
+        } else {
+          itemRuns.push(new TextRun({ text: decodeHtmlEntities(paraIt.text) }));
+        }
+      }
+    }
+
+    // Push the current list item paragraph with appropriate indentation and bullet level
+    if (isOrdered) {
+      elements.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `${index + 1}. `,
+              bold: true,
+              color: '0284c7',
+            }),
+            ...itemRuns,
+          ],
+          indent: { left: 400 * (clampedLevel + 1) },
+          spacing: { line: 300, after: 60 },
+        })
+      );
+    } else {
+      elements.push(
+        new Paragraph({
+          children: itemRuns,
+          bullet: { level: clampedLevel },
+          spacing: { line: 300, after: 60 },
+        })
+      );
+    }
+
+    // Recursively process any nested lists at the next level
+    for (const childList of nestedLists) {
+      processList(childList, level + 1, elements);
+    }
+  });
 }
 
 /**
@@ -662,62 +802,7 @@ export async function generateDocxDocument(markdownContent: string, title: strin
 
       case 'list': {
         const listToken = token as Tokens.List;
-        const isOrdered = listToken.ordered;
-
-        listToken.items.forEach((item, index) => {
-          const itemRuns: (TextRun | ExternalHyperlink)[] = [];
-
-          // Handle task list checkboxes
-          if (item.task) {
-            itemRuns.push(
-              new TextRun({
-                text: item.checked ? '☑ ' : '☐ ',
-                bold: true,
-                color: item.checked ? '0284c7' : '64748b',
-                font: 'Segoe UI Symbol',
-              })
-            );
-          }
-
-          // Build content runs
-          for (const itToken of item.tokens) {
-            if (itToken.type === 'text') {
-              const textIt = itToken as Tokens.Text;
-              if (textIt.tokens && textIt.tokens.length > 0) {
-                itemRuns.push(...buildRunsFromTokens(textIt.tokens));
-              } else {
-                itemRuns.push(new TextRun({ text: decodeHtmlEntities(textIt.text) }));
-              }
-            } else if (itToken.type === 'paragraph') {
-              itemRuns.push(...buildRunsFromTokens((itToken as Tokens.Paragraph).tokens));
-            }
-          }
-
-          if (isOrdered) {
-            elements.push(
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: `${index + 1}. `,
-                    bold: true,
-                    color: '0284c7',
-                  }),
-                  ...itemRuns,
-                ],
-                indent: { left: 400 },
-                spacing: { line: 300, after: 60 },
-              })
-            );
-          } else {
-            elements.push(
-              new Paragraph({
-                children: itemRuns,
-                bullet: { level: 0 },
-                spacing: { line: 300, after: 60 },
-              })
-            );
-          }
-        });
+        processList(listToken, 0, elements);
         break;
       }
 
