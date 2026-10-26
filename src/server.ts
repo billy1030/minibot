@@ -1390,8 +1390,8 @@ app.post("/api/tts", requireAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: "Text is required for TTS synthesis" });
     }
 
-    // Dynamic timeout limit: between 3 and 120 seconds (default 30s)
-    const timeoutSec = Math.max(3, Math.min(120, Number(timeout) || 30));
+    // Dynamic timeout limit: between 5 and 120 seconds (default 30s)
+    const timeoutSec = Math.max(5, Math.min(120, Number(timeout) || 30));
 
     // Use dedicated voice.apiKey if configured, otherwise fallback to llm.apiKey
     const apiKey = (config.voice?.apiKey && config.voice.apiKey.trim()) || config.llm.apiKey;
@@ -1399,81 +1399,145 @@ app.post("/api/tts", requireAuth, async (req, res) => {
       return res.status(500).json({ success: false, error: "MiniMax Voice API key not configured on server" });
     }
 
-    const postData = JSON.stringify({
-      model: "speech-2.8-hd",
-      text: text.trim(),
-      stream: false,
-      voice_setting: {
-        voice_id: voiceId,
-        speed: Number(speed) || 1.0,
-        vol: Number(vol) || 1.0,
-        pitch: Math.round(Number(pitch)) || 0,
-      },
-      audio_setting: {
-        sample_rate: 24000,
-        bitrate: 64000,
-        format: "mp3",
-        channel: 1,
-      },
-    });
-
-    const ttsReq = https.request(
-      "https://api.minimaxi.com/v1/t2a_v2",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Length": Buffer.byteLength(postData),
-        },
-      },
-      (ttsRes) => {
-        let rawBody = "";
-        ttsRes.on("data", (chunk) => {
-          rawBody += chunk;
+    const requestT2A = (targetVoiceId: string): Promise<Buffer> => {
+      return new Promise((resolve, reject) => {
+        const postData = JSON.stringify({
+          model: "speech-2.8-hd",
+          text: text.trim(),
+          stream: false,
+          voice_setting: {
+            voice_id: targetVoiceId,
+            speed: Number(speed) || 1.0,
+            vol: Number(vol) || 1.0,
+            pitch: Math.round(Number(pitch)) || 0,
+          },
+          audio_setting: {
+            sample_rate: 24000,
+            bitrate: 64000,
+            format: "mp3",
+            channel: 1,
+          },
         });
 
-        ttsRes.on("end", () => {
-          try {
-            const parsed = JSON.parse(rawBody);
-            if (parsed.base_resp && parsed.base_resp.status_code !== 0) {
-              return res.status(502).json({
-                success: false,
-                error: parsed.base_resp.status_msg || "MiniMax TTS failed",
-              });
-            }
+        const ttsReq = https.request(
+          "https://api.minimaxi.com/v1/t2a_v2",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Length": Buffer.byteLength(postData),
+            },
+          },
+          (ttsRes) => {
+            let rawBody = "";
+            ttsRes.on("data", (chunk) => {
+              rawBody += chunk;
+            });
 
-            if (parsed.data && parsed.data.audio) {
-              const audioBuffer = Buffer.from(parsed.data.audio, "hex");
-              res.setHeader("Content-Type", "audio/mpeg");
-              res.setHeader("Content-Length", audioBuffer.length);
-              return res.send(audioBuffer);
-            }
+            ttsRes.on("end", () => {
+              try {
+                const parsed = JSON.parse(rawBody);
+                if (parsed.base_resp && parsed.base_resp.status_code !== 0) {
+                  const err: any = new Error(parsed.base_resp.status_msg || "MiniMax TTS failed");
+                  err.statusCode = parsed.base_resp.status_code;
+                  return reject(err);
+                }
 
-            return res.status(502).json({ success: false, error: "No audio data received from MiniMax" });
-          } catch (parseErr: any) {
-            return res.status(502).json({ success: false, error: `Invalid response from MiniMax: ${parseErr.message}` });
+                if (parsed.data && parsed.data.audio) {
+                  const audioBuffer = Buffer.from(parsed.data.audio, "hex");
+                  return resolve(audioBuffer);
+                }
+
+                return reject(new Error("No audio data received from MiniMax"));
+              } catch (parseErr: any) {
+                return reject(new Error(`Invalid response from MiniMax: ${parseErr.message}`));
+              }
+            });
           }
+        );
+
+        ttsReq.on("error", (err) => {
+          reject(err);
         });
+
+        ttsReq.setTimeout(timeoutSec * 1000, () => {
+          ttsReq.destroy(new Error(`MiniMax Voice API request timed out after ${timeoutSec} seconds`));
+        });
+
+        ttsReq.write(postData);
+        ttsReq.end();
+      });
+    };
+
+    try {
+      const audioBuffer = await requestT2A(voiceId);
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Content-Length", audioBuffer.length);
+      return res.send(audioBuffer);
+    } catch (primaryErr: any) {
+      // 🛡️ Auto-fallback if requested voice ID does not exist (MiniMax code 2054)
+      if (primaryErr?.statusCode === 2054) {
+        const fallbackVoice = voiceId.toLowerCase().includes("english") ? "English_Trustworthy_Man" : "Cantonese_CuteGirl";
+        console.warn(`[TTS] Voice ID '${voiceId}' does not exist (code 2054). Auto-retrying with fallback voice '${fallbackVoice}'...`);
+        try {
+          const fallbackBuffer = await requestT2A(fallbackVoice);
+          res.setHeader("Content-Type", "audio/mpeg");
+          res.setHeader("Content-Length", fallbackBuffer.length);
+          return res.send(fallbackBuffer);
+        } catch (fallbackErr: any) {
+          console.error("[TTS Fallback Error]:", fallbackErr.message);
+          return res.status(502).json({ success: false, error: fallbackErr.message });
+        }
       }
-    );
-
-    ttsReq.on("error", (err) => {
-      console.error("[TTS Request Error]:", err.message);
-      res.status(502).json({ success: false, error: err.message });
-    });
-
-    ttsReq.setTimeout(timeoutSec * 1000, () => {
-      ttsReq.destroy(new Error(`MiniMax Voice API request timed out after ${timeoutSec} seconds`));
-    });
-
-    ttsReq.write(postData);
-    ttsReq.end();
+      console.error("[TTS Request Error]:", primaryErr.message);
+      return res.status(502).json({ success: false, error: primaryErr.message });
+    }
   } catch (err: any) {
     console.error("[TTS Error]:", err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// 3d. On-demand translation from English to natural spoken Hong Kong Cantonese (preserving technical terms in English)
+app.post("/api/tts/translate-cantonese", requireAuth, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ success: false, error: "Text is required" });
+    }
+
+    const trimmed = text.trim();
+    // Fast check: if text contains virtually no English words (fewer than 3 English words), return as-is
+    const englishWordMatches = trimmed.match(/[a-zA-Z]{2,}/g) || [];
+    if (englishWordMatches.length < 3) {
+      return res.json({ success: true, translatedText: trimmed, translated: false });
+    }
+
+    const client = new LLMClient(config.llm);
+    const systemPrompt = `You are an expert bilingual Hong Kong tech engineer and voice interpreter.
+Translate the user's text into natural, spoken colloquial Hong Kong Cantonese (口語廣東話，例如用「呢個」、「喺」、「唔好」、「已經」、「搞掂」、「可以」、「睇下」等).
+STRICT RULES:
+1. STRICTLY KEEP ALL TECHNICAL TERMS, CODE, API NAMES, LIBRARIES, FRAMEWORKS, BRAND NAMES, ACRONYMS, AND PROPER NOUNS IN ORIGINAL ENGLISH.
+   Examples of terms that MUST STAY IN ENGLISH:
+   - "API", "Docker", "React", "Next.js", "TypeScript", "Python", "Kubernetes", "VM", "AWS", "database", "endpoint", "function", "hook", "component", "timeout", "cache", "token", "payload", "deploy", "build", "commit", "push", "pull request", "schema", "JSON", "HTTP", "CSS", "HTML", etc.
+2. Translate explanatory and conversational sentence structures into authentic Hong Kong spoken Cantonese, exactly how tech colleagues talk to each other in Hong Kong offices.
+3. DO NOT add any greeting, preamble, explanations, notes, or markdown formatting. Output ONLY the raw spoken Cantonese text.`;
+
+    const result = await client.createChatCompletion([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: trimmed },
+    ]);
+
+    const translatedText = result.choices[0]?.message?.content?.trim() || trimmed;
+    return res.json({ success: true, translatedText, translated: true });
+  } catch (err: any) {
+    console.error("[TTS Translate Cantonese Error]:", err?.message || err);
+    // Graceful fallback: return original text so playback never breaks
+    return res.json({ success: true, translatedText: req.body?.text || "", translated: false, error: err?.message });
+  }
+});
+
 
 // Helper for Document Manager instance per user
 function getDocManager(req: express.Request): DocumentManager {

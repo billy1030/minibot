@@ -458,7 +458,19 @@ export function App() {
   });
   const [ttsVoiceId, setTtsVoiceId] = useState<string>(() => {
     try {
-      return localStorage.getItem("minibot_tts_voice_id") || "Cantonese_CuteGirl";
+      const saved = localStorage.getItem("minibot_tts_voice_id");
+      const invalidVoices = [
+        "Cantonese_LivelyYouth",
+        "Cantonese_ProfessionalHost(F)",
+        "Cantonese_ProfessionalHost",
+        "English_Energetic_Female",
+        "English_Warm_Friend",
+        "English_Inspiring_Speaker",
+      ];
+      if (saved && !invalidVoices.includes(saved)) {
+        return saved;
+      }
+      return "Cantonese_CuteGirl";
     } catch {
       return "Cantonese_CuteGirl";
     }
@@ -487,6 +499,15 @@ export function App() {
       return saved ? parseInt(saved, 10) : 30;
     } catch {
       return 30;
+    }
+  });
+  // 🌐 英文內容自動轉口語廣東話輸出（技術 Term、Code 保持英文）
+  const [ttsTranslateEnglish, setTtsTranslateEnglish] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("minibot_tts_translate_en");
+      return saved !== null ? saved === "true" : true;
+    } catch {
+      return true;
     }
   });
   // 系統已安裝的中文/粵語可用語音清單
@@ -2249,6 +2270,45 @@ export function App() {
       return;
     }
 
+    // 🌐 Optional Translation: If TTS language is Cantonese, user enabled translation, and text contains English
+    let textToSpeak = cleanText;
+    if (ttsTranslateEnglish && ttsLang === "cantonese") {
+      const englishWords = cleanText.match(/[a-zA-Z]{2,}/g) || [];
+      const englishCharCount = englishWords.reduce((acc, w) => acc + w.length, 0);
+      const chineseChars = cleanText.match(/[\u4e00-\u9fa5]/g) || [];
+      const isEnglishDominant =
+        englishWords.length >= 3 &&
+        (englishCharCount / Math.max(1, cleanText.length) > 0.20 || chineseChars.length < 15);
+
+      if (isEnglishDominant) {
+        setIsTtsLoading(true);
+        setPlayingMessageId(messageId);
+        showAlert(
+          "🌐 正在將英文內容轉為廣東話口語朗讀 (技術 Term 保持英文)...",
+          "info",
+          "粵語語音轉譯中 (Translating)"
+        );
+        try {
+          const transRes = await fetch("/api/tts/translate-cantonese", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ text: cleanText }),
+          });
+          if (transRes.ok) {
+            const transJson = await transRes.json();
+            if (transJson.translatedText) {
+              textToSpeak = transJson.translatedText;
+            }
+          }
+        } catch (transErr) {
+          console.warn("TTS Cantonese translation failed, falling back to original text:", transErr);
+        } finally {
+          setIsTtsLoading(false);
+        }
+      }
+    }
+
     // Mode 1: Local Browser Native TTS (supports Cantonese / Mandarin / English / multi-voice / speed)
     if (ttsEngine === "local") {
       if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -2259,7 +2319,7 @@ export function App() {
       setPlayingMessageId(messageId);
       lastTtsPlaybackRef.current = {
         messageId,
-        text: cleanText,
+        text: textToSpeak,
         engine: "local",
         audioBlobUrl: null,
       };
@@ -2328,7 +2388,7 @@ export function App() {
         return chunks.length > 0 ? chunks : [str];
       };
 
-      const textChunks = splitIntoChunks(cleanText);
+      const textChunks = splitIntoChunks(textToSpeak);
 
       const cleanupUtterance = () => {
         if (ttsSpeakingTimeoutRef.current) {
@@ -2469,7 +2529,7 @@ export function App() {
       return chunks.length > 0 ? chunks : [str];
     };
 
-    const minimaxChunks = splitForMiniMax(cleanText);
+    const minimaxChunks = splitForMiniMax(textToSpeak);
     const totalChunks = minimaxChunks.length;
 
     const abortController = new AbortController();
@@ -2588,7 +2648,7 @@ export function App() {
         // 快取以支援立即重播
         lastTtsPlaybackRef.current = {
           messageId,
-          text: cleanText,
+          text: textToSpeak,
           engine: "minimax",
           audioBlobUrl: currentBlobUrl,
         };
@@ -2647,8 +2707,8 @@ export function App() {
       showAlert(
         totalChunks > 1
           ? (ttsLang === "english"
-              ? `Preparing voice audio (${startChunk + 1}/${totalChunks})... Total ${cleanText.length} chars.`
-              : `長文智能分段朗讀 (第 ${startChunk + 1}/${totalChunks} 段，${cleanText.length} 字)，即將播放...`)
+              ? `Preparing voice audio (${startChunk + 1}/${totalChunks})... Total ${textToSpeak.length} chars.`
+              : `長文智能分段朗讀 (第 ${startChunk + 1}/${totalChunks} 段，${textToSpeak.length} 字)，即將播放...`)
           : (ttsLang === "english"
               ? `Generating voice audio, please wait...`
               : `語音模型生成中，請稍候...`),
@@ -3134,7 +3194,7 @@ export function App() {
                   letterSpacing: "0.2px",
                 }}
               >
-                v1.3.1
+                v1.4.1
               </span>
             </div>
             <span
@@ -4117,6 +4177,66 @@ export function App() {
                     </div>
                   </div>
 
+                  {/* 🌐 英文內容自動轉廣東話朗讀 (Auto English ➔ Cantonese Translation Toggle) */}
+                  <div
+                    onClick={() => {
+                      const next = !ttsTranslateEnglish;
+                      setTtsTranslateEnglish(next);
+                      try {
+                        localStorage.setItem("minibot_tts_translate_en", String(next));
+                      } catch {}
+                    }}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      background: ttsTranslateEnglish ? "rgba(16, 185, 129, 0.12)" : "var(--bg-card)",
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      border: ttsTranslateEnglish ? "1px solid #10b981" : "1px solid var(--border-color)",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <Globe size={13} color={ttsTranslateEnglish ? "#10b981" : "var(--text-muted)"} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: ttsTranslateEnglish ? "#10b981" : "var(--text-main)" }}>
+                          {ttsLang === "cantonese" || ttsLang === "mandarin" ? "英文轉廣東話語音輸出" : "English to Cantonese Voice"}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          width: 30,
+                          height: 16,
+                          borderRadius: 9999,
+                          background: ttsTranslateEnglish ? "#10b981" : "var(--border-color)",
+                          position: "relative",
+                          transition: "background 0.2s ease",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: 9999,
+                            background: "#ffffff",
+                            position: "absolute",
+                            top: 2,
+                            left: ttsTranslateEnglish ? 16 : 2,
+                            transition: "left 0.2s ease",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.35 }}>
+                      {ttsLang === "cantonese" || ttsLang === "mandarin"
+                        ? "遇英文內容時自動轉為地道香港口語粵語朗讀，技術 Term、Code 與專有名詞維持英文"
+                        : "Automatically converts English text into spoken Cantonese while keeping technical terms in English"}
+                    </span>
+                  </div>
+
                   {/* Local Voice Selector (When Local TTS is selected) */}
                   {ttsEngine === "local" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--bg-card)", padding: 8, borderRadius: 8, border: "1px solid var(--border-color)" }}>
@@ -4224,27 +4344,30 @@ export function App() {
                             <option value="Cantonese_KindWoman">🌸 Kind Woman (溫暖親切大姐姐)</option>
                             <option value="Cantonese_ProfessionalHost（F)">🎙️ Professional Host (知性幹練女主播)</option>
                             <option value="Cantonese_GentleLady">☕ Gentle Lady (溫柔磁性熟女)</option>
-                            <option value="Cantonese_LivelyYouth">⚡ Lively Youth (活潑靈動少女)</option>
-                            <option value="presenter_male">👔 Presenter Male (沉穩男主持)</option>
+                            <option value="cantonese_male">👔 Cantonese Male (地道香港男聲)</option>
+                            <option value="presenter_male">🎙️ Presenter Male (沉穩男主持)</option>
                           </>
                         )}
                         {ttsLang === "mandarin" && (
                           <>
                             <option value="female-yujie">🌟 Female Yujie (溫柔知性御姐)</option>
                             <option value="female-tianmei">🌸 Female Tianmei (甜美親切少女)</option>
+                            <option value="sweet_girl">🍓 Sweet Girl (甜美萌妹)</option>
+                            <option value="qiaopi_mengmei">✨ Qiaopi Mengmei (俏皮萌妹)</option>
                             <option value="presenter_male">🎙️ Presenter Male (沉穩專業播音員)</option>
                             <option value="presenter_female">📻 Presenter Female (專業新聞女主播)</option>
                             <option value="male-qn-qingse">⚡ Male Youth (陽光青澀少年)</option>
                             <option value="male-qn-jingying">👔 Elite Male (商務菁英男聲)</option>
+                            <option value="audiobook_female_1">📖 Audiobook Female (故事女主播)</option>
+                            <option value="audiobook_male_1">📚 Audiobook Male (故事男主播)</option>
                           </>
                         )}
                         {ttsLang === "english" && (
                           <>
-                            <option value="English_Trustworthy_Man">💼 Trustworthy Man</option>
-                            <option value="English_Graceful_Lady">🌸 Graceful Lady</option>
-                            <option value="English_Energetic_Female">⚡ Energetic Female</option>
-                            <option value="English_Warm_Friend">☕ Warm Friend</option>
-                            <option value="English_Inspiring_Speaker">🎙️ Inspiring Speaker</option>
+                            <option value="English_Trustworthy_Man">💼 Trustworthy Man (商務穩重男聲)</option>
+                            <option value="English_Graceful_Lady">🌸 Graceful Lady (優雅知性女聲)</option>
+                            <option value="English_expressive_narrator">🎙️ Expressive Narrator (生動旁白男聲)</option>
+                            <option value="English_captivating_female">✨ Captivating Female (魅力迷人女聲)</option>
                           </>
                         )}
                       </select>
