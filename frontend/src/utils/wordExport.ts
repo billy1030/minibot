@@ -440,26 +440,26 @@ function createCodeBlockElement(code: string, lang?: string): Table {
     lang === 'ascii';
 
   // Standard code size is 19 half-points (9.5pt).
-  // For wide text diagrams (> 70 chars), reduce by 2 levels (2-4 half-points / 1-2pt):
-  // - >= 90 chars: size 14 (~7pt, 2.5pt reduction)
-  // - >= 75 chars: size 15 (~7.5pt, 2pt reduction)
-  // - >= 65 chars: size 16 (~8pt, 1.5pt reduction)
-  // - default: size 18-19 (9-9.5pt)
+  // For wide text diagrams (> 70 chars), reduce by 1-2 levels (1-3 half-points / 0.5-1.5pt):
+  // - >= 90 chars: size 16 (~8pt, +2 from previous 14)
+  // - >= 75 chars: size 17 (~8.5pt, +2 from previous 15)
+  // - >= 65 chars: size 18 (~9pt, +2 from previous 16)
+  // - default: size 19 (9.5pt)
   let fontSize = 19;
   let lineHeight = 280;
 
   if (isAsciiDiagram && maxLineLength >= 90) {
-    fontSize = 14; // ~7pt
-    lineHeight = 210;
-  } else if (isAsciiDiagram && maxLineLength >= 75) {
-    fontSize = 15; // ~7.5pt (reduced by 2 levels)
-    lineHeight = 225;
-  } else if (isAsciiDiagram && maxLineLength >= 65) {
-    fontSize = 16; // ~8pt
+    fontSize = 16; // ~8pt (+1 level from 14)
     lineHeight = 240;
+  } else if (isAsciiDiagram && maxLineLength >= 75) {
+    fontSize = 17; // ~8.5pt (+1 level from 15)
+    lineHeight = 255;
+  } else if (isAsciiDiagram && maxLineLength >= 65) {
+    fontSize = 18; // ~9pt (+1 level from 16)
+    lineHeight = 270;
   } else if (maxLineLength >= 85) {
-    fontSize = 15; // for very wide code snippets
-    lineHeight = 225;
+    fontSize = 17; // for very wide code snippets (+1 level from 15)
+    lineHeight = 255;
   }
 
   // Language header badge
