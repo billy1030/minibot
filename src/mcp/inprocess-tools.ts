@@ -19,6 +19,7 @@ async function performDuckDuckGoSearch(query: string, maxResults = 5): Promise<s
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
+    signal: AbortSignal.timeout(10000), // 🛡️ Prevent lingering sockets or network stalls
   });
   if (!res.ok) {
     throw new Error(`DuckDuckGo search failed with HTTP ${res.status}`);

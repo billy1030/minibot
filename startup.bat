@@ -40,9 +40,10 @@ cd ..
 :: Ensure PORT is explicitly set to 7009 for MiniBot
 set PORT=7009
 
-:: 3. Clean up any existing process holding Port 7009
+:: 3. Clean up any existing process holding Port 7009 (and its child process tree)
 echo [Port Check] Ensuring Port 7009 is free...
-powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 7009 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 7009 -ErrorAction SilentlyContinue | ForEach-Object { cmd /c \"taskkill /PID $($_.OwningProcess) /T /F\" 2>`$null; Stop-Process -Id `$_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"name = 'node.exe'\" -ErrorAction SilentlyContinue | Where-Object { `$_.CommandLine -match 'mini-news/dist/index.js --mcp-only|rea-agent|mcp-chrome-bridge' } | ForEach-Object { cmd /c \"taskkill /PID $($_.ProcessId) /T /F\" 2>`$null }"
 
 :: 4. Launch browser automatically in background after 2 seconds
 start /min powershell -NoProfile -Command "Start-Sleep -Seconds 2; Start-Process 'http://localhost:7009'"

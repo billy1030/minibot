@@ -33,6 +33,19 @@ if [ ! -f "frontend/dist/index.html" ]; then
     cd ..
 fi
 
+# 3. Clean up port and any leftover orphan MCP processes on macOS/Linux
+if lsof -ti :${PORT} >/dev/null 2>&1; then
+    echo "[Port Check] Freeing port ${PORT}..."
+    PIDS=$(lsof -ti :${PORT})
+    for PID in $PIDS; do
+        pkill -P "$PID" 2>/dev/null || true
+        kill -9 "$PID" 2>/dev/null || true
+    done
+fi
+pkill -f "mini-news/dist/index.js --mcp-only" 2>/dev/null || true
+pkill -f "mcp-chrome-bridge" 2>/dev/null || true
+pkill -f "rea-agent" 2>/dev/null || true
+
 # 4. Open browser after short delay
 (
     sleep 2

@@ -154,6 +154,9 @@ let isInitialized = false;
 getUsers();
 
 async function initMCP() {
+  // 🛡️ Always close previous connections across all scopes first to prevent duplicate orphan processes
+  await scopedMcpManager.closeAll();
+
   const servers: Record<string, MCPServerDef> = {};
   for (const [key, def] of Object.entries(config.mcpServers)) {
     if (def.args?.[0]?.startsWith("dist/") && def.args[0].endsWith(".js")) {
@@ -2301,6 +2304,20 @@ async function start() {
     console.error(`[Server Error] Could not start server on port ${PORT}:`, err.message);
   });
 }
+
+async function gracefulShutdown(signal: string) {
+  console.log(`\n[Server] Received ${signal}. Gracefully closing all MCP clients and terminating child processes...`);
+  try {
+    await scopedMcpManager.closeAll();
+    console.log("[Server] All MCP clients and processes closed cleanly.");
+  } catch (err: any) {
+    console.error("[Server] Error during MCP cleanup:", err?.message || err);
+  }
+  process.exit(0);
+}
+
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 start().catch((err) => {
   console.error("Failed to start server:", err);

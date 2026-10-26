@@ -1,8 +1,33 @@
+import { execFile } from "node:child_process";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { MCPServerDef } from "../config/schema.js";
 import { BigFixStreamableHttpClient } from "./bigfix-client.js";
 import { BUILTIN_INPROCESS_TOOLS, executeInProcessTool } from "./inprocess-tools.js";
+
+/**
+ * Forcefully terminates a stdio transport process tree to prevent zombie processes on Windows/Unix
+ */
+function killTransportProcessTree(transport: StdioClientTransport): void {
+  try {
+    const proc = (transport as any)._process;
+    if (proc && proc.pid) {
+      if (process.platform === "win32") {
+        execFile("taskkill", ["/PID", String(proc.pid), "/T", "/F"], () => {});
+      } else {
+        // macOS & Linux: terminate child processes first via pkill -P, then kill the process
+        execFile("pkill", ["-P", String(proc.pid)], () => {
+          try {
+            proc.kill("SIGKILL");
+          } catch {}
+        });
+        try {
+          proc.kill("SIGKILL");
+        } catch {}
+      }
+    }
+  } catch {}
+}
 
 export interface DiscoveredTool {
   serverName: string;
@@ -34,6 +59,9 @@ export class MCPClientManager {
    * Initializes and connects to all configured MCP servers
    */
   async initialize(serversConfig: Record<string, MCPServerDef>): Promise<void> {
+    // 🛡️ Always close previous connections first to prevent duplicate orphan processes
+    await this.closeAll();
+
     for (const [serverName, def] of Object.entries(serversConfig)) {
       if (!def.enabled) continue;
 
@@ -189,10 +217,26 @@ export class MCPClientManager {
       return inProcessResult;
     }
 
+    // Timeout Protection for external tool calls (default: 60s, prevents hanging indefinitely)
+    const timeoutMs = (typeof context?.toolTimeoutMs === "number" && context.toolTimeoutMs > 0)
+      ? context.toolTimeoutMs
+      : 60000;
+
     // 2. Check HTTP clients (e.g. BigFix)
     const httpClient = this.httpClients.get(toolDef.serverName);
     if (httpClient) {
-      const response = await httpClient.callTool(name, args);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error(`[Tool Execution Timeout]: Tool "${name}" on HTTP server "${toolDef.serverName}" timed out after ${timeoutMs / 1000}s.`));
+        }, timeoutMs);
+        if (timer.unref) timer.unref();
+      });
+
+      const response = await Promise.race([
+        httpClient.callTool(name, args),
+        timeoutPromise,
+      ]);
+
       if (response && response.content && Array.isArray(response.content)) {
         return response.content
           .map((item: any) => {
@@ -210,10 +254,20 @@ export class MCPClientManager {
       throw new Error(`Server "${toolDef.serverName}" for tool "${name}" is not connected.`);
     }
 
-    const response = await target.client.callTool({
-      name,
-      arguments: args,
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`[Tool Execution Timeout]: Tool "${name}" on stdio server "${toolDef.serverName}" timed out after ${timeoutMs / 1000}s. The service process may be deadlocked or unresponsive.`));
+      }, timeoutMs);
+      if (timer.unref) timer.unref();
     });
+
+    const response = await Promise.race([
+      target.client.callTool({
+        name,
+        arguments: args,
+      }),
+      timeoutPromise,
+    ]);
 
     // Parse content blocks
     if (response.content && Array.isArray(response.content)) {
@@ -360,6 +414,7 @@ export class MCPClientManager {
         await stdioEntry.client.close();
         await stdioEntry.transport.close();
       } catch {}
+      killTransportProcessTree(stdioEntry.transport);
       this.stdioClients.delete(serverName);
     }
 
@@ -396,7 +451,7 @@ export class MCPClientManager {
   }
 
   /**
-   * Gracefully close all MCP client connections
+   * Gracefully close all MCP client connections and clean up child process trees
    */
   async closeAll(): Promise<void> {
     for (const [serverName, { client, transport }] of this.stdioClients.entries()) {
@@ -406,6 +461,7 @@ export class MCPClientManager {
       } catch (err) {
         // Ignore closing errors
       }
+      killTransportProcessTree(transport);
     }
     this.stdioClients.clear();
     this.httpClients.clear();

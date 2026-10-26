@@ -54,8 +54,8 @@ export class BigFixStreamableHttpClient {
     return new Promise((resolve, reject) => {
       const controller = new AbortController();
       const timer = setTimeout(() => {
-        controller.abort(new Error("BigFix MCP connection timed out after 3000ms"));
-      }, 3000);
+        controller.abort(new Error("BigFix MCP connection timed out after 30000ms"));
+      }, 30000);
 
       const req = https.request(
         this.url,
