@@ -228,6 +228,41 @@ export function App() {
   const [isFlashingComplete, setIsFlashingComplete] = useState<boolean>(false);
   const flashTimerRef = useRef<any>(null);
 
+  // 🟢/🔴 LLM Readiness Status (green/red indicator)
+  const [llmReadyState, setLlmReadyState] = useState<{
+    status: "ready" | "error" | "checking";
+    message?: string;
+    model?: string;
+  }>({ status: "checking" });
+
+  const checkLlmReady = async (targetModelId?: string) => {
+    setLlmReadyState((prev) => ({ ...prev, status: "checking" }));
+    try {
+      const activeId = targetModelId || config?.activeModelId;
+      const url = activeId ? `/api/llm/test?modelId=${encodeURIComponent(activeId)}` : "/api/llm/test";
+      const res = await fetch(url, { credentials: "include" });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setLlmReadyState({
+          status: "ready",
+          model: data.model || config?.llm?.model,
+          message: data.message || "LLM connection healthy and ready",
+        });
+      } else {
+        setLlmReadyState({
+          status: "error",
+          model: data.model || config?.llm?.model,
+          message: data.error || `HTTP ${res.status} connection test failed`,
+        });
+      }
+    } catch (err: any) {
+      setLlmReadyState({
+        status: "error",
+        message: err.message || "Network error testing LLM",
+      });
+    }
+  };
+
   const handleAddImageFile = (file: File) => {
     if (!file || !file.type.startsWith("image/")) return;
     const reader = new FileReader();
@@ -1294,7 +1329,9 @@ export function App() {
       });
       const data = await res.json();
       if (data.messages) {
-        setMessages(data.messages);
+        // Guarantee all loaded messages have isStreaming: false
+        const sanitized = data.messages.map((m: any) => ({ ...m, isStreaming: false }));
+        setMessages(sanitized);
         setActiveSessionFile(filename);
         try {
           localStorage.setItem("minibot_active_session", filename);
@@ -1492,6 +1529,7 @@ export function App() {
       }
       await fetchTools();
       await fetchAgentsRules();
+      checkLlmReady(data.activeModelId);
     } catch (err) {
       console.error("Failed to load config:", err);
     }
@@ -1688,6 +1726,7 @@ export function App() {
         const data = await res.json();
         if (data.config) setConfig(data.config);
       }
+      checkLlmReady(modelId);
     } catch (err) {
       console.error("Failed to switch active model:", err);
     }
@@ -3122,6 +3161,15 @@ export function App() {
         }),
       });
 
+      if (!response.ok) {
+        let errorDetail = `Server responded with ${response.status}: ${response.statusText}`;
+        try {
+          const errData = await response.json();
+          if (errData?.error) errorDetail = errData.error;
+        } catch {}
+        throw new Error(errorDetail);
+      }
+
       if (!response.body) throw new Error("No response body from server");
 
       const reader = response.body.getReader();
@@ -3225,7 +3273,24 @@ export function App() {
             console.log("[SSE] 📚 Skill dynamically installed by agent:", data);
             fetchTools();
             fetchSkills(currentWorkspace);
+          } else if (event === "error") {
+            const errorMsg = data.message || "An unexpected error occurred during execution.";
+            setLlmReadyState({ status: "error", message: errorMsg });
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessageId
+                  ? {
+                      ...m,
+                      content: `[Loop Error]: ${errorMsg}`,
+                      isStreaming: false,
+                    }
+                  : m
+              )
+            );
+            try { reader.cancel(); } catch {}
+            break;
           } else if (event === "complete") {
+            setLlmReadyState({ status: "ready", model: data.model || config?.llm?.model, message: "LLM active" });
             const totalDurationSec = Math.max(0.1, (Date.now() - requestStartTime) / 1000);
             const estTokens = Math.round((data.answer?.length || 0) / 3.5);
             const tokensPerSec = Math.round(estTokens / totalDurationSec);
@@ -3274,6 +3339,21 @@ export function App() {
           }
         }
       }
+
+      // Guarantee that if the stream completed without event: "complete", the assistant message is not left in a perpetual streaming state
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== assistantMessageId) return m;
+          if (m.isStreaming) {
+            return {
+              ...m,
+              content: m.content || "(No response received from model)",
+              isStreaming: false,
+            };
+          }
+          return m;
+        })
+      );
     } catch (err: any) {
       if (err.name === "AbortError" || abortController.signal.aborted) {
         setMessages((prev) =>
@@ -3288,6 +3368,7 @@ export function App() {
           )
         );
       } else {
+        setLlmReadyState({ status: "error", message: err.message });
         // If we already received a valid completed answer or tools, do not overwrite with transient socket close error
         setMessages((prev) =>
           prev.map((m) => {
@@ -3310,6 +3391,10 @@ export function App() {
       setLoading(false);
       setCurrentStep(null);
       setActiveRunStartTime(null);
+      // Failsafe: Ensure no message is ever left in isStreaming=true state after the run finishes
+      setMessages((prev) =>
+        prev.map((m) => (m.isStreaming ? { ...m, isStreaming: false, content: m.content || "(Request ended without response)" } : m))
+      );
     }
   };
 
@@ -3467,6 +3552,78 @@ export function App() {
             title="Agent Engine Online"
           />
           <Activity size={14} color="var(--accent-emerald)" style={{ flexShrink: 0 }} />
+
+          {/* 🟢/🔴 LLM Readiness Status Indicator Pill */}
+          <div
+            onClick={() => checkLlmReady(config?.activeModelId)}
+            title={`LLM Status: ${
+              llmReadyState.status === "ready"
+                ? "Ready (Online)"
+                : llmReadyState.status === "error"
+                ? `Error: ${llmReadyState.message || "Connection test failed"}`
+                : "Testing LLM connectivity..."
+            } · Model: ${config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm?.model || "LLM"} (Click to re-test)`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "2px 8px",
+              borderRadius: 12,
+              background:
+                llmReadyState.status === "ready"
+                  ? "rgba(16, 185, 129, 0.12)"
+                  : llmReadyState.status === "error"
+                  ? "rgba(239, 68, 68, 0.12)"
+                  : "rgba(245, 158, 11, 0.12)",
+              border: `1px solid ${
+                llmReadyState.status === "ready"
+                  ? "rgba(16, 185, 129, 0.3)"
+                  : llmReadyState.status === "error"
+                  ? "rgba(239, 68, 68, 0.3)"
+                  : "rgba(245, 158, 11, 0.3)"
+              }`,
+              color:
+                llmReadyState.status === "ready"
+                  ? "#10b981"
+                  : llmReadyState.status === "error"
+                  ? "#ef4444"
+                  : "#f59e0b",
+              fontSize: 10.5,
+              fontWeight: 700,
+              cursor: "pointer",
+              userSelect: "none",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background:
+                  llmReadyState.status === "ready"
+                    ? "#10b981"
+                    : llmReadyState.status === "error"
+                    ? "#ef4444"
+                    : "#f59e0b",
+                boxShadow: `0 0 6px ${
+                  llmReadyState.status === "ready"
+                    ? "rgba(16, 185, 129, 0.8)"
+                    : llmReadyState.status === "error"
+                    ? "rgba(239, 68, 68, 0.8)"
+                    : "rgba(245, 158, 11, 0.8)"
+                }`,
+              }}
+            />
+            <span>
+              {llmReadyState.status === "ready"
+                ? "LLM Ready"
+                : llmReadyState.status === "error"
+                ? "LLM Offline"
+                : "Testing..."}
+            </span>
+          </div>
+
           {currentStep && (
             <span
               style={{
@@ -7522,7 +7679,7 @@ export function App() {
                             >
                               <MarkdownRenderer content={mainText} />
                             </div>
-                          ) : thoughtText && m.isStreaming ? (
+                          ) : thoughtText && (loading && m.isStreaming) ? (
                             <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--text-muted)", fontSize: 13, fontStyle: "italic", padding: "4px 0" }}>
                               <Loader2 size={13} className="spin" color="#a855f7" />
                               <span>Thinking in progress...</span>
@@ -7539,9 +7696,20 @@ export function App() {
                                   border: "1px solid rgba(168, 85, 247, 0.25)",
                                   display: "inline-flex",
                                   alignItems: "center",
-                                  gap: 3,
+                                  gap: 5,
                                 }}
                               >
+                                <span
+                                  style={{
+                                    width: 6,
+                                    height: 6,
+                                    borderRadius: "50%",
+                                    background: llmReadyState.status === "error" ? "#ef4444" : "#10b981",
+                                    boxShadow: `0 0 6px ${llmReadyState.status === "error" ? "rgba(239, 68, 68, 0.8)" : "rgba(16, 185, 129, 0.8)"}`,
+                                    display: "inline-block",
+                                  }}
+                                  title={llmReadyState.status === "error" ? "LLM Error" : "LLM Ready & Active"}
+                                />
                                 ⏱️ {liveElapsedSec}s
                               </span>
                             </div>
@@ -8286,7 +8454,7 @@ export function App() {
                         </div>
                       </>
                     );
-                  })() : m.isStreaming ? (
+                  })() : (loading && m.isStreaming) ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--text-muted)", fontStyle: "italic", fontSize: 13 }}>
                         <Loader2 size={16} className="spin" color="var(--accent)" />
                         <span>Reasoning through tool outputs...</span>
@@ -8303,13 +8471,43 @@ export function App() {
                             border: "1px solid rgba(2, 132, 199, 0.25)",
                             display: "inline-flex",
                             alignItems: "center",
-                            gap: 4,
+                            gap: 6,
                           }}
                         >
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: "50%",
+                              background: llmReadyState.status === "error" ? "#ef4444" : "#10b981",
+                              boxShadow: `0 0 6px ${llmReadyState.status === "error" ? "rgba(239, 68, 68, 0.8)" : "rgba(16, 185, 129, 0.8)"}`,
+                              display: "inline-block",
+                            }}
+                            title={llmReadyState.status === "error" ? "LLM Error" : "LLM Responding"}
+                          />
                           ⏱️ {liveElapsedSec}s
                         </span>
                       </div>
-                    ) : null}
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--text-muted)", fontStyle: "italic", fontSize: 12.5, padding: "4px 0" }}>
+                        <span>*(No response received)*</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRollbackTurn(m.id)}
+                          style={{
+                            background: "transparent",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: 4,
+                            padding: "1px 6px",
+                            fontSize: 11,
+                            color: "var(--text-muted)",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Retry / Rollback
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -8535,7 +8733,7 @@ export function App() {
             <button
               type="button"
               onClick={() => setShowQuickModelMenu((v) => !v)}
-              title={`Switch Model: ${config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm?.model || "Model"}`}
+              title={`LLM ${llmReadyState.status === "ready" ? "Ready" : llmReadyState.status === "error" ? `Error: ${llmReadyState.message || "Failed"}` : "Testing"} · Switch Model: ${config?.models?.find((m) => m.id === config?.activeModelId)?.name || config?.llm?.model || "Model"}`}
               style={{
                 width: 30,
                 height: 30,
@@ -8547,6 +8745,7 @@ export function App() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                position: "relative",
                 transition: "all 0.15s ease",
               }}
               onMouseEnter={(e) => {
@@ -8561,6 +8760,32 @@ export function App() {
               }}
             >
               <Cpu size={13} />
+              {/* 🟢/🔴 Status Circle Indicator */}
+              <span
+                style={{
+                  position: "absolute",
+                  top: -2,
+                  right: -2,
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background:
+                    llmReadyState.status === "ready"
+                      ? "#10b981"
+                      : llmReadyState.status === "error"
+                      ? "#ef4444"
+                      : "#f59e0b",
+                  boxShadow: `0 0 6px ${
+                    llmReadyState.status === "ready"
+                      ? "rgba(16, 185, 129, 0.9)"
+                      : llmReadyState.status === "error"
+                      ? "rgba(239, 68, 68, 0.9)"
+                      : "rgba(245, 158, 11, 0.9)"
+                  }`,
+                  border: "1.5px solid var(--bg-secondary)",
+                }}
+                title={`LLM ${llmReadyState.status === "ready" ? "Ready" : llmReadyState.status === "error" ? `Error: ${llmReadyState.message || "Offline"}` : "Testing"}`}
+              />
             </button>
 
             {showQuickModelMenu && (
@@ -8605,6 +8830,93 @@ export function App() {
                     onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
                   >
                     Manage Models ⚙️
+                  </button>
+                </div>
+
+                {/* LLM Status Bar inside menu */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "5px 8px",
+                    borderRadius: 6,
+                    background:
+                      llmReadyState.status === "ready"
+                        ? "rgba(16, 185, 129, 0.08)"
+                        : llmReadyState.status === "error"
+                        ? "rgba(239, 68, 68, 0.08)"
+                        : "rgba(245, 158, 11, 0.08)",
+                    border: `1px solid ${
+                      llmReadyState.status === "ready"
+                        ? "rgba(16, 185, 129, 0.25)"
+                        : llmReadyState.status === "error"
+                        ? "rgba(239, 68, 68, 0.25)"
+                        : "rgba(245, 158, 11, 0.25)"
+                    }`,
+                    marginBottom: 4,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        background:
+                          llmReadyState.status === "ready"
+                            ? "#10b981"
+                            : llmReadyState.status === "error"
+                            ? "#ef4444"
+                            : "#f59e0b",
+                        boxShadow: `0 0 6px ${
+                          llmReadyState.status === "ready"
+                            ? "rgba(16, 185, 129, 0.8)"
+                            : llmReadyState.status === "error"
+                            ? "rgba(239, 68, 68, 0.8)"
+                            : "rgba(245, 158, 11, 0.8)"
+                        }`,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color:
+                          llmReadyState.status === "ready"
+                            ? "#10b981"
+                            : llmReadyState.status === "error"
+                            ? "#ef4444"
+                            : "#f59e0b",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {llmReadyState.status === "ready"
+                        ? "LLM Ready"
+                        : llmReadyState.status === "error"
+                        ? `Error: ${llmReadyState.message || "Failed"}`
+                        : "Testing..."}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => checkLlmReady(config?.activeModelId)}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--accent, #0284c7)",
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      padding: "1px 4px",
+                      flexShrink: 0,
+                    }}
+                    title="Run connection test to verify LLM responsiveness"
+                  >
+                    Test ⚡
                   </button>
                 </div>
 

@@ -150,3 +150,36 @@ const splitForMiniMax = (str: string, targetLen = 450, hardMax = 650): string[] 
 - **認證保護**：全面掛載 `requireAuth` 守衛，防止未授權調用。
 - **音訊格式**：採用 24kHz、64kbps MP3 單聲道輸出，平衡語音品質與傳輸體積。
 - **超時保護**：預設動態超時守護（預設 30 秒），防止後端掛起。
+
+---
+
+## 6. 香港地道廣東話口語翻譯引擎 (`/api/tts/translate-cantonese`)
+
+### 6.1 設計背景與挑戰
+在 IT / 研發工程環境中，助手輸出的文字往往包含大量的繁體書面語或英文技術解說。如果直接以神經網路粵語發音人（如 `Cantonese_CuteGirl`）朗讀純書面中文或英文，會產生生硬彆扭的「讀書音」，破壞流暢感。
+
+然而，若直接採用 Google Translate 等常規翻譯工具：
+1. 會將專有名詞強行中譯（例如將 `API` 譯為「應用程式介面」、`Docker` 譯為「多克」、`Commit` 譯為「提交」、`Endpoint` 譯為「端點」），脫離香港工程師日常口語交流習慣；
+2. 書面語法依然僵硬，無法精準重現香港 IT 職場自然的中英夾雜與口語虛詞（「呢個」、「喺」、「唔好」、「搞掂」、「睇下」）。
+
+### 6.2 架構實作：雙語情境 LLM Prompting
+MiniBot 透過後端架構將翻譯任務交由當前系統設定的 **LLM Client**（如 MiniMax / DeepSeek / Claude / Qwen）執行：
+
+```typescript
+// 後端路由: POST /api/tts/translate-cantonese
+const systemPrompt = `You are an expert bilingual Hong Kong tech engineer and voice interpreter.
+Translate the user's text into natural, spoken colloquial Hong Kong Cantonese (口語廣東話，例如用「呢個」、「喺」、「唔好」、「已經」、「搞掂」、「可以」、「睇下」等).
+STRICT RULES:
+1. STRICTLY KEEP ALL TECHNICAL TERMS, CODE, API NAMES, LIBRARIES, FRAMEWORKS, BRAND NAMES, ACRONYMS, AND PROPER NOUNS IN ORIGINAL ENGLISH.
+   Examples of terms that MUST STAY IN ENGLISH:
+   - "API", "Docker", "React", "Next.js", "TypeScript", "Python", "Kubernetes", "VM", "AWS", "database", "endpoint", "function", "hook", "component", "timeout", "cache", "token", "payload", "deploy", "build", "commit", "push", "pull request", "schema", "JSON", "HTTP", "CSS", "HTML", etc.
+2. Translate explanatory and conversational sentence structures into authentic Hong Kong spoken Cantonese, exactly how tech colleagues talk to each other in Hong Kong offices.
+3. DO NOT add any greeting, preamble, explanations, notes, or markdown formatting. Output ONLY the raw spoken Cantonese text.`;
+```
+
+### 6.3 效能優化與優雅降級 (Graceful Degradation)
+1. **快速正則短路 (Regex Fast-Check Bypass)**：
+   若文字內英文單詞少於 3 個（`trimmed.match(/[a-zA-Z]{2,}/g) < 3`），代表原文已經是純中文，立即跳過 LLM 呼叫並以 `translated: false` 原文返回，節省算力並實現零延遲。
+2. **容錯回退 (Graceful Fallback)**：
+   若 LLM 請求超時或異常，捕獲異常後直接返回原始字串，確保 TTS 朗讀管線永不中斷掛起。
+
