@@ -610,6 +610,15 @@ export function App() {
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const activeUtteranceQueueRef = useRef<SpeechSynthesisUtterance[]>([]);
   const ttsSpeakingTimeoutRef = useRef<any>(null);
+  // 🎙️ Local Browser TTS 佇列與狀態參照（免受 Chromium pause() 當機 bug 影響）
+  const localTtsQueueRef = useRef<{
+    messageId: string;
+    textChunks: string[];
+    currentIndex: number;
+    selectedVoice?: SpeechSynthesisVoice;
+    targetLang: string;
+  } | null>(null);
+  const resumeLocalTtsRef = useRef<(() => void) | null>(null);
   // 快取最後一次合成/播放的音訊資訊，支援免重新生成立即重播 (Repeat without regeneration)
   const lastTtsPlaybackRef = useRef<{
     messageId: string;
@@ -2183,6 +2192,8 @@ export function App() {
         window.speechSynthesis.cancel();
       } catch {}
     }
+    localTtsQueueRef.current = null;
+    resumeLocalTtsRef.current = null;
     setPlayingMessageId(null);
     setIsTtsPaused(false);
     setIsTtsLoading(false);
@@ -2320,26 +2331,45 @@ export function App() {
 
   // ⏸️ Pause / On-Hold current TTS playback
   const pauseTtsPlayback = () => {
+    // 1. Clear timers
     if (ttsProgressTimerRef.current) {
       clearInterval(ttsProgressTimerRef.current);
       ttsProgressTimerRef.current = null;
     }
+    if (ttsSpeakingTimeoutRef.current) {
+      clearInterval(ttsSpeakingTimeoutRef.current);
+      ttsSpeakingTimeoutRef.current = null;
+    }
+
+    // 2. MiniMax HTML5 audio pause (smooth, non-blocking)
     if (ttsAudioRef.current) {
       try {
         ttsAudioRef.current.pause();
-      } catch {}
+      } catch (err) {
+        console.warn("Failed to pause HTML5 audio:", err);
+      }
     }
+
+    // 3. Local Browser SpeechSynthesis:
+    // ⚠️ Chromium Windows SAPI Bug 徹底防護：在 Windows Chromium (Chrome/Edge) 環境下，
+    // 調用 window.speechSynthesis.pause() 會直接鎖死音訊 IPC 執行緒，導致整頁完全白屏崩潰 (white screen freeze)。
+    // 正確安全的做法：使用 window.speechSynthesis.cancel() 立即釋放執行緒，
+    // 同時妥善保留 localTtsQueueRef 的當前段落進度，點擊「繼續」時直接無縫續播下一句，100% 杜絕死鎖白屏！
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
-        window.speechSynthesis.pause();
-      } catch {}
+        window.speechSynthesis.cancel();
+      } catch (err) {
+        console.warn("Failed to cancel speechSynthesis during pause:", err);
+      }
     }
+
     setIsTtsPaused(true);
   };
 
   // ▶️ Resume current on-hold TTS playback
   const resumeTtsPlayback = async () => {
-    if (ttsAudioRef.current) {
+    // 1. MiniMax HTML5 audio resume
+    if (ttsAudioRef.current && ttsAudioBlobUrlRef.current) {
       try {
         await ttsAudioRef.current.play();
         if (ttsProgressTimerRef.current) clearInterval(ttsProgressTimerRef.current);
@@ -2350,14 +2380,19 @@ export function App() {
           }
         }, 50);
       } catch (err) {
-        console.error("Failed to resume audio:", err);
+        console.error("Failed to resume MiniMax audio:", err);
       }
     }
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+
+    // 2. Local browser speech synthesis resume (無死鎖無縫續播)
+    if (resumeLocalTtsRef.current && localTtsQueueRef.current) {
       try {
-        window.speechSynthesis.resume();
-      } catch {}
+        resumeLocalTtsRef.current();
+      } catch (err) {
+        console.error("Failed to resume Local TTS:", err);
+      }
     }
+
     setIsTtsPaused(false);
   };
 
@@ -2784,93 +2819,132 @@ export function App() {
 
       const textChunks = splitIntoChunks(textToSpeak);
 
-      const cleanupUtterance = () => {
-        if (ttsSpeakingTimeoutRef.current) {
-          clearInterval(ttsSpeakingTimeoutRef.current);
-          ttsSpeakingTimeoutRef.current = null;
-        }
-        setTtsSpeakingProgressRatio(null);
-        activeUtteranceRef.current = null;
-        if (activeUtteranceQueueRef.current) {
-          activeUtteranceQueueRef.current = [];
-        }
-        setPlayingMessageId(null);
-        setIsTtsPaused(false);
+      localTtsQueueRef.current = {
+        messageId,
+        textChunks,
+        currentIndex: options?.startChunkIndex || 0,
+        selectedVoice,
+        targetLang,
       };
 
-      const utterances: SpeechSynthesisUtterance[] = textChunks.map((chunk, index) => {
-        const u = new SpeechSynthesisUtterance(chunk);
-        u.rate = ttsSpeed || 1.0;
-        u.pitch = 1.0;
-        if (selectedVoice) {
-          u.voice = selectedVoice;
-          u.lang = selectedVoice.lang || targetLang;
-        } else {
-          u.lang = targetLang;
-        }
+      const startLocalPlayback = (startIndex: number) => {
+        if (!localTtsQueueRef.current) return;
+        localTtsQueueRef.current.currentIndex = startIndex;
 
-        u.onboundary = (e) => {
-          if (e.charIndex !== undefined && chunk.length > 0) {
-            setTtsSpeakingProgressRatio(Math.min(1, Math.max(0, e.charIndex / chunk.length)));
-          }
-        };
-
-        // Only cleanup when the last sentence chunk completes
-        if (index === textChunks.length - 1) {
-          u.onend = () => {
-            cleanupUtterance();
-          };
-        } else {
-          u.onend = () => {
-            // Point activeUtteranceRef to next utterance in queue
-            activeUtteranceRef.current = utterances[index + 1] || null;
-          };
-        }
-
-        u.onerror = (e) => {
-          console.warn("Local TTS error on chunk", index, e);
-          cleanupUtterance();
-        };
-
-        return u;
-      });
-
-      // Keep strong references in queue to prevent Chromium garbage collection bug
-      activeUtteranceQueueRef.current = utterances;
-      activeUtteranceRef.current = utterances[0] || null;
-
-      // Chrome speech synthesis paused bug workaround: keep resume pulsing during playback
-      if (ttsSpeakingTimeoutRef.current) {
-        clearInterval(ttsSpeakingTimeoutRef.current);
-      }
-      ttsSpeakingTimeoutRef.current = setInterval(() => {
-        if (window.speechSynthesis.speaking) {
-          window.speechSynthesis.pause();
-          window.speechSynthesis.resume();
-        } else if (!window.speechSynthesis.pending && !window.speechSynthesis.speaking) {
+        const cleanupUtterance = () => {
           if (ttsSpeakingTimeoutRef.current) {
             clearInterval(ttsSpeakingTimeoutRef.current);
             ttsSpeakingTimeoutRef.current = null;
           }
-        }
-      }, 10000);
+          setTtsSpeakingProgressRatio(null);
+          activeUtteranceRef.current = null;
+          if (activeUtteranceQueueRef.current) {
+            activeUtteranceQueueRef.current = [];
+          }
+          localTtsQueueRef.current = null;
+          resumeLocalTtsRef.current = null;
+          setPlayingMessageId(null);
+          setIsTtsPaused(false);
+        };
 
-      // In Chrome/Edge, cancel preceding utterance then speak queue with a safe delay
-      try {
-        window.speechSynthesis.cancel();
-      } catch {}
-
-      setTimeout(() => {
-        try {
-          window.speechSynthesis.resume();
-          utterances.forEach((u) => {
-            window.speechSynthesis.speak(u);
-          });
-        } catch (err) {
-          console.error("speechSynthesis.speak error:", err);
+        const remainingChunks = localTtsQueueRef.current.textChunks.slice(startIndex);
+        if (remainingChunks.length === 0) {
           cleanupUtterance();
+          return;
         }
-      }, 50);
+
+        const utterances: SpeechSynthesisUtterance[] = remainingChunks.map((chunk, relIdx) => {
+          const absIdx = startIndex + relIdx;
+          const u = new SpeechSynthesisUtterance(chunk);
+          u.rate = ttsSpeed || 1.0;
+          u.pitch = 1.0;
+          if (selectedVoice) {
+            u.voice = selectedVoice;
+            u.lang = selectedVoice.lang || targetLang;
+          } else {
+            u.lang = targetLang;
+          }
+
+          u.onstart = () => {
+            if (localTtsQueueRef.current) {
+              localTtsQueueRef.current.currentIndex = absIdx;
+            }
+          };
+
+          u.onboundary = (e) => {
+            if (e.charIndex !== undefined && chunk.length > 0) {
+              setTtsSpeakingProgressRatio(Math.min(1, Math.max(0, e.charIndex / chunk.length)));
+            }
+          };
+
+          // Only cleanup when the last sentence chunk completes
+          if (relIdx === remainingChunks.length - 1) {
+            u.onend = () => {
+              cleanupUtterance();
+            };
+          } else {
+            u.onend = () => {
+              // Point activeUtteranceRef to next utterance in queue
+              activeUtteranceRef.current = utterances[relIdx + 1] || null;
+            };
+          }
+
+          u.onerror = (e) => {
+            // Cancel or interrupted caused by user pressing pause or stop is intentional
+            if (e.error === "canceled" || e.error === "interrupted") {
+              return;
+            }
+            console.warn("Local TTS error on chunk", absIdx, e);
+            cleanupUtterance();
+          };
+
+          return u;
+        });
+
+        // Keep strong references in queue to prevent Chromium garbage collection bug
+        activeUtteranceQueueRef.current = utterances;
+        activeUtteranceRef.current = utterances[0] || null;
+
+        // Chrome speech synthesis paused bug workaround: keep resume pulsing during playback
+        if (ttsSpeakingTimeoutRef.current) {
+          clearInterval(ttsSpeakingTimeoutRef.current);
+        }
+        ttsSpeakingTimeoutRef.current = setInterval(() => {
+          if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.pause();
+            window.speechSynthesis.resume();
+          } else if (!window.speechSynthesis.pending && !window.speechSynthesis.speaking) {
+            if (ttsSpeakingTimeoutRef.current) {
+              clearInterval(ttsSpeakingTimeoutRef.current);
+              ttsSpeakingTimeoutRef.current = null;
+            }
+          }
+        }, 10000);
+
+        // In Chrome/Edge, cancel preceding utterance then speak queue with a safe delay
+        try {
+          window.speechSynthesis.cancel();
+        } catch {}
+
+        setTimeout(() => {
+          try {
+            window.speechSynthesis.resume();
+            utterances.forEach((u) => {
+              window.speechSynthesis.speak(u);
+            });
+          } catch (err) {
+            console.error("speechSynthesis.speak error:", err);
+            cleanupUtterance();
+          }
+        }, 50);
+      };
+
+      resumeLocalTtsRef.current = () => {
+        const curIdx = localTtsQueueRef.current?.currentIndex ?? 0;
+        startLocalPlayback(curIdx);
+      };
+
+      startLocalPlayback(options?.startChunkIndex || 0);
       return;
     }
 
@@ -3654,7 +3728,7 @@ export function App() {
                   letterSpacing: "0.2px",
                 }}
               >
-                v1.4.1
+                v1.4.5
               </span>
             </div>
             <span

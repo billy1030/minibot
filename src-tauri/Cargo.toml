@@ -1,6 +1,6 @@
 [package]
 name = "minibot"
-version = "0.1.0"
+version = "1.4.5"
 description = "MiniBot Standalone Desktop Application"
 authors = ["you"]
 license = ""

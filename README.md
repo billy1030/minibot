@@ -1,6 +1,7 @@
 # MiniBot - Autonomous Chatbot with Model Context Protocol (MCP) & Tauri Desktop
 
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![Version](https://img.shields.io/badge/version-v1.4.5-blue.svg)](package.json)
 [![Node](https://img.shields.io/badge/Node.js-20%2B%20%7C%2026%20ESM-green.svg)](https://nodejs.org)
 [![React](https://img.shields.io/badge/React-19.2-cyan.svg)](https://react.dev)
 [![Port](https://img.shields.io/badge/Unified%20Port-7009-orange.svg)](http://localhost:7009)

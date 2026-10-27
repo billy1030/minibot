@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { AuthProvider, useAuth } from './contexts/AuthContext.tsx'
 import { LoginPage } from './pages/LoginPage.tsx'
+import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { Loader2 } from 'lucide-react'
 
 // Initialize font attribute immediately on script load
@@ -31,8 +32,10 @@ function RootApp() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider>
-      <RootApp />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <RootApp />
+      </AuthProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )
