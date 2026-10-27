@@ -2118,16 +2118,19 @@ export function App() {
 
     // Preserve current chunk progress before tearing down queue if requested (default: true)
     if (options?.preserveProgress !== false && ttsAudioQueueRef.current && ttsAudioQueueRef.current.messageId) {
-      const msgId = ttsAudioQueueRef.current.messageId;
-      const curIdx = ttsAudioQueueRef.current.currentIndex;
-      const total = ttsAudioQueueRef.current.chunks.length;
+      const activeQueue = ttsAudioQueueRef.current;
+      const msgId = activeQueue.messageId;
+      const curIdx = activeQueue.currentIndex;
+      const chunks = activeQueue.chunks || [];
+      const total = chunks.length;
       if (curIdx > 0 && curIdx < total) {
+        const remainingCleanText = chunks.slice(curIdx).join("\n\n");
         setTtsMessageProgress((prev) => ({
           ...prev,
           [msgId]: {
             chunkIndex: curIdx,
             totalChunks: total,
-            cleanText: ttsAudioQueueRef.current!.chunks.slice(curIdx).join("\n\n"),
+            cleanText: remainingCleanText,
           },
         }));
       }
@@ -2203,9 +2206,10 @@ export function App() {
   const jumpToNextChunk = () => {
     const queue = ttsAudioQueueRef.current;
     const targetMsgId = playingMessageId || activeFloatingCantoneseMessageId;
-    if (queue && playingMessageId) {
+    if (queue && queue.chunks && playingMessageId) {
+      const chunks = queue.chunks;
       const nextIdx = queue.currentIndex + 1;
-      if (nextIdx < queue.chunks.length) {
+      if (nextIdx < chunks.length) {
         if (ttsAudioRef.current) {
           try {
             ttsAudioRef.current.onended = null;
@@ -2222,7 +2226,7 @@ export function App() {
             },
           };
         });
-        showAlert(`⏭️ 跳至第 ${nextIdx + 1}/${queue.chunks.length} 段`, "info", "跳至下一段");
+        showAlert(`⏭️ 跳至第 ${nextIdx + 1}/${chunks.length} 段`, "info", "跳至下一段");
         playChunkAtRef.current?.(nextIdx);
       } else {
         showAlert("已經是最後一段", "info", "已到文末");
@@ -2248,7 +2252,8 @@ export function App() {
   const jumpToPrevChunk = () => {
     const queue = ttsAudioQueueRef.current;
     const targetMsgId = playingMessageId || activeFloatingCantoneseMessageId;
-    if (queue && playingMessageId) {
+    if (queue && queue.chunks && playingMessageId) {
+      const chunks = queue.chunks;
       const prevIdx = queue.currentIndex - 1;
       if (prevIdx >= 0) {
         if (ttsAudioRef.current) {
@@ -2267,7 +2272,7 @@ export function App() {
             },
           };
         });
-        showAlert(`⏮️ 返回第 ${prevIdx + 1}/${queue.chunks.length} 段`, "info", "返回上一段");
+        showAlert(`⏮️ 返回第 ${prevIdx + 1}/${chunks.length} 段`, "info", "返回上一段");
         playChunkAtRef.current?.(prevIdx);
       } else {
         showAlert("已經是第一段", "info", "已在開頭");
@@ -3046,12 +3051,13 @@ export function App() {
       queueState.currentIndex = index;
       setTtsCurrentChunkInfo({ current: index + 1, total: totalChunks });
 
+      const cleanRemaining = queueState.chunks ? queueState.chunks.slice(index).join("\n\n") : "";
       setTtsMessageProgress((prev) => ({
         ...prev,
         [messageId]: {
           chunkIndex: index,
           totalChunks,
-          cleanText: queueState.chunks.slice(index).join("\n\n"),
+          cleanText: cleanRemaining,
         },
       }));
 
