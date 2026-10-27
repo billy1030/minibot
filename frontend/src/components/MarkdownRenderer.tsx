@@ -23,6 +23,89 @@ interface ContentSegment {
   html?: string;
 }
 
+// Helper: Clean cell and auto-repair missing closing parentheses
+function cleanCell(cell: string): string {
+  let c = cell.trim();
+  const openParen = (c.match(/\(/g) || []).length;
+  const closeParen = (c.match(/\)/g) || []).length;
+  if (openParen > closeParen) {
+    c += ')'.repeat(openParen - closeParen);
+  }
+  return c;
+}
+
+// Transform fragile ASCII/Unicode box-drawing tables into native GFM Markdown tables
+export function convertAsciiBoxToMarkdown(text: string): string {
+  if (!text || (!text.includes('┌') && !text.includes('+--') && !text.includes('├──'))) return text;
+
+  // If the box is wrapped in ```text or ```, unwrap the code block wrapper around the box so it renders as a native table
+  const unwrapCodeBlockRegex = /```(?:text|plain|ascii)?\s*([\s\S]*?[┌\+][─\-\+=┬┴┼]{4,}[\s\S]*?[┘\+])\s*```/g;
+  const processed = text.replace(unwrapCodeBlockRegex, '$1');
+
+  const lines = processed.split(/\r?\n/);
+  const result: string[] = [];
+  let inBox = false;
+  let boxLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    const isBoxBorder = /^[┌├└\+][─\-\+=┬┴┼]{4,}[┐┤┘\+]?$/.test(trimmed) || /^[└\+]\s*[─\-\+=┬┴┼\s]{4,}[┘\+]?$/.test(trimmed);
+    const isBoxRow = /^[│\|].+[│\|]$/.test(trimmed);
+
+    if (isBoxBorder || isBoxRow) {
+      if (!inBox && (trimmed.startsWith('┌') || (trimmed.startsWith('+') && trimmed.includes('-')))) {
+        inBox = true;
+        boxLines = [line];
+        continue;
+      }
+      if (inBox) {
+        boxLines.push(line);
+        const isEnd = trimmed.startsWith('└') || 
+                      (trimmed.startsWith('+') && boxLines.length > 2 && (i === lines.length - 1 || !/^[│\|]/.test(lines[i+1]?.trim() || '')));
+        if (isEnd) {
+          const dataRows = boxLines.filter(l => /^[│\|]/.test(l.trim()));
+          if (dataRows.length > 0) {
+            let headerDone = false;
+            let titleSpan: string | null = null;
+            for (const r of dataRows) {
+              const cells = r.trim().split(/[│\|]/).slice(1, -1).map(cleanCell);
+              if (!cells.some(c => c.length > 0)) continue;
+              if (cells.length === 1 && !headerDone) {
+                titleSpan = cells[0];
+                continue;
+              }
+              if (!headerDone) {
+                if (titleSpan) {
+                  result.push('### ' + titleSpan + '\n');
+                  titleSpan = null;
+                }
+                result.push('| ' + cells.join(' | ') + ' |');
+                result.push('| ' + cells.map(() => '---').join(' | ') + ' |');
+                headerDone = true;
+              } else {
+                result.push('| ' + cells.join(' | ') + ' |');
+              }
+            }
+          }
+          inBox = false;
+          boxLines = [];
+        }
+        continue;
+      }
+    } else {
+      if (inBox) {
+        result.push(...boxLines);
+        inBox = false;
+        boxLines = [];
+      }
+      result.push(line);
+    }
+  }
+  if (inBox) result.push(...boxLines);
+  return result.join('\n');
+}
+
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className = "", disableDiagrams = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -34,6 +117,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     if (clean.startsWith("```markdown") && clean.endsWith("```")) {
       clean = clean.slice(11, -3).trim();
     }
+
+    // Auto-convert fragile ASCII box tables into native responsive GFM tables
+    clean = convertAsciiBoxToMarkdown(clean);
+
 
     if (disableDiagrams) {
       try {

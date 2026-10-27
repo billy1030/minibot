@@ -64,6 +64,8 @@ import {
   Image as ImageIcon,
   FileSpreadsheet,
   Languages,
+  Minimize2,
+  Maximize2,
 } from "lucide-react";
 import { MarkdownRenderer } from "./components/MarkdownRenderer";
 import { generateStandaloneExportHtml, downloadHtmlFile } from "./utils/htmlExport";
@@ -546,16 +548,54 @@ export function App() {
       return true;
     }
   });
-  // 🌐 廣東話翻譯視覺化狀態（顯示對照卡片、段落切換、載入狀態）
+  // 🌐 粵語翻譯視覺化狀態（顯示對照卡片、段落切換、載入狀態）
   const [ttsTranslationState, setTtsTranslationState] = useState<{
     [messageId: string]: {
+      originalText?: string;
+      originalChunks?: string[];
       fullTranslatedText: string;
       activeChunkIndex: number;
       translatedChunks: string[];
       isTranslating?: boolean;
       showBox?: boolean;
+      isOriginalChinese?: boolean;
     };
   }>({});
+  // 🪟 廣東話口語翻譯對照懸浮視窗 (Floating Window) 狀態
+  const [showCantoneseFloatingWindow, setShowCantoneseFloatingWindow] = useState<boolean>(false);
+  const [activeFloatingCantoneseMessageId, setActiveFloatingCantoneseMessageId] = useState<string | null>(null);
+  const [isCantoneseFloatingMinimized, setIsCantoneseFloatingMinimized] = useState<boolean>(false);
+  const [cantoneseFloatingPos, setCantoneseFloatingPos] = useState<{ x: number; y: number } | null>(null);
+  const [isDraggingCantoneseWindow, setIsDraggingCantoneseWindow] = useState<boolean>(false);
+
+  // 🖱️ 粵語對照懸浮視窗拖曳處理函數 (Draggable Floating Window)
+  const handleFloatingHeaderMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    e.preventDefault();
+    setIsDraggingCantoneseWindow(true);
+    const windowEl = document.getElementById("cantonese-floating-window");
+    const rect = windowEl ? windowEl.getBoundingClientRect() : { left: window.innerWidth - 524, top: window.innerHeight - 520, width: 500, height: 480 };
+    const shiftX = e.clientX - rect.left;
+    const shiftY = e.clientY - rect.top;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const currentWidth = windowEl ? windowEl.offsetWidth : 480;
+      const currentHeight = windowEl ? windowEl.offsetHeight : 44;
+      const newX = Math.max(8, Math.min(window.innerWidth - currentWidth - 8, moveEvent.clientX - shiftX));
+      const newY = Math.max(8, Math.min(window.innerHeight - currentHeight - 8, moveEvent.clientY - shiftY));
+      setCantoneseFloatingPos({ x: newX, y: newY });
+    };
+
+    const onMouseUp = () => {
+      setIsDraggingCantoneseWindow(false);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
   // 系統已安裝的中文/粵語可用語音清單
   const [availableLocalVoices, setAvailableLocalVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
@@ -581,6 +621,9 @@ export function App() {
   const [customVoiceApiKey, setCustomVoiceApiKey] = useState<string>("");
   const [isSavingVoiceKey, setIsSavingVoiceKey] = useState<boolean>(false);
   const [ttsCurrentChunkInfo, setTtsCurrentChunkInfo] = useState<{ current: number; total: number } | null>(null);
+  // 🎙️ 即時語音朗讀進度比例 (0.0 ~ 1.0)，支援卡拉OK式即時逐字發光聚焦
+  const [ttsSpeakingProgressRatio, setTtsSpeakingProgressRatio] = useState<number | null>(null);
+  const ttsProgressTimerRef = useRef<any>(null);
   const ttsAudioQueueRef = useRef<{
     chunks: string[];
     currentIndex: number;
@@ -591,8 +634,8 @@ export function App() {
   } | null>(null);
   // ⚡ 支援動態跳段（jump to chunk）的函數引用
   const playChunkAtRef = useRef<((index: number) => Promise<void>) | null>(null);
-  // 記憶每則訊息最後播放或中斷的段落進度，支援「從第 X 段繼續播放」
-  const [ttsMessageProgress, setTtsMessageProgress] = useState<
+  // 記憶每則訊息最後播放或中斷的段落進度
+  const [_ttsMessageProgress, setTtsMessageProgress] = useState<
     Record<string, { chunkIndex: number; totalChunks: number; cleanText: string }>
   >({});
 
@@ -2104,6 +2147,11 @@ export function App() {
       clearInterval(ttsSpeakingTimeoutRef.current);
       ttsSpeakingTimeoutRef.current = null;
     }
+    if (ttsProgressTimerRef.current) {
+      clearInterval(ttsProgressTimerRef.current);
+      ttsProgressTimerRef.current = null;
+    }
+    setTtsSpeakingProgressRatio(null);
     // Clear active utterance ref and queue
     if (activeUtteranceRef.current) {
       activeUtteranceRef.current.onend = null;
@@ -2143,66 +2191,89 @@ export function App() {
   // ⏭️ Skip to next chunk (Alt + → / UI button)
   const jumpToNextChunk = () => {
     const queue = ttsAudioQueueRef.current;
-    if (!queue || !playingMessageId) return;
-    const nextIdx = queue.currentIndex + 1;
-    if (nextIdx < queue.chunks.length) {
-      if (ttsAudioRef.current) {
-        try {
-          ttsAudioRef.current.onended = null;
-          ttsAudioRef.current.pause();
-        } catch {}
+    const targetMsgId = playingMessageId || activeFloatingCantoneseMessageId;
+    if (queue && playingMessageId) {
+      const nextIdx = queue.currentIndex + 1;
+      if (nextIdx < queue.chunks.length) {
+        if (ttsAudioRef.current) {
+          try {
+            ttsAudioRef.current.onended = null;
+            ttsAudioRef.current.pause();
+          } catch {}
+        }
+        setTtsTranslationState((prev) => {
+          if (!prev[playingMessageId]) return prev;
+          return {
+            ...prev,
+            [playingMessageId]: {
+              ...prev[playingMessageId],
+              activeChunkIndex: nextIdx,
+            },
+          };
+        });
+        showAlert(`⏭️ 跳至第 ${nextIdx + 1}/${queue.chunks.length} 段`, "info", "跳至下一段");
+        playChunkAtRef.current?.(nextIdx);
+      } else {
+        showAlert("已經是最後一段", "info", "已到文末");
       }
-      setTtsTranslationState((prev) => {
-        if (!prev[playingMessageId]) return prev;
-        return {
+    } else if (targetMsgId && ttsTranslationState[targetMsgId]) {
+      const curIdx = ttsTranslationState[targetMsgId].activeChunkIndex ?? 0;
+      const total = ttsTranslationState[targetMsgId].translatedChunks?.length || 1;
+      if (curIdx + 1 < total) {
+        setTtsTranslationState((prev) => ({
           ...prev,
-          [playingMessageId]: {
-            ...prev[playingMessageId],
-            activeChunkIndex: nextIdx,
+          [targetMsgId]: {
+            ...prev[targetMsgId],
+            activeChunkIndex: curIdx + 1,
           },
-        };
-      });
-      setTimeout(() => {
-        const el = document.getElementById(`tts-chunk-${playingMessageId}-${nextIdx}`);
-        el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }, 50);
-      showAlert(`⏭️ 跳至第 ${nextIdx + 1}/${queue.chunks.length} 段`, "info", "跳至下一段");
-      playChunkAtRef.current?.(nextIdx);
-    } else {
-      showAlert("已經是最後一段", "info", "已到文末");
+        }));
+      } else {
+        showAlert("已經是最後一段", "info", "已到文末");
+      }
     }
   };
 
   // ⏮️ Jump back to previous chunk (Alt + ← / UI button)
   const jumpToPrevChunk = () => {
     const queue = ttsAudioQueueRef.current;
-    if (!queue || !playingMessageId) return;
-    const prevIdx = queue.currentIndex - 1;
-    if (prevIdx >= 0) {
-      if (ttsAudioRef.current) {
-        try {
-          ttsAudioRef.current.onended = null;
-          ttsAudioRef.current.pause();
-        } catch {}
+    const targetMsgId = playingMessageId || activeFloatingCantoneseMessageId;
+    if (queue && playingMessageId) {
+      const prevIdx = queue.currentIndex - 1;
+      if (prevIdx >= 0) {
+        if (ttsAudioRef.current) {
+          try {
+            ttsAudioRef.current.onended = null;
+            ttsAudioRef.current.pause();
+          } catch {}
+        }
+        setTtsTranslationState((prev) => {
+          if (!prev[playingMessageId]) return prev;
+          return {
+            ...prev,
+            [playingMessageId]: {
+              ...prev[playingMessageId],
+              activeChunkIndex: prevIdx,
+            },
+          };
+        });
+        showAlert(`⏮️ 返回第 ${prevIdx + 1}/${queue.chunks.length} 段`, "info", "返回上一段");
+        playChunkAtRef.current?.(prevIdx);
+      } else {
+        showAlert("已經是第一段", "info", "已在開頭");
       }
-      setTtsTranslationState((prev) => {
-        if (!prev[playingMessageId]) return prev;
-        return {
+    } else if (targetMsgId && ttsTranslationState[targetMsgId]) {
+      const curIdx = ttsTranslationState[targetMsgId].activeChunkIndex ?? 0;
+      if (curIdx > 0) {
+        setTtsTranslationState((prev) => ({
           ...prev,
-          [playingMessageId]: {
-            ...prev[playingMessageId],
-            activeChunkIndex: prevIdx,
+          [targetMsgId]: {
+            ...prev[targetMsgId],
+            activeChunkIndex: curIdx - 1,
           },
-        };
-      });
-      setTimeout(() => {
-        const el = document.getElementById(`tts-chunk-${playingMessageId}-${prevIdx}`);
-        el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }, 50);
-      showAlert(`⏮️ 返回第 ${prevIdx + 1}/${queue.chunks.length} 段`, "info", "返回上一段");
-      playChunkAtRef.current?.(prevIdx);
-    } else {
-      showAlert("已經是第一段", "info", "已在開頭");
+        }));
+      } else {
+        showAlert("已經是第一段", "info", "已在開頭");
+      }
     }
   };
 
@@ -2249,6 +2320,10 @@ export function App() {
 
   // ⏸️ Pause / On-Hold current TTS playback
   const pauseTtsPlayback = () => {
+    if (ttsProgressTimerRef.current) {
+      clearInterval(ttsProgressTimerRef.current);
+      ttsProgressTimerRef.current = null;
+    }
     if (ttsAudioRef.current) {
       try {
         ttsAudioRef.current.pause();
@@ -2267,6 +2342,13 @@ export function App() {
     if (ttsAudioRef.current) {
       try {
         await ttsAudioRef.current.play();
+        if (ttsProgressTimerRef.current) clearInterval(ttsProgressTimerRef.current);
+        ttsProgressTimerRef.current = setInterval(() => {
+          if (ttsAudioRef.current && !ttsAudioRef.current.paused && ttsAudioRef.current.duration > 0) {
+            const r = Math.min(1, Math.max(0, ttsAudioRef.current.currentTime / ttsAudioRef.current.duration));
+            setTtsSpeakingProgressRatio(r);
+          }
+        }, 50);
       } catch (err) {
         console.error("Failed to resume audio:", err);
       }
@@ -2421,10 +2503,49 @@ export function App() {
       return cached.fullTranslatedText;
     }
 
-    // 在 UI 立即設定加載狀態，展開對照卡片
+    // 🇭🇰 檢查是否本身已經係中文/廣東話：若是，完全無需翻譯，直接使用原文朗讀！
+    const chineseChars = cleanText.match(/[\u4e00-\u9fa5]/g) || [];
+    const englishWords = cleanText.match(/[a-zA-Z]{2,}/g) || [];
+    const englishCharCount = englishWords.reduce((acc, w) => acc + w.length, 0);
+    const isAlreadyChinese = chineseChars.length >= 15 && (chineseChars.length * 2 >= englishCharCount || chineseChars.length > 25);
+
+    if (isAlreadyChinese) {
+      setActiveFloatingCantoneseMessageId(messageId);
+      setShowCantoneseFloatingWindow(true);
+      setIsCantoneseFloatingMinimized(false);
+      const chunks = splitForMiniMax(cleanText);
+      setTtsTranslationState((prev) => ({
+        ...prev,
+        [messageId]: {
+          originalText: cleanText,
+          originalChunks: [], // 空陣列表示原文非英文，無需中英雙語對照
+          fullTranslatedText: cleanText,
+          activeChunkIndex: options?.targetStartChunkIndex ?? 0,
+          translatedChunks: chunks,
+          isTranslating: false,
+          showBox: true,
+          isOriginalChinese: true,
+        },
+      }));
+      if (options?.autoPlay) {
+        playCantoneseTts(cleanText, messageId, {
+          startChunkIndex: options?.targetStartChunkIndex ?? 0,
+          skipTranslation: true,
+        });
+      }
+      return cleanText;
+    }
+
+    // 在 UI 立即設定加載狀態，並開啟懸浮對照視窗
+    setActiveFloatingCantoneseMessageId(messageId);
+    setShowCantoneseFloatingWindow(true);
+    setIsCantoneseFloatingMinimized(false);
+    const initialEnChunks = splitForMiniMax(cleanText);
     setTtsTranslationState((prev) => ({
       ...prev,
       [messageId]: {
+        originalText: cleanText,
+        originalChunks: initialEnChunks,
         fullTranslatedText: "",
         activeChunkIndex: options?.targetStartChunkIndex ?? 0,
         translatedChunks: [],
@@ -2434,7 +2555,7 @@ export function App() {
     }));
 
     showAlert(
-      "🌐 正在將英文內容轉為道地香港廣東話口語（技術 Term 保留英文）...",
+      "🌐 正在將英文內容轉為道地香港粵語口語（技術 Term 保留英文）...",
       "info",
       "粵語語音轉譯中 (Translating)"
     );
@@ -2456,10 +2577,13 @@ export function App() {
       }
 
       const chunks = splitForMiniMax(translatedText);
+      const originalChunks = splitForMiniMax(cleanText);
 
       setTtsTranslationState((prev) => ({
         ...prev,
         [messageId]: {
+          originalText: cleanText,
+          originalChunks,
           fullTranslatedText: translatedText,
           activeChunkIndex: options?.targetStartChunkIndex ?? 0,
           translatedChunks: chunks,
@@ -2468,7 +2592,7 @@ export function App() {
         },
       }));
 
-      showAlert("✅ 廣東話口語翻譯已完成，已為您展開對照卡片！", "success", "轉譯完成");
+      showAlert("✅ 粵語口語翻譯已完成，已為您在懸浮視窗中展開對照！", "success", "轉譯完成");
 
       if (options?.autoPlay) {
         playCantoneseTts(translatedText, messageId, {
@@ -2543,12 +2667,13 @@ export function App() {
       if (cached && cached.fullTranslatedText) {
         textToSpeak = cached.fullTranslatedText;
       } else {
+        const chineseChars = cleanText.match(/[\u4e00-\u9fa5]/g) || [];
         const englishWords = cleanText.match(/[a-zA-Z]{2,}/g) || [];
         const englishCharCount = englishWords.reduce((acc, w) => acc + w.length, 0);
-        const chineseChars = cleanText.match(/[\u4e00-\u9fa5]/g) || [];
-        const isEnglishDominant =
-          englishWords.length >= 3 &&
-          (englishCharCount / Math.max(1, cleanText.length) > 0.20 || chineseChars.length < 15);
+
+        // 如果中文字數充足（>= 15 粒，且中文字數相較英文字詞具備顯著比例或超過 25 粒），直接當作中文，免除翻譯！
+        const isAlreadyChinese = chineseChars.length >= 15 && (chineseChars.length * 2 >= englishCharCount || chineseChars.length > 25);
+        const isEnglishDominant = !isAlreadyChinese && englishWords.length >= 3 && (englishCharCount / Math.max(1, cleanText.length) > 0.35 || chineseChars.length < 15);
 
         if (isEnglishDominant) {
           await translateMessageToCantonese(messageId, cleanText, {
@@ -2557,6 +2682,23 @@ export function App() {
             forceShow: true,
           });
           return;
+        } else {
+          // 本身已為中文，直接初始化懸浮對照視窗狀態並直接朗讀
+          const chunks = splitForMiniMax(cleanText);
+          setActiveFloatingCantoneseMessageId(messageId);
+          setTtsTranslationState((prev) => ({
+            ...prev,
+            [messageId]: {
+              originalText: cleanText,
+              originalChunks: [],
+              fullTranslatedText: cleanText,
+              activeChunkIndex: options?.startChunkIndex ?? 0,
+              translatedChunks: chunks,
+              isTranslating: false,
+              showBox: true,
+              isOriginalChinese: true,
+            },
+          }));
         }
       }
     }
@@ -2647,6 +2789,7 @@ export function App() {
           clearInterval(ttsSpeakingTimeoutRef.current);
           ttsSpeakingTimeoutRef.current = null;
         }
+        setTtsSpeakingProgressRatio(null);
         activeUtteranceRef.current = null;
         if (activeUtteranceQueueRef.current) {
           activeUtteranceQueueRef.current = [];
@@ -2665,6 +2808,12 @@ export function App() {
         } else {
           u.lang = targetLang;
         }
+
+        u.onboundary = (e) => {
+          if (e.charIndex !== undefined && chunk.length > 0) {
+            setTtsSpeakingProgressRatio(Math.min(1, Math.max(0, e.charIndex / chunk.length)));
+          }
+        };
 
         // Only cleanup when the last sentence chunk completes
         if (index === textChunks.length - 1) {
@@ -2803,6 +2952,11 @@ export function App() {
       if (queueState.abortController?.signal.aborted) return;
       if (index >= totalChunks) {
         // 全文朗讀完成
+        if (ttsProgressTimerRef.current) {
+          clearInterval(ttsProgressTimerRef.current);
+          ttsProgressTimerRef.current = null;
+        }
+        setTtsSpeakingProgressRatio(null);
         setPlayingMessageId(null);
         setIsTtsPaused(false);
         setTtsCurrentChunkInfo(null);
@@ -2827,7 +2981,7 @@ export function App() {
         },
       }));
 
-      // 🔄 同步更新廣東話對照卡片中的活躍段落，並平滑滾動至可見區域
+      // 🔄 同步更新粵語對照中的活躍段落，只在懸浮視窗內部滾動，絕不干擾主對話視窗捲動
       setTtsTranslationState((prev) => {
         if (!prev[messageId]) return prev;
         return {
@@ -2839,8 +2993,12 @@ export function App() {
         };
       });
       setTimeout(() => {
-        const el = document.getElementById(`tts-chunk-${messageId}-${index}`);
-        el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        const container = document.getElementById("cantonese-floating-body");
+        const chunkEl = document.getElementById(`floating-tts-chunk-${messageId}-${index}`);
+        if (container && chunkEl) {
+          const topOffset = chunkEl.offsetTop - container.offsetTop - 12;
+          container.scrollTo({ top: topOffset, behavior: "smooth" });
+        }
       }, 50);
 
       try {
@@ -2873,13 +3031,32 @@ export function App() {
           });
         }
 
+        if (ttsProgressTimerRef.current) clearInterval(ttsProgressTimerRef.current);
+        setTtsSpeakingProgressRatio(0);
+        ttsProgressTimerRef.current = setInterval(() => {
+          if (audio && !audio.paused && audio.duration > 0) {
+            const r = Math.min(1, Math.max(0, audio.currentTime / audio.duration));
+            setTtsSpeakingProgressRatio(r);
+          }
+        }, 50);
+
         audio.onended = () => {
+          if (ttsProgressTimerRef.current) {
+            clearInterval(ttsProgressTimerRef.current);
+            ttsProgressTimerRef.current = null;
+          }
+          setTtsSpeakingProgressRatio(null);
           if (queueState.abortController?.signal.aborted) return;
           // 無縫切換播放下一段
           playChunkAt(index + 1);
         };
 
         audio.onerror = (e) => {
+          if (ttsProgressTimerRef.current) {
+            clearInterval(ttsProgressTimerRef.current);
+            ttsProgressTimerRef.current = null;
+          }
+          setTtsSpeakingProgressRatio(null);
           if (queueState.abortController?.signal.aborted || !ttsAudioRef.current) return;
           console.error(`Audio playback error at chunk ${index + 1}:`, e);
           setPlayingMessageId(null);
@@ -5004,6 +5181,101 @@ export function App() {
               )}
             </div>
           </div>
+
+          {/* 🇭🇰 粵語對照 Floating Window Nav Bar Trigger & Playback Controls */}
+            {(() => {
+              const activeMsgId =
+                activeFloatingCantoneseMessageId ||
+                playingMessageId ||
+                Object.entries(ttsTranslationState).filter(([_, v]) => (v.translatedChunks && v.translatedChunks.length > 0) || v.isTranslating).pop()?.[0];
+              const activeTranslationData = activeMsgId ? ttsTranslationState[activeMsgId] : null;
+              const hasTranslation = Boolean(activeTranslationData && ((activeTranslationData.translatedChunks && activeTranslationData.translatedChunks.length > 0) || activeTranslationData.isTranslating));
+              if (!hasTranslation) return null;
+
+              return (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (activeMsgId && !activeFloatingCantoneseMessageId) {
+                        setActiveFloatingCantoneseMessageId(activeMsgId);
+                      }
+                      setShowCantoneseFloatingWindow(!showCantoneseFloatingWindow);
+                      setIsCantoneseFloatingMinimized(false);
+                    }}
+                    title="開啟/收起粵語翻譯對照懸浮視窗"
+                    style={{
+                      height: 30,
+                      padding: "0 10px",
+                      borderRadius: 6,
+                      background: showCantoneseFloatingWindow
+                        ? "rgba(16, 185, 129, 0.22)"
+                        : "rgba(16, 185, 129, 0.1)",
+                      border: showCantoneseFloatingWindow
+                        ? "1px solid #10b981"
+                        : "1px solid rgba(16, 185, 129, 0.35)",
+                      color: "#10b981",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      cursor: "pointer",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      transition: "all 0.15s ease",
+                      boxShadow: showCantoneseFloatingWindow ? "0 0 10px rgba(16, 185, 129, 0.35)" : "none",
+                    }}
+                  >
+                    <Languages size={13} color="#10b981" />
+                    <span>粵語對照</span>
+                    {activeTranslationData?.translatedChunks?.length ? (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          padding: "1px 5px",
+                          borderRadius: 8,
+                          background: "#10b981",
+                          color: "#ffffff",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {(activeTranslationData.activeChunkIndex ?? 0) + 1}/{activeTranslationData.translatedChunks.length}
+                      </span>
+                    ) : null}
+                  </button>
+
+                  {playingMessageId ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isTtsPaused) {
+                          resumeTtsPlayback();
+                        } else {
+                          pauseTtsPlayback();
+                        }
+                      }}
+                      title={isTtsPaused ? "繼續播放語音" : "暫停播放語音"}
+                      style={{
+                        height: 30,
+                        padding: "0 8px",
+                        borderRadius: 6,
+                        background: isTtsPaused ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                        border: isTtsPaused ? "1px solid #10b981" : "1px solid #f59e0b",
+                        color: isTtsPaused ? "#10b981" : "#f59e0b",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        cursor: "pointer",
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {isTtsPaused ? <Play size={10} fill="#10b981" /> : <Pause size={10} fill="#f59e0b" />}
+                      <span>{isTtsPaused ? "繼續" : "暫停"}</span>
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })()}
 
           {/* Group Divider 3 -> 4 */}
           <div style={{ width: 1, height: 18, background: "var(--border-color)", flexShrink: 0, margin: "0 2px" }} />
@@ -7715,178 +7987,6 @@ export function App() {
                             </div>
                           ) : null}
 
-                          {/* 🌐 廣東話口語翻譯對照卡片 (Spoken Cantonese Translation Card) */}
-                          {ttsTranslationState[m.id]?.showBox && (
-                            <div
-                              className="cantonese-translation-card"
-                              style={{
-                                marginTop: 14,
-                                borderRadius: 10,
-                                border: "1px solid rgba(16, 185, 129, 0.35)",
-                                background: "linear-gradient(180deg, rgba(16, 185, 129, 0.06) 0%, rgba(15, 23, 42, 0.4) 100%)",
-                                backdropFilter: "blur(8px)",
-                                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
-                                overflow: "hidden",
-                                transition: "all 0.2s ease",
-                              }}
-                            >
-                              {/* Header */}
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  padding: "9px 13px",
-                                  background: "rgba(16, 185, 129, 0.12)",
-                                  borderBottom: "1px solid rgba(16, 185, 129, 0.22)",
-                                }}
-                              >
-                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                  <Languages size={15} color="#10b981" />
-                                  <span style={{ fontWeight: 700, fontSize: 13, color: "#10b981" }}>
-                                    廣東話口語翻譯對照 (Spoken Cantonese)
-                                  </span>
-                                  <span
-                                    style={{
-                                      fontSize: 10,
-                                      padding: "1px 7px",
-                                      borderRadius: 10,
-                                      background: "rgba(16, 185, 129, 0.18)",
-                                      color: "#34d399",
-                                      fontWeight: 600,
-                                      border: "1px solid rgba(16, 185, 129, 0.3)",
-                                    }}
-                                  >
-                                    技術 Term 保留英文
-                                  </span>
-                                  {ttsTranslationState[m.id]?.isTranslating && (
-                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "#eab308", fontWeight: 600 }}>
-                                      <Loader2 size={12} className="spin" />
-                                      轉譯口語中...
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  {ttsTranslationState[m.id]?.translatedChunks && ttsTranslationState[m.id].translatedChunks.length > 0 ? (
-                                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                                      段落: {((ttsTranslationState[m.id]?.activeChunkIndex ?? 0) + 1)} / {ttsTranslationState[m.id].translatedChunks.length}
-                                    </span>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setTtsTranslationState((prev) => ({
-                                        ...prev,
-                                        [m.id]: { ...prev[m.id], showBox: false },
-                                      }));
-                                    }}
-                                    style={{
-                                      background: "transparent",
-                                      border: "none",
-                                      color: "var(--text-muted)",
-                                      cursor: "pointer",
-                                      padding: "2px 6px",
-                                      borderRadius: 4,
-                                      fontSize: 13,
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                    }}
-                                    title="收起對照卡片"
-                                  >
-                                    <X size={13} />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Body: Chunks */}
-                              <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8, maxHeight: 380, overflowY: "auto" }}>
-                                {ttsTranslationState[m.id]?.isTranslating && !ttsTranslationState[m.id]?.fullTranslatedText ? (
-                                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 0", color: "var(--text-muted)", fontSize: 13, justifyContent: "center" }}>
-                                    <Loader2 size={16} className="spin" color="#10b981" />
-                                    <span>MiniBot 正在將英文內容轉為道地香港廣東話口語（保留所有 Code 與技術 Term）...</span>
-                                  </div>
-                                ) : (
-                                  ttsTranslationState[m.id]?.translatedChunks?.map((chunk, idx) => {
-                                    const isActive = playingMessageId === m.id && (ttsTranslationState[m.id]?.activeChunkIndex ?? 0) === idx;
-                                    return (
-                                      <div
-                                        key={idx}
-                                        id={`tts-chunk-${m.id}-${idx}`}
-                                        onClick={(e) => {
-                                          const blockEl = e.currentTarget as HTMLElement;
-                                          if (e.altKey || e.metaKey) {
-                                            blockEl.style.transition = "all 0.25s ease";
-                                            blockEl.style.backgroundColor = "rgba(16, 185, 129, 0.35)";
-                                            blockEl.style.boxShadow = "0 0 0 2px #10b981";
-                                            setTimeout(() => {
-                                              blockEl.style.backgroundColor = "";
-                                              blockEl.style.boxShadow = "";
-                                            }, 800);
-                                          }
-                                          if (playingMessageId === m.id && playChunkAtRef.current) {
-                                            playChunkAtRef.current(idx);
-                                          } else {
-                                            playCantoneseTts(ttsTranslationState[m.id].fullTranslatedText, m.id, { startChunkIndex: idx, skipTranslation: true });
-                                          }
-                                        }}
-                                        style={{
-                                          padding: "8px 12px",
-                                          borderRadius: 6,
-                                          fontSize: 13,
-                                          lineHeight: 1.65,
-                                          cursor: "pointer",
-                                          transition: "all 0.2s ease",
-                                          background: isActive
-                                            ? "rgba(16, 185, 129, 0.18)"
-                                            : "rgba(255, 255, 255, 0.03)",
-                                          border: isActive
-                                            ? "1px solid #10b981"
-                                            : "1px solid rgba(255, 255, 255, 0.07)",
-                                          color: isActive ? "#ffffff" : "var(--text-main)",
-                                          boxShadow: isActive ? "0 0 12px rgba(16, 185, 129, 0.25)" : "none",
-                                        }}
-                                        title="點選此段立即朗讀 (支援 Alt+左右方向鍵跳段，Alt+滑鼠點選直讀)"
-                                      >
-                                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                                          <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? "#34d399" : "var(--text-muted)" }}>
-                                            {isActive ? "▶️ 正在播放 第 " + (idx + 1) + " 段" : "第 " + (idx + 1) + " 段"}
-                                          </span>
-                                          <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                                            {chunk.length} 字
-                                          </span>
-                                        </div>
-                                        <div style={{ whiteSpace: "pre-wrap" }}>{chunk}</div>
-                                      </div>
-                                    );
-                                  })
-                                )}
-                              </div>
-
-                              {/* Footer shortcuts hint */}
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  padding: "6px 14px",
-                                  background: "rgba(0, 0, 0, 0.2)",
-                                  borderTop: "1px solid rgba(255, 255, 255, 0.06)",
-                                  fontSize: 11,
-                                  color: "var(--text-muted)",
-                                  flexWrap: "wrap",
-                                  gap: 6,
-                                }}
-                              >
-                                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                                  <span>⌨️ 快捷操作：</span>
-                                  <span><kbd style={{ background: "rgba(255,255,255,0.1)", padding: "1px 5px", borderRadius: 3 }}>Alt</kbd> + <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "1px 5px", borderRadius: 3 }}>滑鼠點選</kbd> 從該座標直讀</span>
-                                  <span><kbd style={{ background: "rgba(255,255,255,0.1)", padding: "1px 5px", borderRadius: 3 }}>Alt</kbd> + <kbd style={{ background: "rgba(255,255,255,0.1)", padding: "1px 5px", borderRadius: 3 }}>←</kbd>/<kbd style={{ background: "rgba(255,255,255,0.1)", padding: "1px 5px", borderRadius: 3 }}>→</kbd> 上下段快速切換</span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
                           {/* ⚠️ Interactive Loop Limit Reached Banner with Extra Loop Allowance */}
                           {m.limitReached && !m.isStreaming && (
                             <div
@@ -8006,280 +8106,57 @@ export function App() {
                           )}
 
                           <div style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                            {/* 🔊 Text-to-Voice Play/Stop & Progress Resume Buttons */}
-                            {playingMessageId !== m.id && ttsMessageProgress[m.id] && ttsMessageProgress[m.id].chunkIndex > 0 ? (
-                              <>
-                                {/* Resume from stopped chunk */}
-                                <button
-                                  type="button"
-                                  onClick={() => playCantoneseTts(m.content, m.id, { startChunkIndex: ttsMessageProgress[m.id].chunkIndex })}
-                                  title={`從上次停止的進度繼續朗讀 (第 ${ttsMessageProgress[m.id].chunkIndex + 1} 段，共 ${ttsMessageProgress[m.id].totalChunks} 段)`}
-                                  style={{
-                                    background: "rgba(16, 185, 129, 0.15)",
-                                    border: "1px solid #10b981",
-                                    borderRadius: 4,
-                                    padding: "2px 8px",
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    color: "#10b981",
-                                    cursor: "pointer",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                    transition: "all 0.15s ease",
-                                  }}
-                                >
-                                  <Play size={10} fill="#10b981" color="#10b981" />
-                                  <span>繼續第 {ttsMessageProgress[m.id].chunkIndex + 1}/{ttsMessageProgress[m.id].totalChunks} 段</span>
-                                </button>
-
-                                {/* Restart from beginning */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setTtsMessageProgress((prev) => {
-                                      const cp = { ...prev };
-                                      delete cp[m.id];
-                                      return cp;
-                                    });
-                                    playCantoneseTts(m.content, m.id, { startChunkIndex: 0 });
-                                  }}
-                                  title="從第 1 段重頭開始朗讀"
-                                  style={{
-                                    background: "transparent",
-                                    border: "1px solid var(--border-color)",
-                                    borderRadius: 4,
-                                    padding: "2px 6px",
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    color: "var(--text-muted)",
-                                    cursor: "pointer",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 3,
-                                    transition: "all 0.15s ease",
-                                  }}
-                                >
-                                  <RotateCcw size={10} />
-                                  <span>重頭</span>
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => playCantoneseTts(m.content, m.id)}
-                                disabled={isTtsLoading && playingMessageId === m.id}
-                                title={
-                                  playingMessageId === m.id
-                                    ? ttsLang === "cantonese" ? "停止朗讀 (已記憶進度)" : ttsLang === "mandarin" ? "停止朗讀 (已記憶進度)" : "Stop reading aloud"
-                                    : ttsLang === "cantonese"
-                                    ? `朗讀此回答 (粵語 | 模式: ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"})`
-                                    : ttsLang === "mandarin"
-                                    ? `朗讀此回答 (國語 | 模式: ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"})`
-                                    : `Read response aloud (English | Mode: ${ttsEngine === "local" ? "Local TTS" : "MiniMax Voice API"})`
-                                }
-                                style={{
-                                  background: playingMessageId === m.id ? "rgba(16, 185, 129, 0.15)" : "transparent",
-                                  border: playingMessageId === m.id ? "1px solid #10b981" : "1px solid var(--border-color)",
-                                  borderRadius: 4,
-                                  padding: "2px 8px",
-                                  fontSize: 10,
-                                  fontWeight: 600,
-                                  color: playingMessageId === m.id ? "#10b981" : "var(--text-muted)",
-                                  cursor: "pointer",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  transition: "all 0.15s ease",
-                                }}
-                                onMouseEnter={(e) => {
-                                  if (playingMessageId !== m.id) {
-                                    e.currentTarget.style.borderColor = "#10b981";
-                                    e.currentTarget.style.color = "#10b981";
-                                  }
-                                }}
-                                onMouseLeave={(e) => {
-                                  if (playingMessageId !== m.id) {
-                                    e.currentTarget.style.borderColor = "var(--border-color)";
-                                    e.currentTarget.style.color = "var(--text-muted)";
-                                  }
-                                }}
-                              >
-                                {isTtsLoading && playingMessageId === m.id ? (
-                                  <>
-                                    <Loader2 size={11} className="spin" color="#10b981" />
-                                    <span style={{ color: "#10b981" }}>
-                                      {ttsLang === "cantonese" ? "合成中..." : ttsLang === "mandarin" ? "合成中..." : "Composing..."}
-                                    </span>
-                                  </>
-                                ) : playingMessageId === m.id ? (
-                                  <>
-                                    <Square size={10} fill="#ef4444" color="#ef4444" />
-                                    <span style={{ color: "#ef4444" }}>
-                                      Stop
-                                    </span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Volume2 size={11} />
-                                    <span>Play</span>
-                                  </>
-                                )}
-                              </button>
-                            )}
-
-                            {/* Long Text Chunk Progress & Jump Controls (Option 2: Alt + Left/Right arrow or click) */}
-                            {playingMessageId === m.id && ttsCurrentChunkInfo && ttsCurrentChunkInfo.total > 1 && (
-                              <div style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
-                                <button
-                                  type="button"
-                                  onClick={() => jumpToPrevChunk()}
-                                  disabled={ttsCurrentChunkInfo.current <= 1}
-                                  title="上一段 (快捷鍵: Alt + ←)"
-                                  style={{
-                                    background: "transparent",
-                                    border: "1px solid var(--border-color)",
-                                    borderRadius: 4,
-                                    padding: "2px 5px",
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    color: ttsCurrentChunkInfo.current <= 1 ? "var(--text-muted)" : "#10b981",
-                                    cursor: ttsCurrentChunkInfo.current <= 1 ? "not-allowed" : "pointer",
-                                    opacity: ttsCurrentChunkInfo.current <= 1 ? 0.4 : 1,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                  }}
-                                >
-                                  <SkipBack size={10} />
-                                </button>
-
-                                <span
-                                  style={{
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    color: "#10b981",
-                                    background: "rgba(16, 185, 129, 0.12)",
-                                    border: "1px solid rgba(16, 185, 129, 0.3)",
-                                    borderRadius: 4,
-                                    padding: "2px 6px",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 2,
-                                  }}
-                                  title={`正在朗讀第 ${ttsCurrentChunkInfo.current} 段 (共 ${ttsCurrentChunkInfo.total} 段)。快捷鍵：Alt + ←/→ 跳段`}
-                                >
-                                  {ttsCurrentChunkInfo.current}/{ttsCurrentChunkInfo.total} 段
-                                </span>
-
-                                <button
-                                  type="button"
-                                  onClick={() => jumpToNextChunk()}
-                                  disabled={ttsCurrentChunkInfo.current >= ttsCurrentChunkInfo.total}
-                                  title="下一段 (快捷鍵: Alt + →)"
-                                  style={{
-                                    background: "transparent",
-                                    border: "1px solid var(--border-color)",
-                                    borderRadius: 4,
-                                    padding: "2px 5px",
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    color: ttsCurrentChunkInfo.current >= ttsCurrentChunkInfo.total ? "var(--text-muted)" : "#10b981",
-                                    cursor: ttsCurrentChunkInfo.current >= ttsCurrentChunkInfo.total ? "not-allowed" : "pointer",
-                                    opacity: ttsCurrentChunkInfo.current >= ttsCurrentChunkInfo.total ? 0.4 : 1,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                  }}
-                                >
-                                  <SkipForward size={10} />
-                                </button>
-                              </div>
-                            )}
-
-                            {/* Message Row On-Hold / Resume Button */}
-                            {playingMessageId === m.id && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (isTtsPaused) {
-                                    resumeTtsPlayback();
-                                  } else {
-                                    pauseTtsPlayback();
-                                  }
-                                }}
-                                title={isTtsPaused ? "繼續播放 (Resume)" : "暫停播放 (On-Hold)"}
-                                style={{
-                                  background: isTtsPaused ? "rgba(245, 158, 11, 0.2)" : "rgba(245, 158, 11, 0.1)",
-                                  border: "1px solid #f59e0b",
-                                  borderRadius: 4,
-                                  padding: "2px 8px",
-                                  fontSize: 10,
-                                  fontWeight: 600,
-                                  color: "#f59e0b",
-                                  cursor: "pointer",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  transition: "all 0.15s ease",
-                                }}
-                              >
-                                {isTtsPaused ? (
-                                  <>
-                                    <Play size={10} color="#f59e0b" fill="#f59e0b" />
-                                    <span>Resume</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Pause size={10} color="#f59e0b" />
-                                    <span>On-Hold</span>
-                                  </>
-                                )}
-                              </button>
-                            )}
-
-                            {/* 🌐 Toggle Cantonese Translation View */}
+                            {/* 🔊 Clean Text-to-Speech Play / Stop (All detailed Cantonese/TTS controls moved to Nav Bar & Floating Window) */}
                             <button
                               type="button"
-                              onClick={() => {
-                                const current = ttsTranslationState[m.id];
-                                if (current?.fullTranslatedText) {
-                                  setTtsTranslationState((prev) => ({
-                                    ...prev,
-                                    [m.id]: { ...prev[m.id], showBox: !prev[m.id]?.showBox },
-                                  }));
-                                } else {
-                                  translateMessageToCantonese(m.id, m.content, { forceShow: true, autoPlay: false });
-                                }
-                              }}
-                              disabled={ttsTranslationState[m.id]?.isTranslating}
+                              onClick={() => playCantoneseTts(m.content, m.id)}
+                              disabled={isTtsLoading && playingMessageId === m.id}
                               title={
-                                ttsTranslationState[m.id]?.showBox
-                                  ? "收起廣東話口語對照"
-                                  : "顯示廣東話口語翻譯對照 (支援 Alt+滑鼠點選 與 方向鍵導航)"
+                                playingMessageId === m.id
+                                  ? "停止朗讀"
+                                  : "朗讀此回答"
                               }
                               style={{
-                                background: ttsTranslationState[m.id]?.showBox ? "rgba(16, 185, 129, 0.15)" : "transparent",
-                                border: ttsTranslationState[m.id]?.showBox ? "1px solid #10b981" : "1px solid var(--border-color)",
+                                background: playingMessageId === m.id ? "rgba(16, 185, 129, 0.15)" : "transparent",
+                                border: playingMessageId === m.id ? "1px solid #10b981" : "1px solid var(--border-color)",
                                 borderRadius: 4,
                                 padding: "2px 8px",
                                 fontSize: 10,
                                 fontWeight: 600,
-                                color: ttsTranslationState[m.id]?.showBox ? "#10b981" : "var(--text-muted)",
+                                color: playingMessageId === m.id ? "#10b981" : "var(--text-muted)",
                                 cursor: "pointer",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: 4,
                                 transition: "all 0.15s ease",
                               }}
+                              onMouseEnter={(e) => {
+                                if (playingMessageId !== m.id) {
+                                  e.currentTarget.style.borderColor = "#10b981";
+                                  e.currentTarget.style.color = "#10b981";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (playingMessageId !== m.id) {
+                                  e.currentTarget.style.borderColor = "var(--border-color)";
+                                  e.currentTarget.style.color = "var(--text-muted)";
+                                }
+                              }}
                             >
-                              {ttsTranslationState[m.id]?.isTranslating ? (
+                              {isTtsLoading && playingMessageId === m.id ? (
                                 <>
-                                  <Loader2 size={10} className="spin" color="#10b981" />
-                                  <span style={{ color: "#10b981" }}>翻譯中...</span>
+                                  <Loader2 size={11} className="spin" color="#10b981" />
+                                  <span style={{ color: "#10b981" }}>合成中...</span>
+                                </>
+                              ) : playingMessageId === m.id ? (
+                                <>
+                                  <Square size={10} fill="#ef4444" color="#ef4444" />
+                                  <span style={{ color: "#ef4444" }}>Stop</span>
                                 </>
                               ) : (
                                 <>
-                                  <Languages size={11} />
-                                  <span>{ttsTranslationState[m.id]?.showBox ? "隱藏粵語" : "粵語對照"}</span>
+                                  <Volume2 size={11} />
+                                  <span>Play</span>
                                 </>
                               )}
                             </button>
@@ -12433,6 +12310,526 @@ export function App() {
           </div>
         </div>
       )}
+
+      {/* 🪟 廣東話口語翻譯對照懸浮視窗 (Spoken Cantonese Floating Window) */}
+      {(() => {
+        const activeTranslationData =
+          (activeFloatingCantoneseMessageId && ttsTranslationState[activeFloatingCantoneseMessageId]) ||
+          (playingMessageId && ttsTranslationState[playingMessageId]) ||
+          Object.entries(ttsTranslationState).filter(([_, v]) => (v.translatedChunks && v.translatedChunks.length > 0) || v.isTranslating).pop()?.[1];
+        const activeFloatingMsgId = activeFloatingCantoneseMessageId || playingMessageId ||
+          Object.entries(ttsTranslationState).filter(([_, v]) => (v.translatedChunks && v.translatedChunks.length > 0) || v.isTranslating).pop()?.[0] || null;
+
+        if (!showCantoneseFloatingWindow || !activeTranslationData) return null;
+
+        return (
+          <div
+            id="cantonese-floating-window"
+            style={{
+              position: "fixed",
+              left: cantoneseFloatingPos ? cantoneseFloatingPos.x : "auto",
+              top: cantoneseFloatingPos ? cantoneseFloatingPos.y : "auto",
+              bottom: cantoneseFloatingPos ? "auto" : (isCantoneseFloatingMinimized ? 20 : 84),
+              right: cantoneseFloatingPos ? "auto" : 24,
+              width: isCantoneseFloatingMinimized ? 320 : 540,
+              minWidth: isCantoneseFloatingMinimized ? 280 : 360,
+              maxWidth: "calc(100vw - 32px)",
+              height: isCantoneseFloatingMinimized ? 44 : "auto",
+              minHeight: isCantoneseFloatingMinimized ? 44 : 260,
+              maxHeight: isCantoneseFloatingMinimized ? 44 : "calc(100vh - 48px)",
+              resize: isCantoneseFloatingMinimized ? "none" : "both",
+              background: "rgba(15, 23, 42, 0.94)",
+              border: "1px solid rgba(16, 185, 129, 0.45)",
+              borderRadius: 12,
+              boxShadow: "0 16px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(16, 185, 129, 0.2)",
+              backdropFilter: "blur(16px)",
+              zIndex: 9999,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              transition: isDraggingCantoneseWindow ? "none" : "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+            }}
+          >
+            {/* Header Bar */}
+            <div
+              onMouseDown={handleFloatingHeaderMouseDown}
+              onDoubleClick={() => setCantoneseFloatingPos(null)}
+              title="按住滑鼠左鍵可隨意拖曳移動視窗 (雙擊重設回右下角預設位置)"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 14px",
+                background: "rgba(16, 185, 129, 0.14)",
+                borderBottom: isCantoneseFloatingMinimized ? "none" : "1px solid rgba(16, 185, 129, 0.25)",
+                userSelect: "none",
+                cursor: isDraggingCantoneseWindow ? "grabbing" : "grab",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", flex: 1, minWidth: 0 }}>
+                <GripVertical size={14} color="#10b981" style={{ opacity: 0.65, cursor: "grab" }} />
+                <Languages size={16} color="#10b981" />
+                <span style={{ fontWeight: 700, fontSize: 13, color: "#10b981", whiteSpace: "nowrap" }}>
+                  {activeTranslationData?.isOriginalChinese ? "廣東話朗讀" : "粵語對照"}
+                </span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    padding: "1px 6px",
+                    borderRadius: 10,
+                    background: "rgba(16, 185, 129, 0.18)",
+                    color: "#34d399",
+                    fontWeight: 600,
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {activeTranslationData?.isOriginalChinese ? "直接朗讀" : "技術 Term 保留英文"}
+                </span>
+                {activeTranslationData.isTranslating && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#eab308", fontWeight: 600 }}>
+                    <Loader2 size={11} className="spin" />
+                    轉譯中...
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {activeTranslationData.translatedChunks?.length ? (
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
+                    {((activeTranslationData.activeChunkIndex ?? 0) + 1)} / {activeTranslationData.translatedChunks.length}
+                  </span>
+                ) : null}
+
+                {/* Minimize / Expand Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsCantoneseFloatingMinimized(!isCantoneseFloatingMinimized)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    padding: "3px 5px",
+                    borderRadius: 4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                  }}
+                  title={isCantoneseFloatingMinimized ? "展開懸浮視窗" : "最小化至底部"}
+                >
+                  {isCantoneseFloatingMinimized ? <Maximize2 size={13} /> : <Minimize2 size={13} />}
+                </button>
+
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowCantoneseFloatingWindow(false)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    padding: "3px 5px",
+                    borderRadius: 4,
+                    display: "inline-flex",
+                    alignItems: "center",
+                  }}
+                  title="關閉懸浮視窗"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Floating Body (Hidden if minimized) */}
+            {!isCantoneseFloatingMinimized && (
+              <>
+                <div
+                  id="cantonese-floating-body"
+                  style={{
+                    padding: "12px 14px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                    flex: 1,
+                    minHeight: 140,
+                    overflowY: "auto",
+                    overscrollBehavior: "contain",
+                  }}
+                >
+                  {activeTranslationData.isTranslating && !activeTranslationData.fullTranslatedText ? (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "32px 0", color: "var(--text-muted)", fontSize: 13, justifyContent: "center" }}>
+                      <Loader2 size={22} className="spin" color="#10b981" />
+                      <span style={{ color: "#10b981", fontWeight: 600 }}>正在轉譯為香港粵語口語...</span>
+                      <span style={{ fontSize: 11, opacity: 0.8 }}>自動保留技術 Term、Code 與英文專有名詞</span>
+                    </div>
+                  ) : (() => {
+                    const currIdx = activeTranslationData.activeChunkIndex ?? 0;
+                    const total = activeTranslationData.translatedChunks?.length || 1;
+                    const enChunks = activeTranslationData.originalChunks || [];
+                    const isOriginallyEnglish = Boolean(
+                      enChunks.length > 0 &&
+                      !activeTranslationData.isOriginalChinese &&
+                      enChunks.some((c) => c && c.trim().length > 0)
+                    );
+                    const enChunk = isOriginallyEnglish
+                      ? (enChunks[currIdx] || (enChunks.length > 0 ? enChunks[Math.min(currIdx, enChunks.length - 1)] : ""))
+                      : "";
+                    const yueChunk = activeTranslationData.translatedChunks?.[currIdx] || activeTranslationData.fullTranslatedText || "";
+
+                    const isPlayingCurrentMsg = playingMessageId === activeFloatingMsgId;
+                    const isPlayingCurrentChunk = isPlayingCurrentMsg && (
+                      ttsAudioQueueRef.current ? ttsAudioQueueRef.current.currentIndex === currIdx : true
+                    );
+
+                    // 🎙️ 方案 B：讀到邊一句，成句淡色高亮浮起 (緊湊排版，上下段落緊湊不鬆散)
+                    interface SentenceInfo {
+                      text: string;
+                      start: number;
+                      end: number;
+                      hasParagraphBreakBefore?: boolean;
+                    }
+
+                    const getSentences = (text: string, isEnglish: boolean): SentenceInfo[] => {
+                      if (!text) return [];
+                      const regex = isEnglish
+                        ? /([^.!?;\n]+(?:[.!?;\n]+["')\]]*)?)/g
+                        : /([^。！？；\n]+(?:[。！？；\n]+["'」』）)]*)?)/g;
+
+                      const list: SentenceInfo[] = [];
+                      let m: RegExpExecArray | null;
+                      let lastEnd = 0;
+                      while ((m = regex.exec(text)) !== null) {
+                        const raw = m[0];
+                        const trimmed = raw.trim();
+                        if (trimmed.length > 0) {
+                          const gapBetween = text.slice(lastEnd, m.index);
+                          const hasBreak = /\n\s*\n/.test(gapBetween);
+
+                          list.push({
+                            text: trimmed,
+                            start: m.index,
+                            end: m.index + raw.length,
+                            hasParagraphBreakBefore: list.length > 0 && hasBreak,
+                          });
+                          lastEnd = m.index + raw.length;
+                        }
+                      }
+                      return list.length > 0 ? list : [{ text: text.trim(), start: 0, end: text.length }];
+                    };
+
+                    const yueSentences = getSentences(yueChunk, false);
+                    const enSentences = getSentences(enChunk, true);
+
+                    // 計算當前朗讀進度對應的粵語句子索引
+                    let yueActiveIdx = -1;
+                    if (isPlayingCurrentChunk && ttsSpeakingProgressRatio !== null) {
+                      const charPos = Math.floor(ttsSpeakingProgressRatio * yueChunk.length);
+                      yueActiveIdx = yueSentences.findIndex((s) => charPos >= s.start && charPos < s.end);
+                      if (yueActiveIdx === -1 && yueSentences.length > 0) {
+                        yueActiveIdx = charPos >= yueChunk.length ? yueSentences.length - 1 : 0;
+                      }
+                    }
+
+                    // 英文句子索引同步對應
+                    let enActiveIdx = -1;
+                    if (isPlayingCurrentChunk && ttsSpeakingProgressRatio !== null) {
+                      if (enSentences.length === yueSentences.length) {
+                        enActiveIdx = yueActiveIdx;
+                      } else if (enSentences.length > 0) {
+                        const charPos = Math.floor(ttsSpeakingProgressRatio * enChunk.length);
+                        enActiveIdx = enSentences.findIndex((s) => charPos >= s.start && charPos < s.end);
+                        if (enActiveIdx === -1) {
+                          enActiveIdx = charPos >= enChunk.length ? enSentences.length - 1 : 0;
+                        }
+                      }
+                    }
+
+                    const renderSentenceHighlight = (
+                      text: string,
+                      isEnglish: boolean,
+                      sentences: SentenceInfo[],
+                      activeSentenceIdx: number
+                    ) => {
+                      if (!text) return null;
+
+                      // 若未播放或無進度，呈現正常段落排版 (緊密行距 1.5)
+                      if (!isPlayingCurrentChunk || ttsSpeakingProgressRatio === null || activeSentenceIdx === -1) {
+                        return (
+                          <div
+                            style={{
+                              color: isEnglish ? "#7dd3fc" : "#ffffff",
+                              fontSize: isEnglish ? 12.5 : 13,
+                              lineHeight: 1.5,
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-word",
+                              fontWeight: isEnglish ? 400 : 500,
+                            }}
+                          >
+                            {text}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          {sentences.map((sent, sIdx) => {
+                            const isActive = sIdx === activeSentenceIdx;
+                            const isPast = activeSentenceIdx !== -1 && sIdx < activeSentenceIdx;
+
+                            if (isEnglish) {
+                              // 🇺🇸 英文原文：緊湊淡色粉藍微光高亮浮起
+                              return (
+                                <div
+                                  key={sIdx}
+                                  style={{
+                                    padding: isActive ? "3px 8px" : "2px 8px",
+                                    marginTop: sent.hasParagraphBreakBefore ? 6 : 0,
+                                    borderRadius: 5,
+                                    background: isActive ? "rgba(56, 189, 248, 0.16)" : "transparent",
+                                    border: isActive ? "1px solid rgba(56, 189, 248, 0.45)" : "1px solid transparent",
+                                    borderLeft: isActive ? "3px solid #38bdf8" : "3px solid transparent",
+                                    boxShadow: isActive
+                                      ? "0 3px 10px rgba(56, 189, 248, 0.2), 0 1px 2px rgba(0, 0, 0, 0.2)"
+                                      : "none",
+                                    transform: isActive ? "translateY(-1.5px)" : "translateY(0)",
+                                    color: "#7dd3fc",
+                                    opacity: isActive ? 1 : isPast ? 0.9 : 0.42,
+                                    fontWeight: isActive ? 600 : 400,
+                                    fontSize: 12.5,
+                                    lineHeight: 1.48,
+                                    wordBreak: "break-word",
+                                    transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+                                  }}
+                                >
+                                  {sent.text}
+                                </div>
+                              );
+                            }
+
+                            // 🇭🇰 粵語口語：緊湊方案 B 成句淡綠高亮浮起，上下間距緊湊不鬆散
+                            return (
+                              <div
+                                key={sIdx}
+                                style={{
+                                  padding: isActive ? "4px 9px" : "2px 9px",
+                                  marginTop: sent.hasParagraphBreakBefore ? 6 : 0,
+                                  borderRadius: 5,
+                                  background: isActive ? "rgba(16, 185, 129, 0.18)" : "transparent",
+                                  border: isActive ? "1px solid rgba(52, 211, 153, 0.45)" : "1px solid transparent",
+                                  borderLeft: isActive ? "3.5px solid #34d399" : "3.5px solid transparent",
+                                  boxShadow: isActive
+                                    ? "0 3px 12px rgba(16, 185, 129, 0.22), 0 1px 2px rgba(0, 0, 0, 0.2)"
+                                    : "none",
+                                  transform: isActive ? "translateY(-1.5px)" : "translateY(0)",
+                                  color: "#ffffff",
+                                  opacity: isActive ? 1 : isPast ? 0.92 : 0.42,
+                                  fontWeight: isActive ? 600 : 500,
+                                  fontSize: 13,
+                                  lineHeight: 1.52,
+                                  wordBreak: "break-word",
+                                  transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+                                }}
+                              >
+                                {sent.text}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    };
+
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {/* 🇺🇸 上邊：英文原文 (粉藍色字) - 僅在原文為英文時顯示 */}
+                        {isOriginallyEnglish && (
+                          <div
+                            style={{
+                              background: "rgba(56, 189, 248, 0.08)",
+                              border: "1px solid rgba(56, 189, 248, 0.28)",
+                              borderRadius: 8,
+                              padding: "10px 12px",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 5,
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: "#38bdf8", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                <span>🇺🇸 English Original</span>
+                              </span>
+                              <span style={{ fontSize: 10, color: "#38bdf8", opacity: 0.85, fontWeight: 600 }}>
+                                第 {currIdx + 1} / {total} 段
+                              </span>
+                            </div>
+                            {renderSentenceHighlight(enChunk || "(英文原文同步對照中...)", true, enSentences, enActiveIdx)}
+                          </div>
+                        )}
+
+                        {/* 🇭🇰 下邊：粵語口語 (純白色字，方案 B 成句淡色高亮浮起，緊湊流暢) */}
+                        <div
+                          style={{
+                            background: "rgba(16, 185, 129, 0.12)",
+                            border: "1px solid rgba(16, 185, 129, 0.4)",
+                            borderRadius: 8,
+                            padding: "10px 12px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 5,
+                            boxShadow: "0 2px 10px rgba(16, 185, 129, 0.12)",
+                            flex: 1,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: "#34d399", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                              <span>{isOriginallyEnglish ? "🇭🇰 粵語對照" : "🇭🇰 粵語朗讀"}</span>
+                            </span>
+                            <span style={{ fontSize: 10, color: "#34d399", fontWeight: 600 }}>
+                              {yueChunk.length} 字 {!isOriginallyEnglish && `(第 ${currIdx + 1} / ${total} 段)`}
+                            </span>
+                          </div>
+                          {renderSentenceHighlight(yueChunk, false, yueSentences, yueActiveIdx)}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Floating Footer Controls */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 14px",
+                    background: "rgba(0, 0, 0, 0.35)",
+                    borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+                    fontSize: 11,
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button
+                      type="button"
+                      disabled={!activeFloatingMsgId || (activeTranslationData.activeChunkIndex ?? 0) <= 0}
+                      onClick={() => jumpToPrevChunk()}
+                      style={{
+                        background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        color: (activeTranslationData.activeChunkIndex ?? 0) <= 0 ? "var(--text-muted)" : "#10b981",
+                        borderRadius: 4,
+                        padding: "3px 8px",
+                        cursor: (activeTranslationData.activeChunkIndex ?? 0) <= 0 ? "not-allowed" : "pointer",
+                        fontSize: 10,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                      }}
+                    >
+                      <SkipBack size={10} /> 上一段
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={!activeFloatingMsgId || (activeTranslationData.activeChunkIndex ?? 0) >= (activeTranslationData.translatedChunks?.length ?? 1) - 1}
+                      onClick={() => jumpToNextChunk()}
+                      style={{
+                        background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        color: (activeTranslationData.activeChunkIndex ?? 0) >= (activeTranslationData.translatedChunks?.length ?? 1) - 1 ? "var(--text-muted)" : "#10b981",
+                        borderRadius: 4,
+                        padding: "3px 8px",
+                        cursor: (activeTranslationData.activeChunkIndex ?? 0) >= (activeTranslationData.translatedChunks?.length ?? 1) - 1 ? "not-allowed" : "pointer",
+                        fontSize: 10,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                      }}
+                    >
+                      下一段 <SkipForward size={10} />
+                    </button>
+
+                    {playingMessageId ? (
+                      <button
+                        type="button"
+                        onClick={() => { if (isTtsPaused) { resumeTtsPlayback(); } else { pauseTtsPlayback(); } }}
+                        style={{
+                          background: isTtsPaused ? "rgba(16, 185, 129, 0.15)" : "rgba(234, 179, 8, 0.15)",
+                          border: isTtsPaused ? "1px solid #10b981" : "1px solid #eab308",
+                          color: isTtsPaused ? "#10b981" : "#eab308",
+                          borderRadius: 4,
+                          padding: "3px 8px",
+                          cursor: "pointer",
+                          fontSize: 10,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 3,
+                        }}
+                      >
+                        {isTtsPaused ? <Play size={10} fill="#10b981" /> : <Pause size={10} fill="#eab308" />}
+                        <span>{isTtsPaused ? "繼續" : "暫停"}</span>
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      type="button"
+                      disabled={!activeFloatingMsgId}
+                      onClick={() => {
+                        if (activeFloatingMsgId) {
+                          setTtsTranslationState((prev) => ({
+                            ...prev,
+                            [activeFloatingMsgId]: {
+                              ...prev[activeFloatingMsgId],
+                              activeChunkIndex: 0,
+                            },
+                          }));
+                          if (playingMessageId === activeFloatingMsgId && playChunkAtRef.current) {
+                            playChunkAtRef.current(0);
+                          }
+                        }
+                      }}
+                      title="重頭開始播放第 1 段"
+                      style={{
+                        background: "transparent",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        color: "var(--text-muted)",
+                        borderRadius: 4,
+                        padding: "3px 7px",
+                        cursor: "pointer",
+                        fontSize: 10,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                      }}
+                    >
+                      <RotateCcw size={10} /> 重頭
+                    </button>
+
+                    {/* 📐 視窗縮放把手提示 (Resize Grip Handle) */}
+                    <div
+                      title="可按住右下角自由拖曳調整視窗大小 (Drag to Resize Window)"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        opacity: 0.45,
+                        cursor: "nwse-resize",
+                        padding: "1px 0 1px 2px",
+                      }}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <path d="M9 1L1 9M9 5L5 9M9 9L9 9.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
+
     </div>
   );
 }

@@ -132,6 +132,31 @@ export class LoopOrchestrator {
       "Never mix stray Chinese characters into an English diagram or response."
     );
 
+    // Mandatory Structured Presentation & Table Protocol (Strict Prohibition of Fragile ASCII/Unicode Box Drawing)
+    systemPromptParts.push(
+      "\n--- Mandatory Table & Structured Data Presentation Protocol ---\n",
+      "1. STRICT PROHIBITION OF ASCII / UNICODE BOX-DRAWING TABLES:\n" +
+      "   NEVER output tabular data, comparisons, matrices, curriculums, or summaries using manual ASCII or Unicode box-drawing characters (such as ┌, ─, │, ├, ┼, ┤, └, ┴, ┘, +---, or |---). Because LLM tokenization cannot guarantee monospace character-width column alignment across web fonts and devices, ASCII box art inevitably breaks, truncates words/parentheses, collides with borders, and renders poorly.\n" +
+      "2. MANDATORY USE OF GFM MARKDOWN TABLES:\n" +
+      "   Whenever presenting structured comparisons, multi-column data, feature matrices, or curriculums, ALWAYS use standard GitHub-Flavored Markdown (GFM) tables:\n" +
+      "   | Column 1 | Column 2 |\n" +
+      "   |---|---|\n" +
+      "   | Value A  | Value B  |\n" +
+      "   Standard Markdown tables guarantee responsive auto-scrolling, perfect borders across all browser fonts, seamless Word/PDF export, and zero alignment clipping."
+    );
+
+    // Math & Formula Formatting Protocol: Strictly forbid LaTeX unless explicitly requested
+    systemPromptParts.push(
+      "\n--- Math & Formula Formatting Protocol (No LaTeX by Default) ---\n",
+      "DO NOT USE LATEX BY DEFAULT: Unless the user explicitly asks for LaTeX notation (e.g. 'in LaTeX', 'use LaTeX syntax', or rigorous academic math paper specifications), NEVER wrap equations, mathematical formulas, variables, numbers, currency, or units in LaTeX delimiters (such as $...$, $$...$$, \\(...\\), or \\[...\\]).\n" +
+      "- For normal math and formulas: Use clean, natural plain text or code spans with standard Unicode symbols (e.g. ×, ÷, ±, ≈, ≠, ≤, ≥, ², ³, √, ∑, ∈, →, %, $, €).\n" +
+      "- For currency and numbers: Write '$100' or 'USD 100', NEVER '$100$'.\n" +
+      "- For variables and calculations: Write 'x = y + 2' or `x = y + 2`, NEVER '$x = y + 2$'.\n" +
+      "- Only generate LaTeX syntax when the user explicitly requests it in their statement."
+    );
+
+
+
     // Dynamically resolve and inject global & workspace-scoped skills
     const { promptSection: resolvedSkills, activeSkillNames } = globalSkillManager.resolveSkillPromptSection(
       userPrompt,
