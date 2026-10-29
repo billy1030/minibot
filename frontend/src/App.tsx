@@ -3036,6 +3036,129 @@ export function App() {
     }
   };
 
+  // 📥 匯出語音為 MP3 音訊檔案 (Export Voice Output to MP3)
+  const [exportingAudioMsgId, setExportingAudioMsgId] = useState<string | null>(null);
+
+  const exportVoiceToMp3 = async (messageId: string, customText?: string) => {
+    if (exportingAudioMsgId) return;
+    try {
+      setExportingAudioMsgId(messageId);
+      showAlert("⏳ 正在合成與準備語音 MP3 檔案，請稍候...", "info", "語音匯出中");
+
+      // 1. 取得朗讀文字
+      let textToExport = customText;
+      if (!textToExport) {
+        const transState = ttsTranslationState[messageId];
+        if (transState && transState.fullTranslatedText) {
+          textToExport = transState.fullTranslatedText;
+        } else {
+          const msg = messages.find((m) => m.id === messageId);
+          textToExport = msg?.content || "";
+        }
+      }
+
+      // 2. 清理 Markdown 標記
+      const cleanText = textToExport
+        .replace(/<think>[\s\S]*?<\/think>/gi, "")
+        .replace(/```[\s\S]*?```/g, " [Code Block] ")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/!\[.*?\]\(.*?\)/g, "")
+        .replace(/\[([^\]]+)\]\(.*?\)/g, "$1")
+        .replace(/[#*_\->~|]/g, " ")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n\s*\n+/g, "\n\n")
+        .trim();
+
+      if (!cleanText) {
+        showAlert("此訊息沒有可供匯出的語音文字內容。", "warning", "無法匯出");
+        setExportingAudioMsgId(null);
+        return;
+      }
+
+      // 3. 取得要合成的段落 chunks (與 MiniMax 播放完全一致)
+      const cachedChunks = ttsTranslationState[messageId]?.translatedChunks;
+      const chunks = cachedChunks && cachedChunks.length > 0 ? cachedChunks : splitForMiniMax(cleanText);
+
+      // 4. 逐段取得 MP3 音訊 Blob（優先使用已快取的分段，若未快取則自 /api/tts 請求）
+      const mp3Blobs: Blob[] = [];
+      const currentQueue = ttsAudioQueueRef.current;
+      const isCurrentQueueSameMsg = currentQueue && currentQueue.messageId === messageId;
+
+      for (let i = 0; i < chunks.length; i++) {
+        let chunkBlob: Blob | null = null;
+
+        // 若當前播放佇列中已持有該段 blob URL，直接 fetch 本地 blob 取得二進制資料
+        if (isCurrentQueueSameMsg && currentQueue.audioBlobs.has(i)) {
+          const blobUrl = currentQueue.audioBlobs.get(i)!;
+          try {
+            const r = await fetch(blobUrl);
+            if (r.ok) {
+              chunkBlob = await r.blob();
+            }
+          } catch {}
+        }
+
+        // 若無快取，向 /api/tts 請求合成
+        if (!chunkBlob) {
+          const res = await fetch("/api/tts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              text: chunks[i],
+              voiceId: ttsVoiceId || "Cantonese_CuteGirl",
+              speed: ttsSpeed || 1.0,
+              vol: 1.0,
+              pitch: 0,
+              timeout: 60,
+            }),
+          });
+
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            throw new Error(errJson.error || `HTTP ${res.status}`);
+          }
+
+          chunkBlob = await res.blob();
+        }
+
+        if (chunkBlob && chunkBlob.size > 0) {
+          mp3Blobs.push(chunkBlob);
+        }
+      }
+
+      if (mp3Blobs.length === 0) {
+        throw new Error("未能獲取任何音訊數據");
+      }
+
+      // 5. 合併所有 MP3 Blobs 為單一完整 MP3 檔案
+      // MP3 格式由獨立自包含音訊幀（MPEG Audio Frames）組成，二進制串接後即可被任何播放器完整無縫連播
+      const finalMp3Blob = new Blob(mp3Blobs, { type: "audio/mpeg" });
+      const downloadUrl = URL.createObjectURL(finalMp3Blob);
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const filename = `minibot-voice-${messageId.slice(0, 8)}-${timestamp}.mp3`;
+
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      setTimeout(() => {
+        URL.revokeObjectURL(downloadUrl);
+      }, 10000);
+
+      showAlert(`🎉 語音已成功匯出為 MP3 檔案 (${(finalMp3Blob.size / 1024).toFixed(1)} KB)！`, "success", "匯出成功");
+    } catch (err: any) {
+      console.error("Export MP3 failed:", err);
+      showAlert(`匯出語音 MP3 失敗: ${err.message || err}`, "warning", "匯出失敗");
+    } finally {
+      setExportingAudioMsgId(null);
+    }
+  };
+
   const playCantoneseTts = async (
     text: string,
     messageId: string,
@@ -8720,6 +8843,52 @@ export function App() {
                               )}
                             </button>
 
+                            {/* 📥 Export Voice MP3 */}
+                            <button
+                              type="button"
+                              onClick={() => exportVoiceToMp3(m.id)}
+                              disabled={exportingAudioMsgId === m.id}
+                              title="匯出此回答語音為 MP3 音訊檔案"
+                              style={{
+                                background: "transparent",
+                                border: "1px solid var(--border-color)",
+                                borderRadius: 4,
+                                padding: "2px 8px",
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: exportingAudioMsgId === m.id ? "#3b82f6" : "var(--text-muted)",
+                                cursor: exportingAudioMsgId === m.id ? "wait" : "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (exportingAudioMsgId !== m.id) {
+                                  e.currentTarget.style.borderColor = "#3b82f6";
+                                  e.currentTarget.style.color = "#3b82f6";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (exportingAudioMsgId !== m.id) {
+                                  e.currentTarget.style.borderColor = "var(--border-color)";
+                                  e.currentTarget.style.color = "var(--text-muted)";
+                                }
+                              }}
+                            >
+                              {exportingAudioMsgId === m.id ? (
+                                <>
+                                  <Loader2 size={11} className="spin" color="#3b82f6" />
+                                  <span style={{ color: "#3b82f6" }}>匯出中...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download size={11} />
+                                  <span>MP3</span>
+                                </>
+                              )}
+                            </button>
+
                             <button
                               type="button"
                               onClick={async () => {
@@ -13341,6 +13510,40 @@ export function App() {
                       }}
                     >
                       <RotateCcw size={10} /> 重頭
+                    </button>
+
+                    {/* 📥 匯出語音 MP3 按鈕 */}
+                    <button
+                      type="button"
+                      disabled={!activeFloatingMsgId || exportingAudioMsgId === activeFloatingMsgId}
+                      onClick={() => {
+                        if (activeFloatingMsgId) {
+                          exportVoiceToMp3(activeFloatingMsgId);
+                        }
+                      }}
+                      title="匯出此回答語音為完整 MP3 檔案"
+                      style={{
+                        background: "transparent",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        color: exportingAudioMsgId === activeFloatingMsgId ? "#3b82f6" : "var(--text-muted)",
+                        borderRadius: 4,
+                        padding: "3px 7px",
+                        cursor: (!activeFloatingMsgId || exportingAudioMsgId === activeFloatingMsgId) ? "not-allowed" : "pointer",
+                        fontSize: 10,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 3,
+                      }}
+                    >
+                      {exportingAudioMsgId === activeFloatingMsgId ? (
+                        <>
+                          <Loader2 size={10} className="spin" color="#3b82f6" /> 匯出中...
+                        </>
+                      ) : (
+                        <>
+                          <Download size={10} /> 匯出 MP3
+                        </>
+                      )}
                     </button>
 
                     {/* 📐 視窗縮放把手提示 (Resize Grip Handle) */}
