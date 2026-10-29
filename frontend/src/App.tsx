@@ -641,8 +641,11 @@ export function App() {
     messageId: string;
     abortController: AbortController | null;
   } | null>(null);
-  // ⚡ 支援動態跳段（jump to chunk）的函數引用
+  // ⚡ 支援動態跳段（jump to chunk）的函數引用 (MiniMax 與本機語音)
   const playChunkAtRef = useRef<((index: number) => Promise<void>) | null>(null);
+  const playLocalChunkAtRef = useRef<((index: number) => void) | null>(null);
+  // 🛡️ 單調遞增請求序號，徹底防止快速跳段時因非同步網路或音訊回調導致的重複聲音重疊 (Audio overlap prevention)
+  const ttsPlaybackRequestIdRef = useRef<number>(0);
   // 記憶每則訊息最後播放或中斷的段落進度
   const [_ttsMessageProgress, setTtsMessageProgress] = useState<
     Record<string, { chunkIndex: number; totalChunks: number; cleanText: string }>
@@ -2136,6 +2139,9 @@ export function App() {
       }
     }
 
+    // 🛡️ 立即失效所有待處理的非同步語音請求，徹底杜絕快速切換時舊語音重疊 (Overlap prevention)
+    ttsPlaybackRequestIdRef.current++;
+
     // Abort and clear MiniMax chunk queue
     if (ttsAudioQueueRef.current) {
       if (ttsAudioQueueRef.current.abortController) {
@@ -2152,6 +2158,7 @@ export function App() {
       ttsAudioQueueRef.current = null;
     }
     playChunkAtRef.current = null;
+    playLocalChunkAtRef.current = null;
     setTtsCurrentChunkInfo(null);
 
     // Clear speaking keepalive interval if any
@@ -2166,14 +2173,18 @@ export function App() {
     setTtsSpeakingProgressRatio(null);
     // Clear active utterance ref and queue
     if (activeUtteranceRef.current) {
+      activeUtteranceRef.current.onstart = null;
       activeUtteranceRef.current.onend = null;
       activeUtteranceRef.current.onerror = null;
+      activeUtteranceRef.current.onboundary = null;
       activeUtteranceRef.current = null;
     }
     if (activeUtteranceQueueRef.current) {
       activeUtteranceQueueRef.current.forEach((u) => {
+        u.onstart = null;
         u.onend = null;
         u.onerror = null;
+        u.onboundary = null;
       });
       activeUtteranceQueueRef.current = [];
     }
@@ -2182,6 +2193,7 @@ export function App() {
       try {
         ttsAudioRef.current.onerror = null;
         ttsAudioRef.current.onended = null;
+        ttsAudioRef.current.ontimeupdate = null;
         ttsAudioRef.current.pause();
         ttsAudioRef.current.currentTime = 0;
         ttsAudioRef.current.removeAttribute("src");
@@ -2202,20 +2214,41 @@ export function App() {
     setIsTtsLoading(false);
   };
 
-  // ⏭️ Skip to next chunk (Alt + → / UI button)
+  // ⏭️ Skip to next chunk (Alt + → / Alt + ↓ / UI button)
   const jumpToNextChunk = () => {
     const queue = ttsAudioQueueRef.current;
+    const localQueue = localTtsQueueRef.current;
     const targetMsgId = playingMessageId || activeFloatingCantoneseMessageId;
+
     if (queue && queue.chunks && playingMessageId) {
       const chunks = queue.chunks;
       const nextIdx = queue.currentIndex + 1;
       if (nextIdx < chunks.length) {
+        // 1. 遞增序號讓進行中的非同步音訊請求立即無效
+        ttsPlaybackRequestIdRef.current++;
+
+        // 2. 徹底停止當前 HTML5 音訊
         if (ttsAudioRef.current) {
           try {
             ttsAudioRef.current.onended = null;
+            ttsAudioRef.current.onerror = null;
+            ttsAudioRef.current.ontimeupdate = null;
             ttsAudioRef.current.pause();
+            ttsAudioRef.current.currentTime = 0;
+            ttsAudioRef.current.removeAttribute("src");
+            ttsAudioRef.current.load();
           } catch {}
+          ttsAudioRef.current = null;
         }
+
+        // 3. 清理進度計時器
+        if (ttsProgressTimerRef.current) {
+          clearInterval(ttsProgressTimerRef.current);
+          ttsProgressTimerRef.current = null;
+        }
+        setTtsSpeakingProgressRatio(null);
+
+        // 4. 同步更新狀態
         setTtsTranslationState((prev) => {
           if (!prev[playingMessageId]) return prev;
           return {
@@ -2227,41 +2260,127 @@ export function App() {
           };
         });
         showAlert(`⏭️ 跳至第 ${nextIdx + 1}/${chunks.length} 段`, "info", "跳至下一段");
+
+        // 5. 播放下一段
         playChunkAtRef.current?.(nextIdx);
       } else {
         showAlert("已經是最後一段", "info", "已到文末");
       }
+    } else if (localQueue && localQueue.textChunks && playingMessageId) {
+      const chunks = localQueue.textChunks;
+      const nextIdx = localQueue.currentIndex + 1;
+      if (nextIdx < chunks.length) {
+        // 1. 遞增序號
+        ttsPlaybackRequestIdRef.current++;
+
+        // 2. 取消瀏覽器當前發音
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          try {
+            window.speechSynthesis.cancel();
+          } catch {}
+        }
+        if (activeUtteranceRef.current) {
+          activeUtteranceRef.current.onstart = null;
+          activeUtteranceRef.current.onend = null;
+          activeUtteranceRef.current.onerror = null;
+          activeUtteranceRef.current.onboundary = null;
+          activeUtteranceRef.current = null;
+        }
+        if (activeUtteranceQueueRef.current) {
+          activeUtteranceQueueRef.current.forEach((u) => {
+            u.onstart = null;
+            u.onend = null;
+            u.onerror = null;
+            u.onboundary = null;
+          });
+          activeUtteranceQueueRef.current = [];
+        }
+        if (ttsProgressTimerRef.current) {
+          clearInterval(ttsProgressTimerRef.current);
+          ttsProgressTimerRef.current = null;
+        }
+        setTtsSpeakingProgressRatio(null);
+
+        // 3. 更新隊列索引與懸浮視窗活躍段落
+        localQueue.currentIndex = nextIdx;
+        setTtsTranslationState((prev) => {
+          if (!prev[playingMessageId]) return prev;
+          return {
+            ...prev,
+            [playingMessageId]: {
+              ...prev[playingMessageId],
+              activeChunkIndex: nextIdx,
+            },
+          };
+        });
+        showAlert(`⏭️ 跳至第 ${nextIdx + 1}/${chunks.length} 段`, "info", "跳至下一段");
+
+        // 4. 立即從目標段落接續朗讀
+        playLocalChunkAtRef.current?.(nextIdx);
+      } else {
+        showAlert("已經是最後一段", "info", "已到文末");
+      }
     } else if (targetMsgId && ttsTranslationState[targetMsgId]) {
-      const curIdx = ttsTranslationState[targetMsgId].activeChunkIndex ?? 0;
-      const total = ttsTranslationState[targetMsgId].translatedChunks?.length || 1;
-      if (curIdx + 1 < total) {
+      const transData = ttsTranslationState[targetMsgId];
+      const curIdx = transData.activeChunkIndex ?? 0;
+      const total = transData.translatedChunks?.length || 1;
+      const nextIdx = curIdx + 1;
+      if (nextIdx < total) {
         setTtsTranslationState((prev) => ({
           ...prev,
           [targetMsgId]: {
             ...prev[targetMsgId],
-            activeChunkIndex: curIdx + 1,
+            activeChunkIndex: nextIdx,
           },
         }));
+        if (transData.fullTranslatedText) {
+          playCantoneseTts(transData.fullTranslatedText, targetMsgId, {
+            startChunkIndex: nextIdx,
+            skipTranslation: true,
+            customChunks: transData.translatedChunks,
+          });
+        }
       } else {
         showAlert("已經是最後一段", "info", "已到文末");
       }
     }
   };
 
-  // ⏮️ Jump back to previous chunk (Alt + ← / UI button)
+  // ⏮️ Jump back to previous chunk (Alt + ← / Alt + ↑ / UI button)
   const jumpToPrevChunk = () => {
     const queue = ttsAudioQueueRef.current;
+    const localQueue = localTtsQueueRef.current;
     const targetMsgId = playingMessageId || activeFloatingCantoneseMessageId;
+
     if (queue && queue.chunks && playingMessageId) {
       const chunks = queue.chunks;
       const prevIdx = queue.currentIndex - 1;
       if (prevIdx >= 0) {
+        // 1. 遞增序號讓進行中的非同步音訊請求立即無效
+        ttsPlaybackRequestIdRef.current++;
+
+        // 2. 徹底停止當前 HTML5 音訊
         if (ttsAudioRef.current) {
           try {
             ttsAudioRef.current.onended = null;
+            ttsAudioRef.current.onerror = null;
+            ttsAudioRef.current.ontimeupdate = null;
             ttsAudioRef.current.pause();
+            ttsAudioRef.current.currentTime = 0;
+            ttsAudioRef.current.removeAttribute("src");
+            ttsAudioRef.current.load();
           } catch {}
+          ttsAudioRef.current = null;
         }
+
+        // 3. 清理進度計時器
+        if (ttsProgressTimerRef.current) {
+          clearInterval(ttsProgressTimerRef.current);
+          ttsProgressTimerRef.current = null;
+        }
+        setTtsSpeakingProgressRatio(null);
+
+        // 4. 同步更新狀態
         setTtsTranslationState((prev) => {
           if (!prev[playingMessageId]) return prev;
           return {
@@ -2273,27 +2392,92 @@ export function App() {
           };
         });
         showAlert(`⏮️ 返回第 ${prevIdx + 1}/${chunks.length} 段`, "info", "返回上一段");
+
+        // 5. 播放上一段
         playChunkAtRef.current?.(prevIdx);
       } else {
         showAlert("已經是第一段", "info", "已在開頭");
       }
+    } else if (localQueue && localQueue.textChunks && playingMessageId) {
+      const chunks = localQueue.textChunks;
+      const prevIdx = localQueue.currentIndex - 1;
+      if (prevIdx >= 0) {
+        // 1. 遞增序號
+        ttsPlaybackRequestIdRef.current++;
+
+        // 2. 取消瀏覽器當前發音
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          try {
+            window.speechSynthesis.cancel();
+          } catch {}
+        }
+        if (activeUtteranceRef.current) {
+          activeUtteranceRef.current.onstart = null;
+          activeUtteranceRef.current.onend = null;
+          activeUtteranceRef.current.onerror = null;
+          activeUtteranceRef.current.onboundary = null;
+          activeUtteranceRef.current = null;
+        }
+        if (activeUtteranceQueueRef.current) {
+          activeUtteranceQueueRef.current.forEach((u) => {
+            u.onstart = null;
+            u.onend = null;
+            u.onerror = null;
+            u.onboundary = null;
+          });
+          activeUtteranceQueueRef.current = [];
+        }
+        if (ttsProgressTimerRef.current) {
+          clearInterval(ttsProgressTimerRef.current);
+          ttsProgressTimerRef.current = null;
+        }
+        setTtsSpeakingProgressRatio(null);
+
+        // 3. 更新隊列索引與懸浮視窗活躍段落
+        localQueue.currentIndex = prevIdx;
+        setTtsTranslationState((prev) => {
+          if (!prev[playingMessageId]) return prev;
+          return {
+            ...prev,
+            [playingMessageId]: {
+              ...prev[playingMessageId],
+              activeChunkIndex: prevIdx,
+            },
+          };
+        });
+        showAlert(`⏮️ 返回第 ${prevIdx + 1}/${chunks.length} 段`, "info", "返回上一段");
+
+        // 4. 立即從目標段落接續朗讀
+        playLocalChunkAtRef.current?.(prevIdx);
+      } else {
+        showAlert("已經是第一段", "info", "已在開頭");
+      }
     } else if (targetMsgId && ttsTranslationState[targetMsgId]) {
-      const curIdx = ttsTranslationState[targetMsgId].activeChunkIndex ?? 0;
-      if (curIdx > 0) {
+      const transData = ttsTranslationState[targetMsgId];
+      const curIdx = transData.activeChunkIndex ?? 0;
+      const prevIdx = curIdx - 1;
+      if (prevIdx >= 0) {
         setTtsTranslationState((prev) => ({
           ...prev,
           [targetMsgId]: {
             ...prev[targetMsgId],
-            activeChunkIndex: curIdx - 1,
+            activeChunkIndex: prevIdx,
           },
         }));
+        if (transData.fullTranslatedText) {
+          playCantoneseTts(transData.fullTranslatedText, targetMsgId, {
+            startChunkIndex: prevIdx,
+            skipTranslation: true,
+            customChunks: transData.translatedChunks,
+          });
+        }
       } else {
         showAlert("已經是第一段", "info", "已在開頭");
       }
     }
   };
 
-  // ⌨️ Global keyboard shortcuts for TTS navigation (Alt + Arrow Left / Arrow Right)
+  // ⌨️ Global keyboard shortcuts for TTS navigation (Alt + Arrow Left / Right / Up / Down)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement;
@@ -2302,20 +2486,25 @@ export function App() {
         return;
       }
 
-      if ((e.altKey || e.metaKey) && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
+      if (
+        (e.altKey || e.metaKey) &&
+        (e.key === "ArrowRight" || e.key === "ArrowLeft" || e.key === "ArrowDown" || e.key === "ArrowUp")
+      ) {
+        e.preventDefault();
+        const isNext = e.key === "ArrowRight" || e.key === "ArrowDown";
         if (playingMessageId) {
-          e.preventDefault();
-          if (e.key === "ArrowRight") jumpToNextChunk();
+          if (isNext) jumpToNextChunk();
           else jumpToPrevChunk();
         } else {
           // If not currently playing, check for open translation card to allow Alt+Arrow navigation
-          const openEntry = Object.entries(ttsTranslationState).find(([_, s]) => s.showBox && s.translatedChunks && s.translatedChunks.length > 0);
+          const openEntry = Object.entries(ttsTranslationState).find(
+            ([_, s]) => s.showBox && s.translatedChunks && s.translatedChunks.length > 0
+          );
           if (openEntry) {
-            e.preventDefault();
             const [targetMsgId, transData] = openEntry;
             const currentIdx = transData.activeChunkIndex ?? 0;
             const maxIdx = transData.translatedChunks.length - 1;
-            const newIdx = e.key === "ArrowRight" ? Math.min(maxIdx, currentIdx + 1) : Math.max(0, currentIdx - 1);
+            const newIdx = isNext ? Math.min(maxIdx, currentIdx + 1) : Math.max(0, currentIdx - 1);
             setTtsTranslationState((prev) => ({
               ...prev,
               [targetMsgId]: { ...prev[targetMsgId], activeChunkIndex: newIdx },
@@ -2324,7 +2513,11 @@ export function App() {
               const el = document.getElementById(`tts-chunk-${targetMsgId}-${newIdx}`);
               el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
             }, 50);
-            playCantoneseTts(transData.fullTranslatedText, targetMsgId, { startChunkIndex: newIdx, skipTranslation: true });
+            playCantoneseTts(transData.fullTranslatedText, targetMsgId, {
+              startChunkIndex: newIdx,
+              skipTranslation: true,
+              customChunks: transData.translatedChunks,
+            });
           }
         }
       }
@@ -2848,13 +3041,13 @@ export function App() {
     messageId: string,
     options?: { startChunkIndex?: number; skipTranslation?: boolean; customChunks?: string[] }
   ) => {
-    // If clicking on currently playing message, stop playback
-    if (playingMessageId === messageId) {
+    // If clicking on currently playing message without chunk jump request, toggle stop playback
+    if (playingMessageId === messageId && options?.startChunkIndex === undefined) {
       stopTtsPlayback();
       return;
     }
 
-    // Stop any previous playback
+    // Stop any previous playback completely
     stopTtsPlayback();
 
     // Clean markdown, HTML and thinking tags to extract clean readable text
@@ -3035,9 +3228,11 @@ export function App() {
 
       const startLocalPlayback = (startIndex: number) => {
         if (!localTtsQueueRef.current) return;
+        const currentReqId = ++ttsPlaybackRequestIdRef.current;
         localTtsQueueRef.current.currentIndex = startIndex;
 
         const cleanupUtterance = () => {
+          if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
           if (ttsProgressTimerRef.current) {
             clearInterval(ttsProgressTimerRef.current);
             ttsProgressTimerRef.current = null;
@@ -3053,6 +3248,7 @@ export function App() {
           }
           localTtsQueueRef.current = null;
           resumeLocalTtsRef.current = null;
+          playLocalChunkAtRef.current = null;
           setPlayingMessageId(null);
           setIsTtsPaused(false);
         };
@@ -3076,6 +3272,7 @@ export function App() {
           }
 
           u.onstart = () => {
+            if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
             if (localTtsQueueRef.current) {
               localTtsQueueRef.current.currentIndex = absIdx;
             }
@@ -3104,6 +3301,7 @@ export function App() {
             const estimatedDurationMs = Math.max(600, (chunk.length / (charsPerSec * currentSpeed)) * 1000);
 
             ttsProgressTimerRef.current = setInterval(() => {
+              if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
               const elapsed = Date.now() - startTime;
               const ratio = Math.min(0.98, elapsed / estimatedDurationMs);
               setTtsSpeakingProgressRatio(ratio);
@@ -3111,6 +3309,7 @@ export function App() {
           };
 
           u.onboundary = (e) => {
+            if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
             if (e.charIndex !== undefined && chunk.length > 0) {
               setTtsSpeakingProgressRatio(Math.min(1, Math.max(0, e.charIndex / chunk.length)));
             }
@@ -3119,6 +3318,7 @@ export function App() {
           // Only cleanup when the last sentence chunk completes
           if (relIdx === remainingChunks.length - 1) {
             u.onend = () => {
+              if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
               if (ttsProgressTimerRef.current) {
                 clearInterval(ttsProgressTimerRef.current);
                 ttsProgressTimerRef.current = null;
@@ -3128,6 +3328,7 @@ export function App() {
             };
           } else {
             u.onend = () => {
+              if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
               if (ttsProgressTimerRef.current) {
                 clearInterval(ttsProgressTimerRef.current);
                 ttsProgressTimerRef.current = null;
@@ -3139,6 +3340,7 @@ export function App() {
           }
 
           u.onerror = (e) => {
+            if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
             // Cancel or interrupted caused by user pressing pause or stop is intentional
             if (e.error === "canceled" || e.error === "interrupted") {
               return;
@@ -3159,6 +3361,7 @@ export function App() {
           clearInterval(ttsSpeakingTimeoutRef.current);
         }
         ttsSpeakingTimeoutRef.current = setInterval(() => {
+          if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
           if (window.speechSynthesis.speaking) {
             window.speechSynthesis.pause();
             window.speechSynthesis.resume();
@@ -3176,6 +3379,7 @@ export function App() {
         } catch {}
 
         setTimeout(() => {
+          if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
           try {
             window.speechSynthesis.resume();
             utterances.forEach((u) => {
@@ -3188,6 +3392,7 @@ export function App() {
         }, 50);
       };
 
+      playLocalChunkAtRef.current = (index: number) => startLocalPlayback(index);
       resumeLocalTtsRef.current = () => {
         const curIdx = localTtsQueueRef.current?.currentIndex ?? 0;
         startLocalPlayback(curIdx);
@@ -3271,8 +3476,9 @@ export function App() {
 
     // 播放指定段落，並同時在背景預載下一段落（Pipeline Double Buffering）
     const playChunkAt = async (index: number) => {
+      const currentReqId = ++ttsPlaybackRequestIdRef.current;
       playChunkAtRef.current = playChunkAt;
-      if (queueState.abortController?.signal.aborted) return;
+      if (queueState.abortController?.signal.aborted || currentReqId !== ttsPlaybackRequestIdRef.current) return;
       if (index >= totalChunks) {
         // 全文朗讀完成
         if (ttsProgressTimerRef.current) {
@@ -3331,7 +3537,28 @@ export function App() {
           setIsTtsLoading(false);
         }
 
-        if (queueState.abortController?.signal.aborted || !currentBlobUrl) return;
+        // ⚠️ 關鍵防護：若在非同步抓取音訊期間用戶跳段或停止，直接放棄播放舊段落！
+        if (
+          queueState.abortController?.signal.aborted ||
+          currentReqId !== ttsPlaybackRequestIdRef.current ||
+          !currentBlobUrl
+        ) {
+          return;
+        }
+
+        // 徹底停止並卸載任何前一個正在播放的 HTML5 音訊實例
+        if (ttsAudioRef.current) {
+          try {
+            ttsAudioRef.current.onended = null;
+            ttsAudioRef.current.onerror = null;
+            ttsAudioRef.current.ontimeupdate = null;
+            ttsAudioRef.current.pause();
+            ttsAudioRef.current.currentTime = 0;
+            ttsAudioRef.current.removeAttribute("src");
+            ttsAudioRef.current.load();
+          } catch {}
+          ttsAudioRef.current = null;
+        }
 
         // 建立 Audio 實例
         const audio = new Audio();
@@ -3356,6 +3583,7 @@ export function App() {
         if (ttsProgressTimerRef.current) clearInterval(ttsProgressTimerRef.current);
         setTtsSpeakingProgressRatio(0);
         ttsProgressTimerRef.current = setInterval(() => {
+          if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
           if (audio && !audio.paused && audio.duration > 0) {
             const r = Math.min(1, Math.max(0, audio.currentTime / audio.duration));
             setTtsSpeakingProgressRatio(r);
@@ -3363,6 +3591,7 @@ export function App() {
         }, 50);
 
         audio.onended = () => {
+          if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
           if (ttsProgressTimerRef.current) {
             clearInterval(ttsProgressTimerRef.current);
             ttsProgressTimerRef.current = null;
@@ -3374,6 +3603,7 @@ export function App() {
         };
 
         audio.onerror = (e) => {
+          if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
           if (ttsProgressTimerRef.current) {
             clearInterval(ttsProgressTimerRef.current);
             ttsProgressTimerRef.current = null;
@@ -3396,7 +3626,14 @@ export function App() {
         audio.src = currentBlobUrl;
         await audio.play();
       } catch (err: any) {
-        if (queueState.abortController?.signal.aborted) return;
+        // 如果是跳段或停止引發的 AbortError 或請求已被更新序號取代，安靜退出
+        if (
+          err?.name === "AbortError" ||
+          queueState.abortController?.signal.aborted ||
+          currentReqId !== ttsPlaybackRequestIdRef.current
+        ) {
+          return;
+        }
         console.error(`Error in TTS playback at chunk ${index + 1}:`, err);
         setPlayingMessageId(null);
         setIsTtsLoading(false);
@@ -13080,8 +13317,12 @@ export function App() {
                               activeChunkIndex: 0,
                             },
                           }));
-                          if (playingMessageId === activeFloatingMsgId && playChunkAtRef.current) {
-                            playChunkAtRef.current(0);
+                          if (playingMessageId === activeFloatingMsgId) {
+                            if (playChunkAtRef.current) {
+                              playChunkAtRef.current(0);
+                            } else if (playLocalChunkAtRef.current) {
+                              playLocalChunkAtRef.current(0);
+                            }
                           }
                         }
                       }}
