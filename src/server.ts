@@ -1502,7 +1502,117 @@ app.post("/api/tts", requireAuth, async (req, res) => {
 // 3d. On-demand translation from English to natural spoken Hong Kong Cantonese (preserving technical terms in English)
 app.post("/api/tts/translate-cantonese", requireAuth, async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, segments } = req.body;
+    const client = new LLMClient(config.llm);
+
+    // Support aligned segment array for multi-chunk synchronized captions
+    if (Array.isArray(segments) && segments.length > 0) {
+      const inputSegments: string[] = segments
+        .map((s) => (typeof s === "string" ? s.trim() : ""))
+        .filter(Boolean);
+
+      if (inputSegments.length === 0) {
+        return res.json({
+          success: true,
+          translatedText: "",
+          translatedChunks: [],
+          originalChunks: [],
+          translated: false,
+        });
+      }
+
+      // Check if text has virtually no English words (< 3 English words)
+      const allText = inputSegments.join(" ");
+      const englishWordMatches = allText.match(/[a-zA-Z]{2,}/g) || [];
+      if (englishWordMatches.length < 3) {
+        return res.json({
+          success: true,
+          translatedText: inputSegments.join("\n\n"),
+          translatedChunks: inputSegments,
+          originalChunks: inputSegments,
+          translated: false,
+        });
+      }
+
+      if (inputSegments.length === 1) {
+        const systemPrompt = `You are an expert bilingual Hong Kong tech engineer and voice interpreter.
+Translate the user's text into natural, spoken colloquial Hong Kong Cantonese (口語廣東話，例如用「呢個」、「喺」、「唔好」、「已經」、「搞掂」、「可以」、「睇下」等).
+STRICT RULES:
+1. STRICTLY KEEP ALL TECHNICAL TERMS, CODE, API NAMES, LIBRARIES, FRAMEWORKS, BRAND NAMES, ACRONYMS, AND PROPER NOUNS IN ORIGINAL ENGLISH.
+   Examples of terms that MUST STAY IN ENGLISH:
+   - "API", "Docker", "React", "Next.js", "TypeScript", "Python", "Kubernetes", "VM", "AWS", "database", "endpoint", "function", "hook", "component", "timeout", "cache", "token", "payload", "deploy", "build", "commit", "push", "pull request", "schema", "JSON", "HTTP", "CSS", "HTML", etc.
+2. Translate explanatory and conversational sentence structures into authentic Hong Kong spoken Cantonese, exactly how tech colleagues talk to each other in Hong Kong offices.
+3. Maintain sentence-by-sentence alignment with the original text so subtitles remain in sync.
+4. DO NOT add any greeting, preamble, explanations, notes, or markdown formatting. Output ONLY the raw spoken Cantonese text.`;
+
+        const result = await client.createChatCompletion([
+          { role: "system", content: systemPrompt },
+          { role: "user", content: inputSegments[0] },
+        ]);
+
+        const translatedText = result.choices[0]?.message?.content?.trim() || inputSegments[0];
+        return res.json({
+          success: true,
+          translatedText,
+          translatedChunks: [translatedText],
+          originalChunks: inputSegments,
+          translated: true,
+        });
+      }
+
+      // Multi-segment alignment: translate each segment preserving explicit [1], [2], etc. numbering
+      const userPrompt = inputSegments.map((seg, idx) => `[${idx + 1}] ${seg}`).join("\n\n");
+      const multiSegmentSystemPrompt = `You are an expert bilingual Hong Kong tech engineer and voice interpreter.
+Translate each of the numbered English text segments into natural, spoken colloquial Hong Kong Cantonese (口語廣東話，例如用「呢個」、「喺」、「唔好」、「已經」、「搞掂」、「可以」、「睇下」等).
+STRICT RULES:
+1. STRICTLY KEEP ALL TECHNICAL TERMS, CODE, API NAMES, LIBRARIES, FRAMEWORKS, BRAND NAMES, ACRONYMS, AND PROPER NOUNS IN ORIGINAL ENGLISH.
+   Examples of terms that MUST STAY IN ENGLISH:
+   - "API", "Docker", "React", "Next.js", "TypeScript", "Python", "Kubernetes", "VM", "AWS", "database", "endpoint", "function", "hook", "component", "timeout", "cache", "token", "payload", "deploy", "build", "commit", "push", "pull request", "schema", "JSON", "HTTP", "CSS", "HTML", etc.
+2. Translate explanatory and conversational sentence structures into authentic Hong Kong spoken Cantonese, exactly how tech colleagues talk to each other in Hong Kong offices.
+3. Maintain sentence-by-sentence alignment with the original text so subtitles remain in sync.
+4. You MUST preserve all ${inputSegments.length} numbered segments in order, and start each translated segment with the corresponding tag: [1], [2], etc.
+5. DO NOT add any greeting, preamble, explanations, notes, or markdown formatting. Output ONLY the numbered translations.`;
+
+      const result = await client.createChatCompletion([
+        { role: "system", content: multiSegmentSystemPrompt },
+        { role: "user", content: userPrompt },
+      ]);
+
+      const rawContent = result.choices[0]?.message?.content?.trim() || "";
+      const parsedChunks: string[] = [];
+      const tagRegex = /\[(\d+)\]\s*([\s\S]*?)(?=(?:\[\d+\]|$))/g;
+      let tagMatch: RegExpExecArray | null;
+      while ((tagMatch = tagRegex.exec(rawContent)) !== null) {
+        const textPart = tagMatch[2].trim();
+        if (textPart) {
+          parsedChunks.push(textPart);
+        }
+      }
+
+      let finalChunks: string[] = [];
+      if (parsedChunks.length === inputSegments.length) {
+        finalChunks = parsedChunks;
+      } else {
+        const lines = rawContent
+          .split(/\n\s*\n+/)
+          .map((l) => l.replace(/^\[\d+\]\s*/, "").trim())
+          .filter(Boolean);
+        if (lines.length === inputSegments.length) {
+          finalChunks = lines;
+        } else {
+          finalChunks = inputSegments.map((orig, i) => parsedChunks[i] || lines[i] || orig);
+        }
+      }
+
+      return res.json({
+        success: true,
+        translatedText: finalChunks.join("\n\n"),
+        translatedChunks: finalChunks,
+        originalChunks: inputSegments,
+        translated: true,
+      });
+    }
+
     if (!text || typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ success: false, error: "Text is required" });
     }
@@ -1511,10 +1621,9 @@ app.post("/api/tts/translate-cantonese", requireAuth, async (req, res) => {
     // Fast check: if text contains virtually no English words (fewer than 3 English words), return as-is
     const englishWordMatches = trimmed.match(/[a-zA-Z]{2,}/g) || [];
     if (englishWordMatches.length < 3) {
-      return res.json({ success: true, translatedText: trimmed, translated: false });
+      return res.json({ success: true, translatedText: trimmed, translatedChunks: [trimmed], originalChunks: [trimmed], translated: false });
     }
 
-    const client = new LLMClient(config.llm);
     const systemPrompt = `You are an expert bilingual Hong Kong tech engineer and voice interpreter.
 Translate the user's text into natural, spoken colloquial Hong Kong Cantonese (口語廣東話，例如用「呢個」、「喺」、「唔好」、「已經」、「搞掂」、「可以」、「睇下」等).
 STRICT RULES:
@@ -1522,7 +1631,8 @@ STRICT RULES:
    Examples of terms that MUST STAY IN ENGLISH:
    - "API", "Docker", "React", "Next.js", "TypeScript", "Python", "Kubernetes", "VM", "AWS", "database", "endpoint", "function", "hook", "component", "timeout", "cache", "token", "payload", "deploy", "build", "commit", "push", "pull request", "schema", "JSON", "HTTP", "CSS", "HTML", etc.
 2. Translate explanatory and conversational sentence structures into authentic Hong Kong spoken Cantonese, exactly how tech colleagues talk to each other in Hong Kong offices.
-3. DO NOT add any greeting, preamble, explanations, notes, or markdown formatting. Output ONLY the raw spoken Cantonese text.`;
+3. Maintain sentence-by-sentence alignment with the original text so subtitles remain in sync.
+4. DO NOT add any greeting, preamble, explanations, notes, or markdown formatting. Output ONLY the raw spoken Cantonese text.`;
 
     const result = await client.createChatCompletion([
       { role: "system", content: systemPrompt },
@@ -1530,11 +1640,26 @@ STRICT RULES:
     ]);
 
     const translatedText = result.choices[0]?.message?.content?.trim() || trimmed;
-    return res.json({ success: true, translatedText, translated: true });
+    return res.json({
+      success: true,
+      translatedText,
+      translatedChunks: [translatedText],
+      originalChunks: [trimmed],
+      translated: true,
+    });
   } catch (err: any) {
     console.error("[TTS Translate Cantonese Error]:", err?.message || err);
     // Graceful fallback: return original text so playback never breaks
-    return res.json({ success: true, translatedText: req.body?.text || "", translated: false, error: err?.message });
+    const fallbackText = req.body?.text || (Array.isArray(req.body?.segments) ? req.body.segments.join("\n\n") : "");
+    const fallbackChunks = Array.isArray(req.body?.segments) ? req.body.segments : [fallbackText];
+    return res.json({
+      success: true,
+      translatedText: fallbackText,
+      translatedChunks: fallbackChunks,
+      originalChunks: fallbackChunks,
+      translated: false,
+      error: err?.message,
+    });
   }
 });
 

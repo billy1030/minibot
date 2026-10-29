@@ -2451,6 +2451,119 @@ export function App() {
     playCantoneseTts(cached.text, cached.messageId);
   };
 
+  // 🎙️ 雙語對照句子資訊結構
+  interface SentenceInfo {
+    text: string;
+    start: number;
+    end: number;
+    hasParagraphBreakBefore?: boolean;
+  }
+
+  // 斷句處理函數（支援英文防斷縮寫與中文標點）
+  const getSentences = (text: string, isEnglish: boolean): SentenceInfo[] => {
+    if (!text) return [];
+
+    if (!isEnglish) {
+      // 廣東話/中文：以中文標點（。！？；）、英文終止標點（.!? 後接空格或換行）或換行切分
+      const regex = /([^。！？；\n]+?(?:[。！？；]+|\.(?=\s|$|\n)|[!?;]+|[\n]+["'」』）)]*|$))/g;
+      const list: SentenceInfo[] = [];
+      let m: RegExpExecArray | null;
+      let lastEnd = 0;
+      while ((m = regex.exec(text)) !== null) {
+        const raw = m[0];
+        const trimmed = raw.trim();
+        if (trimmed.length > 0) {
+          const gapBetween = text.slice(lastEnd, m.index);
+          const hasBreak = /\n\s*\n/.test(gapBetween);
+          list.push({
+            text: trimmed,
+            start: m.index,
+            end: m.index + raw.length,
+            hasParagraphBreakBefore: list.length > 0 && hasBreak,
+          });
+          lastEnd = m.index + raw.length;
+        }
+      }
+      return list.length > 0 ? list : [{ text: text.trim(), start: 0, end: text.length }];
+    }
+
+    // 英文斷句：防止在 e.g., i.e., vs., etc., v1.2, 3.14, Next.js, app.ts 等技術術語的句號誤斷
+    const list: SentenceInfo[] = [];
+    let startIndex = 0;
+    const len = text.length;
+
+    for (let i = 0; i < len; i++) {
+      const ch = text[i];
+      const isNewline = ch === "\n";
+      const isPunct = ch === "." || ch === "!" || ch === "?" || ch === ";";
+
+      if (isNewline || isPunct) {
+        let isSentenceEnd = false;
+
+        if (isNewline) {
+          isSentenceEnd = true;
+        } else if (ch === "!" || ch === "?" || ch === ";") {
+          const next = i + 1 < len ? text[i + 1] : "";
+          if (!next || /\s|["')\]]/.test(next)) {
+            isSentenceEnd = true;
+          }
+        } else if (ch === ".") {
+          const next = i + 1 < len ? text[i + 1] : "";
+          if (!next || /\s|["')\]]/.test(next)) {
+            const prefix = text.slice(Math.max(0, i - 8), i).toLowerCase();
+            const isAbbr = /\b(e\.g|i\.e|etc|vs|dr|mr|mrs|ms|inc|ltd|v|ver|no)$/i.test(prefix);
+            const isInitial = /\b[a-z]$/i.test(prefix);
+            const isNumber = /\d$/.test(prefix) && /^\d/.test(text.slice(i + 1, i + 3));
+
+            if (!isAbbr && !isInitial && !isNumber) {
+              isSentenceEnd = true;
+            }
+          }
+        }
+
+        if (isSentenceEnd) {
+          let endPos = i + 1;
+          while (endPos < len && /["')\]]/.test(text[endPos])) {
+            endPos++;
+          }
+          const raw = text.slice(startIndex, endPos);
+          const trimmed = raw.trim();
+          if (trimmed.length > 0) {
+            const rawStart = text.indexOf(trimmed, startIndex);
+            const hasBreak = /\n\s*\n/.test(text.slice(Math.max(0, startIndex - 4), startIndex));
+            list.push({
+              text: trimmed,
+              start: rawStart !== -1 ? rawStart : startIndex,
+              end: endPos,
+              hasParagraphBreakBefore: list.length > 0 && hasBreak,
+            });
+          }
+          while (endPos < len && /\s/.test(text[endPos]) && text[endPos] !== "\n") {
+            endPos++;
+          }
+          startIndex = endPos;
+          i = endPos - 1;
+        }
+      }
+    }
+
+    if (startIndex < len) {
+      const raw = text.slice(startIndex);
+      const trimmed = raw.trim();
+      if (trimmed.length > 0) {
+        const rawStart = text.indexOf(trimmed, startIndex);
+        list.push({
+          text: trimmed,
+          start: rawStart !== -1 ? rawStart : startIndex,
+          end: len,
+          hasParagraphBreakBefore: list.length > 0 && /\n\s*\n/.test(text.slice(0, rawStart)),
+        });
+      }
+    }
+
+    return list.length > 0 ? list : [{ text: text.trim(), start: 0, end: text.length }];
+  };
+
   // 智能語意斷句（目標約 400 ~ 550 字/段，切在標點符號處，避免超長導致截斷）
   const splitForMiniMax = (str: string, targetLen = 450, hardMax = 650): string[] => {
     // 優先依據段落換行切分
@@ -2503,6 +2616,42 @@ export function App() {
     return chunks.length > 0 ? chunks : [str];
   };
 
+  // 智能語意段落切分（優先依據段落 \n\n 切分，超長段落於完整句子邊界切分，確保每段約 250 ~ 450 字，中英 1:1 對齊）
+  const splitIntoSemanticSegments = (str: string, targetLen = 350, hardMax = 550): string[] => {
+    const paragraphs = str.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+    const chunks: string[] = [];
+    let cur = "";
+
+    for (const p of paragraphs) {
+      if ((cur + " " + p).length <= targetLen) {
+        cur += (cur ? "\n\n" : "") + p;
+      } else {
+        if (cur) {
+          chunks.push(cur);
+          cur = "";
+        }
+
+        if (p.length > hardMax) {
+          const sList = getSentences(p, true);
+          let sub = "";
+          for (const s of sList) {
+            if ((sub + " " + s.text).length <= targetLen) {
+              sub += (sub ? " " : "") + s.text;
+            } else {
+              if (sub.trim()) chunks.push(sub.trim());
+              sub = s.text;
+            }
+          }
+          if (sub.trim()) chunks.push(sub.trim());
+        } else {
+          cur = p;
+        }
+      }
+    }
+    if (cur.trim()) chunks.push(cur.trim());
+    return chunks.length > 0 ? chunks : [str];
+  };
+
   // 🌐 將訊息內容轉譯為道地香港廣東話口語，並同步更新視覺卡片狀態
   const translateMessageToCantonese = async (
     messageId: string,
@@ -2516,14 +2665,26 @@ export function App() {
       .replace(/!\[.*?\]\(.*?\)/g, "")
       .replace(/\[([^\]]+)\]\(.*?\)/g, "$1")
       .replace(/[#*_\->~|]/g, " ")
-      .replace(/\s+/g, " ")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n\s*\n+/g, "\n\n")
       .trim();
 
     if (!cleanText) return "";
 
-    // 檢查快取中是否已有翻譯結果
+    // 檢查快取中是否已有翻譯結果且分段完全對齊
     const cached = ttsTranslationState[messageId];
-    if (cached && cached.fullTranslatedText) {
+    const isCacheValid = Boolean(
+      cached &&
+      cached.fullTranslatedText &&
+      Array.isArray(cached.translatedChunks) &&
+      cached.translatedChunks.length > 0 &&
+      (cached.isOriginalChinese || (
+        Array.isArray(cached.originalChunks) &&
+        cached.originalChunks.length > 0 &&
+        cached.translatedChunks.length === cached.originalChunks.length
+      ))
+    );
+    if (isCacheValid) {
       if (options?.forceShow !== false) {
         setTtsTranslationState((prev) => ({
           ...prev,
@@ -2538,6 +2699,7 @@ export function App() {
         playCantoneseTts(cached.fullTranslatedText, messageId, {
           startChunkIndex: options?.targetStartChunkIndex ?? 0,
           skipTranslation: true,
+          customChunks: cached.translatedChunks,
         });
       }
       return cached.fullTranslatedText;
@@ -2571,21 +2733,24 @@ export function App() {
         playCantoneseTts(cleanText, messageId, {
           startChunkIndex: options?.targetStartChunkIndex ?? 0,
           skipTranslation: true,
+          customChunks: chunks,
         });
       }
       return cleanText;
     }
 
+    // 🌐 英文原文：先依語意切分成英文段落，確保中英 Chunk 1:1 精準對齊
+    const englishSegments = splitIntoSemanticSegments(cleanText);
+
     // 在 UI 立即設定加載狀態，並開啟懸浮對照視窗
     setActiveFloatingCantoneseMessageId(messageId);
     setShowCantoneseFloatingWindow(true);
     setIsCantoneseFloatingMinimized(false);
-    const initialEnChunks = splitForMiniMax(cleanText);
     setTtsTranslationState((prev) => ({
       ...prev,
       [messageId]: {
         originalText: cleanText,
-        originalChunks: initialEnChunks,
+        originalChunks: englishSegments,
         fullTranslatedText: "",
         activeChunkIndex: options?.targetStartChunkIndex ?? 0,
         translatedChunks: [],
@@ -2605,19 +2770,33 @@ export function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ text: cleanText }),
+        body: JSON.stringify({
+          text: cleanText,
+          segments: englishSegments,
+        }),
       });
 
       let translatedText = cleanText;
+      let translatedChunks = englishSegments;
+      let originalChunks = englishSegments;
+
       if (transRes.ok) {
         const transJson = await transRes.json();
-        if (transJson.translatedText) {
+        if (transJson.translatedChunks && Array.isArray(transJson.translatedChunks) && transJson.translatedChunks.length > 0) {
+          translatedChunks = transJson.translatedChunks;
+          originalChunks = transJson.originalChunks || englishSegments;
+          translatedText = transJson.translatedText || translatedChunks.join("\n\n");
+        } else if (transJson.translatedText) {
           translatedText = transJson.translatedText;
+          if (englishSegments.length === 1) {
+            translatedChunks = [translatedText];
+            originalChunks = englishSegments;
+          } else {
+            translatedChunks = splitForMiniMax(translatedText);
+            originalChunks = splitForMiniMax(cleanText);
+          }
         }
       }
-
-      const chunks = splitForMiniMax(translatedText);
-      const originalChunks = splitForMiniMax(cleanText);
 
       setTtsTranslationState((prev) => ({
         ...prev,
@@ -2626,7 +2805,7 @@ export function App() {
           originalChunks,
           fullTranslatedText: translatedText,
           activeChunkIndex: options?.targetStartChunkIndex ?? 0,
-          translatedChunks: chunks,
+          translatedChunks,
           isTranslating: false,
           showBox: true,
         },
@@ -2638,6 +2817,7 @@ export function App() {
         playCantoneseTts(translatedText, messageId, {
           startChunkIndex: options?.targetStartChunkIndex ?? 0,
           skipTranslation: true,
+          customChunks: translatedChunks,
         });
       }
 
@@ -2663,7 +2843,11 @@ export function App() {
     }
   };
 
-  const playCantoneseTts = async (text: string, messageId: string, options?: { startChunkIndex?: number; skipTranslation?: boolean }) => {
+  const playCantoneseTts = async (
+    text: string,
+    messageId: string,
+    options?: { startChunkIndex?: number; skipTranslation?: boolean; customChunks?: string[] }
+  ) => {
     // If clicking on currently playing message, stop playback
     if (playingMessageId === messageId) {
       stopTtsPlayback();
@@ -2681,7 +2865,8 @@ export function App() {
       .replace(/!\[.*?\]\(.*?\)/g, "")
       .replace(/\[([^\]]+)\]\(.*?\)/g, "$1")
       .replace(/[#*_\->~|]/g, " ")
-      .replace(/\s+/g, " ")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n\s*\n+/g, "\n\n")
       .trim();
 
     // If AI is still streaming, prompt user to wait
@@ -2702,10 +2887,26 @@ export function App() {
 
     // 🌐 Optional Translation: If TTS language is Cantonese, user enabled translation, and text contains English
     let textToSpeak = cleanText;
+    let customChunksToUse = options?.customChunks;
+
     if (!options?.skipTranslation && ttsTranslateEnglish && ttsLang === "cantonese") {
       const cached = ttsTranslationState[messageId];
-      if (cached && cached.fullTranslatedText) {
+      const isCacheValid = Boolean(
+        cached &&
+        cached.fullTranslatedText &&
+        Array.isArray(cached.translatedChunks) &&
+        cached.translatedChunks.length > 0 &&
+        (cached.isOriginalChinese || (
+          Array.isArray(cached.originalChunks) &&
+          cached.originalChunks.length > 0 &&
+          cached.translatedChunks.length === cached.originalChunks.length
+        ))
+      );
+      if (isCacheValid) {
         textToSpeak = cached.fullTranslatedText;
+        if (!customChunksToUse && cached.translatedChunks && cached.translatedChunks.length > 0) {
+          customChunksToUse = cached.translatedChunks;
+        }
       } else {
         const chineseChars = cleanText.match(/[\u4e00-\u9fa5]/g) || [];
         const englishWords = cleanText.match(/[a-zA-Z]{2,}/g) || [];
@@ -2822,7 +3023,7 @@ export function App() {
         return chunks.length > 0 ? chunks : [str];
       };
 
-      const textChunks = splitIntoChunks(textToSpeak);
+      const textChunks = customChunksToUse && customChunksToUse.length > 0 ? customChunksToUse : splitIntoChunks(textToSpeak);
 
       localTtsQueueRef.current = {
         messageId,
@@ -2837,6 +3038,10 @@ export function App() {
         localTtsQueueRef.current.currentIndex = startIndex;
 
         const cleanupUtterance = () => {
+          if (ttsProgressTimerRef.current) {
+            clearInterval(ttsProgressTimerRef.current);
+            ttsProgressTimerRef.current = null;
+          }
           if (ttsSpeakingTimeoutRef.current) {
             clearInterval(ttsSpeakingTimeoutRef.current);
             ttsSpeakingTimeoutRef.current = null;
@@ -2874,6 +3079,35 @@ export function App() {
             if (localTtsQueueRef.current) {
               localTtsQueueRef.current.currentIndex = absIdx;
             }
+            setTtsTranslationState((prev) => {
+              if (!prev[messageId]) return prev;
+              return {
+                ...prev,
+                [messageId]: {
+                  ...prev[messageId],
+                  activeChunkIndex: absIdx,
+                },
+              };
+            });
+
+            if (ttsProgressTimerRef.current) {
+              clearInterval(ttsProgressTimerRef.current);
+              ttsProgressTimerRef.current = null;
+            }
+            setTtsSpeakingProgressRatio(0);
+
+            const startTime = Date.now();
+            const isZh = targetLang.startsWith("zh") || targetLang.startsWith("yue");
+            // Standard reading speed: ~4.2 Chinese chars/sec or ~16 English chars/sec
+            const charsPerSec = isZh ? 4.2 : 16;
+            const currentSpeed = ttsSpeed || 1.0;
+            const estimatedDurationMs = Math.max(600, (chunk.length / (charsPerSec * currentSpeed)) * 1000);
+
+            ttsProgressTimerRef.current = setInterval(() => {
+              const elapsed = Date.now() - startTime;
+              const ratio = Math.min(0.98, elapsed / estimatedDurationMs);
+              setTtsSpeakingProgressRatio(ratio);
+            }, 50);
           };
 
           u.onboundary = (e) => {
@@ -2885,10 +3119,20 @@ export function App() {
           // Only cleanup when the last sentence chunk completes
           if (relIdx === remainingChunks.length - 1) {
             u.onend = () => {
+              if (ttsProgressTimerRef.current) {
+                clearInterval(ttsProgressTimerRef.current);
+                ttsProgressTimerRef.current = null;
+              }
+              setTtsSpeakingProgressRatio(1.0);
               cleanupUtterance();
             };
           } else {
             u.onend = () => {
+              if (ttsProgressTimerRef.current) {
+                clearInterval(ttsProgressTimerRef.current);
+                ttsProgressTimerRef.current = null;
+              }
+              setTtsSpeakingProgressRatio(1.0);
               // Point activeUtteranceRef to next utterance in queue
               activeUtteranceRef.current = utterances[relIdx + 1] || null;
             };
@@ -2954,7 +3198,7 @@ export function App() {
     }
 
     // Mode 2: MiniMax Speech-2.8-HD Neural Voice API
-    const minimaxChunks = splitForMiniMax(textToSpeak);
+    const minimaxChunks = customChunksToUse && customChunksToUse.length > 0 ? customChunksToUse : splitForMiniMax(textToSpeak);
     const totalChunks = minimaxChunks.length;
 
     const abortController = new AbortController();
@@ -3074,10 +3318,8 @@ export function App() {
       });
       setTimeout(() => {
         const container = document.getElementById("cantonese-floating-body");
-        const chunkEl = document.getElementById(`floating-tts-chunk-${messageId}-${index}`);
-        if (container && chunkEl) {
-          const topOffset = chunkEl.offsetTop - container.offsetTop - 12;
-          container.scrollTo({ top: topOffset, behavior: "smooth" });
+        if (container) {
+          container.scrollTo({ top: 0, behavior: "smooth" });
         }
       }, 50);
 
@@ -12558,46 +12800,16 @@ export function App() {
                     const yueChunk = activeTranslationData.translatedChunks?.[currIdx] || activeTranslationData.fullTranslatedText || "";
 
                     const isPlayingCurrentMsg = playingMessageId === activeFloatingMsgId;
+                    const currentActiveIdx = activeTranslationData.activeChunkIndex ?? 0;
                     const isPlayingCurrentChunk = isPlayingCurrentMsg && (
-                      ttsAudioQueueRef.current ? ttsAudioQueueRef.current.currentIndex === currIdx : true
+                      ttsAudioQueueRef.current
+                        ? ttsAudioQueueRef.current.currentIndex === currIdx
+                        : localTtsQueueRef.current
+                        ? localTtsQueueRef.current.currentIndex === currIdx
+                        : currentActiveIdx === currIdx
                     );
 
                     // 🎙️ 方案 B：讀到邊一句，成句淡色高亮浮起 (緊湊排版，上下段落緊湊不鬆散)
-                    interface SentenceInfo {
-                      text: string;
-                      start: number;
-                      end: number;
-                      hasParagraphBreakBefore?: boolean;
-                    }
-
-                    const getSentences = (text: string, isEnglish: boolean): SentenceInfo[] => {
-                      if (!text) return [];
-                      const regex = isEnglish
-                        ? /([^.!?;\n]+(?:[.!?;\n]+["')\]]*)?)/g
-                        : /([^。！？；\n]+(?:[。！？；\n]+["'」』）)]*)?)/g;
-
-                      const list: SentenceInfo[] = [];
-                      let m: RegExpExecArray | null;
-                      let lastEnd = 0;
-                      while ((m = regex.exec(text)) !== null) {
-                        const raw = m[0];
-                        const trimmed = raw.trim();
-                        if (trimmed.length > 0) {
-                          const gapBetween = text.slice(lastEnd, m.index);
-                          const hasBreak = /\n\s*\n/.test(gapBetween);
-
-                          list.push({
-                            text: trimmed,
-                            start: m.index,
-                            end: m.index + raw.length,
-                            hasParagraphBreakBefore: list.length > 0 && hasBreak,
-                          });
-                          lastEnd = m.index + raw.length;
-                        }
-                      }
-                      return list.length > 0 ? list : [{ text: text.trim(), start: 0, end: text.length }];
-                    };
-
                     const yueSentences = getSentences(yueChunk, false);
                     const enSentences = getSentences(enChunk, true);
 
@@ -12611,16 +12823,19 @@ export function App() {
                       }
                     }
 
-                    // 英文句子索引同步對應
+                    // 英文句子索引同步精準對應（當句子數量一致時1:1同步，不一致時平滑時間比例投影）
                     let enActiveIdx = -1;
                     if (isPlayingCurrentChunk && ttsSpeakingProgressRatio !== null) {
-                      if (enSentences.length === yueSentences.length) {
+                      if (enSentences.length === yueSentences.length && yueActiveIdx !== -1) {
                         enActiveIdx = yueActiveIdx;
                       } else if (enSentences.length > 0) {
-                        const charPos = Math.floor(ttsSpeakingProgressRatio * enChunk.length);
-                        enActiveIdx = enSentences.findIndex((s) => charPos >= s.start && charPos < s.end);
+                        const enCharPos = Math.floor(ttsSpeakingProgressRatio * enChunk.length);
+                        enActiveIdx = enSentences.findIndex((s) => enCharPos >= s.start && enCharPos < s.end);
                         if (enActiveIdx === -1) {
-                          enActiveIdx = charPos >= enChunk.length ? enSentences.length - 1 : 0;
+                          enActiveIdx = Math.min(
+                            enSentences.length - 1,
+                            Math.max(0, Math.floor(ttsSpeakingProgressRatio * enSentences.length))
+                          );
                         }
                       }
                     }
