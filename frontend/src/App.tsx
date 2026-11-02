@@ -561,6 +561,20 @@ export function App() {
       isOriginalChinese?: boolean;
     };
   }>({});
+  // 📊 即時粵語轉譯百分比進度狀態 (Percentage Progress)
+  const [ttsTranslationProgress, setTtsTranslationProgress] = useState<{
+    messageId: string;
+    percent: number;
+    current: number;
+    total: number;
+  } | null>(null);
+  // 📥 即時語音 MP3 匯出百分比進度狀態 (MP3 Export Percentage Progress)
+  const [exportingAudioProgress, setExportingAudioProgress] = useState<{
+    messageId: string;
+    percent: number;
+    current: number;
+    total: number;
+  } | null>(null);
   // 🪟 廣東話口語翻譯對照懸浮視窗 (Floating Window) 狀態
   const [showCantoneseFloatingWindow, setShowCantoneseFloatingWindow] = useState<boolean>(false);
   const [activeFloatingCantoneseMessageId, setActiveFloatingCantoneseMessageId] = useState<string | null>(null);
@@ -2934,11 +2948,18 @@ export function App() {
 
     // 🌐 英文原文：先依語意切分成英文段落，確保中英 Chunk 1:1 精準對齊
     const englishSegments = splitIntoSemanticSegments(cleanText);
+    const totalSegments = englishSegments.length;
 
     // 在 UI 立即設定加載狀態，並開啟懸浮對照視窗
     setActiveFloatingCantoneseMessageId(messageId);
     setShowCantoneseFloatingWindow(true);
     setIsCantoneseFloatingMinimized(false);
+    setTtsTranslationProgress({
+      messageId,
+      percent: 0,
+      current: 0,
+      total: totalSegments,
+    });
     setTtsTranslationState((prev) => ({
       ...prev,
       [messageId]: {
@@ -2953,71 +2974,141 @@ export function App() {
     }));
 
     showAlert(
-      "🌐 正在將英文內容轉為道地香港粵語口語（技術 Term 保留英文）...",
+      `🌐 正在將英文內容轉為道地香港粵語口語 (0% - 共 ${totalSegments} 段)...`,
       "info",
       "粵語語音轉譯中 (Translating)"
     );
 
+    const translatedChunks: string[] = [];
+
     try {
-      const transRes = await fetch("/api/tts/translate-cantonese", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          text: cleanText,
-          segments: englishSegments,
-        }),
-      });
+      if (totalSegments === 1) {
+        // 單段直接快速轉譯
+        const segController = new AbortController();
+        const segTimeoutId = setTimeout(() => segController.abort(), 15000);
+        const transRes = await fetch("/api/tts/translate-cantonese", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          signal: segController.signal,
+          body: JSON.stringify({
+            text: cleanText,
+            segments: englishSegments,
+          }),
+        });
+        clearTimeout(segTimeoutId);
 
-      let translatedText = cleanText;
-      let translatedChunks = englishSegments;
-      let originalChunks = englishSegments;
-
-      if (transRes.ok) {
-        const transJson = await transRes.json();
-        if (transJson.translatedChunks && Array.isArray(transJson.translatedChunks) && transJson.translatedChunks.length > 0) {
-          translatedChunks = transJson.translatedChunks;
-          originalChunks = transJson.originalChunks || englishSegments;
-          translatedText = transJson.translatedText || translatedChunks.join("\n\n");
-        } else if (transJson.translatedText) {
-          translatedText = transJson.translatedText;
-          if (englishSegments.length === 1) {
-            translatedChunks = [translatedText];
-            originalChunks = englishSegments;
+        if (transRes.ok) {
+          const transJson = await transRes.json();
+          if (transJson.translatedChunks && Array.isArray(transJson.translatedChunks) && transJson.translatedChunks.length > 0) {
+            translatedChunks.push(...transJson.translatedChunks);
+          } else if (transJson.translatedText) {
+            translatedChunks.push(transJson.translatedText);
           } else {
-            translatedChunks = splitForMiniMax(translatedText);
-            originalChunks = splitForMiniMax(cleanText);
+            translatedChunks.push(cleanText);
           }
+        } else {
+          translatedChunks.push(cleanText);
+        }
+        setTtsTranslationProgress({
+          messageId,
+          percent: 100,
+          current: 1,
+          total: 1,
+        });
+      } else {
+        // 多段依序逐段轉譯並即時回報進度百分比，徹底杜絕長文轉譯卡死 (Progressive Translation with Percentage)
+        for (let i = 0; i < totalSegments; i++) {
+          const currentSeg = englishSegments[i];
+          let translatedSeg = currentSeg;
+
+          // 快速檢查：若該段落英文字詞少於 3 個，直接保留原文
+          const segEnglishWords = currentSeg.match(/[a-zA-Z]{2,}/g) || [];
+          if (segEnglishWords.length >= 3) {
+            try {
+              const segController = new AbortController();
+              const segTimeoutId = setTimeout(() => segController.abort(), 15000);
+              const segRes = await fetch("/api/tts/translate-cantonese", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                signal: segController.signal,
+                body: JSON.stringify({
+                  text: currentSeg,
+                  segments: [currentSeg],
+                }),
+              });
+              clearTimeout(segTimeoutId);
+
+              if (segRes.ok) {
+                const segJson = await segRes.json();
+                if (segJson.translatedText && segJson.translatedText.trim()) {
+                  translatedSeg = segJson.translatedText.trim();
+                }
+              }
+            } catch (segErr) {
+              console.warn(`Translation timed out on segment ${i + 1}/${totalSegments}, using original text:`, segErr);
+            }
+          }
+
+          translatedChunks.push(translatedSeg);
+          const currentPercent = Math.round(((i + 1) / totalSegments) * 100);
+
+          setTtsTranslationProgress({
+            messageId,
+            percent: currentPercent,
+            current: i + 1,
+            total: totalSegments,
+          });
+
+          // 即時更新懸浮對照視窗，讓用戶看到各段落逐一轉譯完成
+          setTtsTranslationState((prev) => ({
+            ...prev,
+            [messageId]: {
+              ...prev[messageId],
+              translatedChunks: [...translatedChunks],
+              fullTranslatedText: translatedChunks.join("\n\n"),
+            },
+          }));
+
+          showAlert(
+            `🌐 正在將英文內容轉為道地香港粵語口語 (${currentPercent}% - 第 ${i + 1}/${totalSegments} 段)...`,
+            "info",
+            "粵語語音轉譯中 (Translating)"
+          );
         }
       }
 
+      const fullTranslatedText = translatedChunks.join("\n\n");
       setTtsTranslationState((prev) => ({
         ...prev,
         [messageId]: {
           originalText: cleanText,
-          originalChunks,
-          fullTranslatedText: translatedText,
+          originalChunks: englishSegments,
+          fullTranslatedText,
           activeChunkIndex: options?.targetStartChunkIndex ?? 0,
           translatedChunks,
           isTranslating: false,
           showBox: true,
         },
       }));
+      setTtsTranslationProgress(null);
 
-      showAlert("✅ 粵語口語翻譯已完成，已為您在懸浮視窗中展開對照！", "success", "轉譯完成");
+      showAlert("✅ 粵語口語翻譯已完成 (100%)，已為您在懸浮視窗中展開對照！", "success", "轉譯完成");
 
       if (options?.autoPlay) {
-        playCantoneseTts(translatedText, messageId, {
+        playCantoneseTts(fullTranslatedText, messageId, {
           startChunkIndex: options?.targetStartChunkIndex ?? 0,
           skipTranslation: true,
           customChunks: translatedChunks,
         });
       }
 
-      return translatedText;
+      return fullTranslatedText;
     } catch (err: any) {
       console.warn("TTS Cantonese translation failed:", err);
-      showAlert(`粵語轉譯失敗: ${err.message || err}`, "warning", "轉譯出錯");
+      showAlert(`粵語轉譯超時或出錯: ${err.message || err}，已自動切換為直接以原文朗讀。`, "warning", "轉譯備援");
+      setTtsTranslationProgress(null);
       setTtsTranslationState((prev) => ({
         ...prev,
         [messageId]: {
@@ -3072,23 +3163,45 @@ export function App() {
       if (!cleanText) {
         showAlert("此訊息沒有可供匯出的語音文字內容。", "warning", "無法匯出");
         setExportingAudioMsgId(null);
+        setExportingAudioProgress(null);
         return;
       }
 
       // 3. 取得要合成的段落 chunks (與 MiniMax 播放完全一致)
       const cachedChunks = ttsTranslationState[messageId]?.translatedChunks;
-      const chunks = cachedChunks && cachedChunks.length > 0 ? cachedChunks : splitForMiniMax(cleanText);
-
-      // 4. 逐段取得 MP3 音訊 Blob（優先使用已快取的分段，若未快取則自 /api/tts 請求）
-      const mp3Blobs: Blob[] = [];
       const currentQueue = ttsAudioQueueRef.current;
       const isCurrentQueueSameMsg = currentQueue && currentQueue.messageId === messageId;
 
+      // 檢查是否所有分段皆已在播放時完整快取
+      const hasAllCachedBlobs = Boolean(
+        isCurrentQueueSameMsg &&
+        cachedChunks &&
+        cachedChunks.length > 0 &&
+        cachedChunks.every((_, idx) => currentQueue.audioBlobs.has(idx))
+      );
+
+      // 若已完整快取，直接使用快取分段秒速拼裝；
+      // 若尚未完全快取，為匯出特別採用較大段落（1600~2200 字），大幅減少請求次數，徹底杜絕 MiniMax RPM 頻率限制
+      const chunks = (hasAllCachedBlobs && cachedChunks)
+        ? cachedChunks
+        : splitForMiniMax(cleanText, 1600, 2200);
+
+      // 4. 逐段取得 MP3 音訊 Blob（優先使用已快取的分段，若未快取則向 /api/tts 請求並帶自動重試機制）
+      const mp3Blobs: Blob[] = [];
+
       for (let i = 0; i < chunks.length; i++) {
         let chunkBlob: Blob | null = null;
+        const currentPct = Math.round(((i + 1) / chunks.length) * 100);
+        setExportingAudioProgress({
+          messageId,
+          percent: currentPct,
+          current: i + 1,
+          total: chunks.length,
+        });
+        showAlert(`⏳ 正在合成語音 MP3 (${currentPct}% - 第 ${i + 1}/${chunks.length} 段)...`, "info", "語音匯出中");
 
         // 若當前播放佇列中已持有該段 blob URL，直接 fetch 本地 blob 取得二進制資料
-        if (isCurrentQueueSameMsg && currentQueue.audioBlobs.has(i)) {
+        if (hasAllCachedBlobs && isCurrentQueueSameMsg && currentQueue.audioBlobs.has(i)) {
           const blobUrl = currentQueue.audioBlobs.get(i)!;
           try {
             const r = await fetch(blobUrl);
@@ -3098,28 +3211,58 @@ export function App() {
           } catch {}
         }
 
-        // 若無快取，向 /api/tts 請求合成
+        // 若無快取，向 /api/tts 請求合成，並加入請求間隔與自動重試防禦
         if (!chunkBlob) {
-          const res = await fetch("/api/tts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({
-              text: chunks[i],
-              voiceId: ttsVoiceId || "Cantonese_CuteGirl",
-              speed: ttsSpeed || 1.0,
-              vol: 1.0,
-              pitch: 0,
-              timeout: 60,
-            }),
-          });
-
-          if (!res.ok) {
-            const errJson = await res.json().catch(() => ({}));
-            throw new Error(errJson.error || `HTTP ${res.status}`);
+          // 多段請求之間緩衝 800ms，避免突發併發觸發 RPM
+          if (i > 0) {
+            await new Promise((r) => setTimeout(r, 800));
           }
 
-          chunkBlob = await res.blob();
+          let attempt = 0;
+          const maxRetries = 3;
+          while (attempt < maxRetries && !chunkBlob) {
+            attempt++;
+            try {
+              const res = await fetch("/api/tts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                  text: chunks[i],
+                  voiceId: ttsVoiceId || "Cantonese_CuteGirl",
+                  speed: ttsSpeed || 1.0,
+                  vol: 1.0,
+                  pitch: 0,
+                  timeout: 60,
+                }),
+              });
+
+              if (!res.ok) {
+                const errJson = await res.json().catch(() => ({}));
+                const errMsg = errJson.error || `HTTP ${res.status}`;
+                const isRpm = errMsg.toLowerCase().includes("rate limit") || errMsg.toLowerCase().includes("rpm") || res.status === 429;
+                if (isRpm && attempt < maxRetries) {
+                  showAlert(`⏳ 遇到 API 頻率限制 (RPM)，正在自動等待重試 (第 ${attempt}/${maxRetries} 次)...`, "info", "等待頻率限制");
+                  await new Promise((r) => setTimeout(r, attempt * 2500));
+                  continue;
+                }
+                throw new Error(errMsg);
+              }
+
+              const blob = await res.blob();
+              if (!blob || blob.size === 0) throw new Error("Empty audio response");
+              chunkBlob = blob;
+            } catch (fetchErr: any) {
+              const errMsg = String(fetchErr?.message || "");
+              const isRpm = errMsg.toLowerCase().includes("rate limit") || errMsg.toLowerCase().includes("rpm");
+              if (isRpm && attempt < maxRetries) {
+                showAlert(`⏳ 遇到 API 頻率限制 (RPM)，正在自動等待重試 (第 ${attempt}/${maxRetries} 次)...`, "info", "等待頻率限制");
+                await new Promise((r) => setTimeout(r, attempt * 2500));
+                continue;
+              }
+              throw fetchErr;
+            }
+          }
         }
 
         if (chunkBlob && chunkBlob.size > 0) {
@@ -3150,12 +3293,13 @@ export function App() {
         URL.revokeObjectURL(downloadUrl);
       }, 10000);
 
-      showAlert(`🎉 語音已成功匯出為 MP3 檔案 (${(finalMp3Blob.size / 1024).toFixed(1)} KB)！`, "success", "匯出成功");
+      showAlert(`🎉 語音已成功匯出為 MP3 檔案 (100% - ${(finalMp3Blob.size / 1024).toFixed(1)} KB)！`, "success", "匯出成功");
     } catch (err: any) {
       console.error("Export MP3 failed:", err);
       showAlert(`匯出語音 MP3 失敗: ${err.message || err}`, "warning", "匯出失敗");
     } finally {
       setExportingAudioMsgId(null);
+      setExportingAudioProgress(null);
     }
   };
 
@@ -8792,43 +8936,68 @@ export function App() {
                             <button
                               type="button"
                               onClick={() => playCantoneseTts(m.content, m.id)}
-                              disabled={isTtsLoading && playingMessageId === m.id}
+                              disabled={(isTtsLoading && playingMessageId === m.id) || Boolean(ttsTranslationProgress && ttsTranslationProgress.messageId === m.id)}
                               title={
-                                playingMessageId === m.id
+                                ttsTranslationProgress && ttsTranslationProgress.messageId === m.id
+                                  ? `粵語轉譯中 (${ttsTranslationProgress.percent}%)`
+                                  : playingMessageId === m.id
                                   ? "停止朗讀"
                                   : "朗讀此回答"
                               }
                               style={{
-                                background: playingMessageId === m.id ? "rgba(16, 185, 129, 0.15)" : "transparent",
-                                border: playingMessageId === m.id ? "1px solid #10b981" : "1px solid var(--border-color)",
+                                background: ttsTranslationProgress && ttsTranslationProgress.messageId === m.id
+                                  ? "rgba(234, 179, 8, 0.15)"
+                                  : playingMessageId === m.id
+                                  ? "rgba(16, 185, 129, 0.15)"
+                                  : "transparent",
+                                border: ttsTranslationProgress && ttsTranslationProgress.messageId === m.id
+                                  ? "1px solid #eab308"
+                                  : playingMessageId === m.id
+                                  ? "1px solid #10b981"
+                                  : "1px solid var(--border-color)",
                                 borderRadius: 4,
                                 padding: "2px 8px",
                                 fontSize: 10,
                                 fontWeight: 600,
-                                color: playingMessageId === m.id ? "#10b981" : "var(--text-muted)",
-                                cursor: "pointer",
+                                color: ttsTranslationProgress && ttsTranslationProgress.messageId === m.id
+                                  ? "#eab308"
+                                  : playingMessageId === m.id
+                                  ? "#10b981"
+                                  : "var(--text-muted)",
+                                cursor: (isTtsLoading && playingMessageId === m.id) || Boolean(ttsTranslationProgress && ttsTranslationProgress.messageId === m.id)
+                                  ? "wait"
+                                  : "pointer",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: 4,
                                 transition: "all 0.15s ease",
                               }}
                               onMouseEnter={(e) => {
-                                if (playingMessageId !== m.id) {
+                                if (playingMessageId !== m.id && !(ttsTranslationProgress && ttsTranslationProgress.messageId === m.id)) {
                                   e.currentTarget.style.borderColor = "#10b981";
                                   e.currentTarget.style.color = "#10b981";
                                 }
                               }}
                               onMouseLeave={(e) => {
-                                if (playingMessageId !== m.id) {
+                                if (playingMessageId !== m.id && !(ttsTranslationProgress && ttsTranslationProgress.messageId === m.id)) {
                                   e.currentTarget.style.borderColor = "var(--border-color)";
                                   e.currentTarget.style.color = "var(--text-muted)";
                                 }
                               }}
                             >
-                              {isTtsLoading && playingMessageId === m.id ? (
+                              {ttsTranslationProgress && ttsTranslationProgress.messageId === m.id ? (
+                                <>
+                                  <Loader2 size={11} className="spin" color="#eab308" />
+                                  <span style={{ color: "#eab308" }}>轉譯 {ttsTranslationProgress.percent}%</span>
+                                </>
+                              ) : isTtsLoading && playingMessageId === m.id ? (
                                 <>
                                   <Loader2 size={11} className="spin" color="#10b981" />
-                                  <span style={{ color: "#10b981" }}>合成中...</span>
+                                  <span style={{ color: "#10b981" }}>
+                                    {ttsCurrentChunkInfo && ttsCurrentChunkInfo.total > 1
+                                      ? `合成 ${Math.round((ttsCurrentChunkInfo.current / ttsCurrentChunkInfo.total) * 100)}%`
+                                      : "合成中..."}
+                                  </span>
                                 </>
                               ) : playingMessageId === m.id ? (
                                 <>
@@ -8850,8 +9019,8 @@ export function App() {
                               disabled={exportingAudioMsgId === m.id}
                               title="匯出此回答語音為 MP3 音訊檔案"
                               style={{
-                                background: "transparent",
-                                border: "1px solid var(--border-color)",
+                                background: exportingAudioMsgId === m.id ? "rgba(59, 130, 246, 0.15)" : "transparent",
+                                border: exportingAudioMsgId === m.id ? "1px solid #3b82f6" : "1px solid var(--border-color)",
                                 borderRadius: 4,
                                 padding: "2px 8px",
                                 fontSize: 10,
@@ -8879,7 +9048,13 @@ export function App() {
                               {exportingAudioMsgId === m.id ? (
                                 <>
                                   <Loader2 size={11} className="spin" color="#3b82f6" />
-                                  <span style={{ color: "#3b82f6" }}>匯出中...</span>
+                                  <span style={{ color: "#3b82f6" }}>
+                                    {ttsTranslationProgress && ttsTranslationProgress.messageId === m.id
+                                      ? `轉譯 ${ttsTranslationProgress.percent}%`
+                                      : exportingAudioProgress && exportingAudioProgress.messageId === m.id
+                                      ? `匯出 ${exportingAudioProgress.percent}%`
+                                      : "匯出中..."}
+                                  </span>
                                 </>
                               ) : (
                                 <>
@@ -13117,7 +13292,15 @@ export function App() {
                 {activeTranslationData.isTranslating && (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#eab308", fontWeight: 600 }}>
                     <Loader2 size={11} className="spin" />
-                    轉譯中...
+                    {ttsTranslationProgress && ttsTranslationProgress.messageId === activeFloatingMsgId
+                      ? `轉譯中 ${ttsTranslationProgress.percent}% (${ttsTranslationProgress.current}/${ttsTranslationProgress.total})`
+                      : "轉譯中..."}
+                  </span>
+                )}
+                {exportingAudioProgress && exportingAudioProgress.messageId === activeFloatingMsgId && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#3b82f6", fontWeight: 600 }}>
+                    <Loader2 size={11} className="spin" />
+                    匯出中 {exportingAudioProgress.percent}% ({exportingAudioProgress.current}/${exportingAudioProgress.total})
                   </span>
                 )}
               </div>
@@ -13168,6 +13351,31 @@ export function App() {
                 </button>
               </div>
             </div>
+
+            {/* 📊 即時轉譯與匯出進度指示條 (Progress Bar) */}
+            {activeTranslationData.isTranslating && ttsTranslationProgress && ttsTranslationProgress.messageId === activeFloatingMsgId ? (
+              <div style={{ width: "100%", height: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${ttsTranslationProgress.percent}%`,
+                    background: "linear-gradient(90deg, #10b981, #eab308)",
+                    transition: "width 0.25s ease",
+                  }}
+                />
+              </div>
+            ) : exportingAudioProgress && exportingAudioProgress.messageId === activeFloatingMsgId ? (
+              <div style={{ width: "100%", height: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${exportingAudioProgress.percent}%`,
+                    background: "linear-gradient(90deg, #3b82f6, #06b6d4)",
+                    transition: "width 0.25s ease",
+                  }}
+                />
+              </div>
+            ) : null}
 
             {/* Floating Body (Hidden if minimized) */}
             {!isCantoneseFloatingMinimized && (
@@ -13537,7 +13745,12 @@ export function App() {
                     >
                       {exportingAudioMsgId === activeFloatingMsgId ? (
                         <>
-                          <Loader2 size={10} className="spin" color="#3b82f6" /> 匯出中...
+                          <Loader2 size={10} className="spin" color="#3b82f6" />
+                          <span>
+                            {exportingAudioProgress && exportingAudioProgress.messageId === activeFloatingMsgId
+                              ? `匯出 ${exportingAudioProgress.percent}%`
+                              : "匯出中..."}
+                          </span>
                         </>
                       ) : (
                         <>

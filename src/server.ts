@@ -1470,8 +1470,35 @@ app.post("/api/tts", requireAuth, async (req, res) => {
       });
     };
 
+    // 🛡️ Automatic Rate-Limit Retry (MiniMax RPM backoff)
+    const requestT2AWithRetry = async (targetVoiceId: string, maxRetries = 3): Promise<Buffer> => {
+      let attempt = 0;
+      while (true) {
+        attempt++;
+        try {
+          return await requestT2A(targetVoiceId);
+        } catch (err: any) {
+          const errMsg = String(err?.message || "");
+          const isRateLimit =
+            errMsg.toLowerCase().includes("rate limit") ||
+            errMsg.toLowerCase().includes("rpm") ||
+            err?.statusCode === 1004 ||
+            err?.statusCode === 1002 ||
+            err?.statusCode === 2013;
+
+          if (isRateLimit && attempt <= maxRetries) {
+            const waitMs = attempt * 2000;
+            console.warn(`[TTS] MiniMax RPM rate limit hit (attempt ${attempt}/${maxRetries}). Backing off for ${waitMs}ms before retry...`);
+            await new Promise((r) => setTimeout(r, waitMs));
+            continue;
+          }
+          throw err;
+        }
+      }
+    };
+
     try {
-      const audioBuffer = await requestT2A(voiceId);
+      const audioBuffer = await requestT2AWithRetry(voiceId);
       res.setHeader("Content-Type", "audio/mpeg");
       res.setHeader("Content-Length", audioBuffer.length);
       return res.send(audioBuffer);
@@ -1481,7 +1508,7 @@ app.post("/api/tts", requireAuth, async (req, res) => {
         const fallbackVoice = voiceId.toLowerCase().includes("english") ? "English_Trustworthy_Man" : "Cantonese_CuteGirl";
         console.warn(`[TTS] Voice ID '${voiceId}' does not exist (code 2054). Auto-retrying with fallback voice '${fallbackVoice}'...`);
         try {
-          const fallbackBuffer = await requestT2A(fallbackVoice);
+          const fallbackBuffer = await requestT2AWithRetry(fallbackVoice);
           res.setHeader("Content-Type", "audio/mpeg");
           res.setHeader("Content-Length", fallbackBuffer.length);
           return res.send(fallbackBuffer);
@@ -1503,7 +1530,13 @@ app.post("/api/tts", requireAuth, async (req, res) => {
 app.post("/api/tts/translate-cantonese", requireAuth, async (req, res) => {
   try {
     const { text, segments } = req.body;
-    const client = new LLMClient(config.llm);
+    // Use fast low-latency model for real-time subtitle translation
+    const transLlmConfig = { ...config.llm };
+    if (transLlmConfig.model && transLlmConfig.model.includes("flash-high")) {
+      transLlmConfig.model = transLlmConfig.model.replace("flash-high", "flash-low");
+    }
+    const client = new LLMClient(transLlmConfig);
+    const LLM_TIMEOUT_MS = 15000;
 
     // Support aligned segment array for multi-chunk synchronized captions
     if (Array.isArray(segments) && segments.length > 0) {
@@ -1545,10 +1578,14 @@ STRICT RULES:
 3. Maintain sentence-by-sentence alignment with the original text so subtitles remain in sync.
 4. DO NOT add any greeting, preamble, explanations, notes, or markdown formatting. Output ONLY the raw spoken Cantonese text.`;
 
-        const result = await client.createChatCompletion([
-          { role: "system", content: systemPrompt },
-          { role: "user", content: inputSegments[0] },
-        ]);
+        const result = await client.createChatCompletion(
+          [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: inputSegments[0] },
+          ],
+          undefined,
+          { timeout: LLM_TIMEOUT_MS }
+        );
 
         const translatedText = result.choices[0]?.message?.content?.trim() || inputSegments[0];
         return res.json({
@@ -1573,10 +1610,14 @@ STRICT RULES:
 4. You MUST preserve all ${inputSegments.length} numbered segments in order, and start each translated segment with the corresponding tag: [1], [2], etc.
 5. DO NOT add any greeting, preamble, explanations, notes, or markdown formatting. Output ONLY the numbered translations.`;
 
-      const result = await client.createChatCompletion([
-        { role: "system", content: multiSegmentSystemPrompt },
-        { role: "user", content: userPrompt },
-      ]);
+      const result = await client.createChatCompletion(
+        [
+          { role: "system", content: multiSegmentSystemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        undefined,
+        { timeout: LLM_TIMEOUT_MS }
+      );
 
       const rawContent = result.choices[0]?.message?.content?.trim() || "";
       const parsedChunks: string[] = [];
@@ -1634,10 +1675,14 @@ STRICT RULES:
 3. Maintain sentence-by-sentence alignment with the original text so subtitles remain in sync.
 4. DO NOT add any greeting, preamble, explanations, notes, or markdown formatting. Output ONLY the raw spoken Cantonese text.`;
 
-    const result = await client.createChatCompletion([
-      { role: "system", content: systemPrompt },
-      { role: "user", content: trimmed },
-    ]);
+    const result = await client.createChatCompletion(
+      [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: trimmed },
+      ],
+      undefined,
+      { timeout: LLM_TIMEOUT_MS }
+    );
 
     const translatedText = result.choices[0]?.message?.content?.trim() || trimmed;
     return res.json({

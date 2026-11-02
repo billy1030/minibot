@@ -15,7 +15,8 @@ export class LLMClient {
 
   async createChatCompletion(
     messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-    tools?: OpenAI.Chat.Completions.ChatCompletionTool[]
+    tools?: OpenAI.Chat.Completions.ChatCompletionTool[],
+    options?: OpenAI.RequestOptions
   ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
     const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
       model: this.config.model,
@@ -29,6 +30,6 @@ export class LLMClient {
       params.tool_choice = "auto";
     }
 
-    return await this.openai.chat.completions.create(params);
+    return await this.openai.chat.completions.create(params, options);
   }
 }
