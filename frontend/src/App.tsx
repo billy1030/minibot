@@ -629,6 +629,7 @@ export function App() {
     messageId: string;
     textChunks: string[];
     currentIndex: number;
+    totalExpectedChunks?: number;
     selectedVoice?: SpeechSynthesisVoice;
     targetLang: string;
   } | null>(null);
@@ -650,6 +651,7 @@ export function App() {
   const ttsAudioQueueRef = useRef<{
     chunks: string[];
     currentIndex: number;
+    totalChunks?: number;
     audioBlobs: Map<number, string>; // index -> blobUrl
     isFetching: Set<number>;
     messageId: string;
@@ -2236,8 +2238,9 @@ export function App() {
 
     if (queue && queue.chunks && playingMessageId) {
       const chunks = queue.chunks;
+      const total = queue.totalChunks || chunks.length;
       const nextIdx = queue.currentIndex + 1;
-      if (nextIdx < chunks.length) {
+      if (nextIdx < total) {
         // 1. 遞增序號讓進行中的非同步音訊請求立即無效
         ttsPlaybackRequestIdRef.current++;
 
@@ -2980,6 +2983,7 @@ export function App() {
     );
 
     const translatedChunks: string[] = [];
+    let hasStartedStreamingPlayback = false;
 
     try {
       if (totalSegments === 1) {
@@ -3018,6 +3022,7 @@ export function App() {
         });
       } else {
         // 多段依序逐段轉譯並即時回報進度百分比，徹底杜絕長文轉譯卡死 (Progressive Translation with Percentage)
+
         for (let i = 0; i < totalSegments; i++) {
           const currentSeg = englishSegments[i];
           let translatedSeg = currentSeg;
@@ -3071,6 +3076,17 @@ export function App() {
             },
           }));
 
+          // ⚡ 即時串流播放：第一段轉譯完畢立即啟動朗讀，後續段落邊播邊轉譯（Streaming Pipeline）
+          if (options?.autoPlay && !hasStartedStreamingPlayback && i === (options.targetStartChunkIndex ?? 0)) {
+            hasStartedStreamingPlayback = true;
+            playCantoneseTts(translatedSeg, messageId, {
+              startChunkIndex: options.targetStartChunkIndex ?? 0,
+              skipTranslation: true,
+              customChunks: translatedChunks,
+              totalExpectedChunks: totalSegments,
+            });
+          }
+
           showAlert(
             `🌐 正在將英文內容轉為道地香港粵語口語 (${currentPercent}% - 第 ${i + 1}/${totalSegments} 段)...`,
             "info",
@@ -3096,11 +3112,12 @@ export function App() {
 
       showAlert("✅ 粵語口語翻譯已完成 (100%)，已為您在懸浮視窗中展開對照！", "success", "轉譯完成");
 
-      if (options?.autoPlay) {
+      if (options?.autoPlay && !hasStartedStreamingPlayback) {
         playCantoneseTts(fullTranslatedText, messageId, {
           startChunkIndex: options?.targetStartChunkIndex ?? 0,
           skipTranslation: true,
           customChunks: translatedChunks,
+          totalExpectedChunks: totalSegments,
         });
       }
 
@@ -3306,7 +3323,12 @@ export function App() {
   const playCantoneseTts = async (
     text: string,
     messageId: string,
-    options?: { startChunkIndex?: number; skipTranslation?: boolean; customChunks?: string[] }
+    options?: {
+      startChunkIndex?: number;
+      skipTranslation?: boolean;
+      customChunks?: string[];
+      totalExpectedChunks?: number;
+    }
   ) => {
     // If clicking on currently playing message without chunk jump request, toggle stop playback
     if (playingMessageId === messageId && options?.startChunkIndex === undefined) {
@@ -3488,6 +3510,7 @@ export function App() {
       localTtsQueueRef.current = {
         messageId,
         textChunks,
+        totalExpectedChunks: options?.totalExpectedChunks || textChunks.length,
         currentIndex: options?.startChunkIndex || 0,
         selectedVoice,
         targetLang,
@@ -3519,6 +3542,111 @@ export function App() {
           setPlayingMessageId(null);
           setIsTtsPaused(false);
         };
+
+        const totalExpected = options?.totalExpectedChunks || localTtsQueueRef.current.textChunks.length;
+
+        // ⚡ 支援邊轉譯邊朗讀的串流播放（Streaming Local TTS）
+        if (options?.totalExpectedChunks && options.totalExpectedChunks > 1) {
+          const playLocalChunk = async (chunkIdx: number) => {
+            if (currentReqId !== ttsPlaybackRequestIdRef.current || !localTtsQueueRef.current) return;
+            if (chunkIdx >= totalExpected) {
+              cleanupUtterance();
+              return;
+            }
+
+            // ⏳ 若該段落仍在串流轉譯中，等待轉譯產出
+            while (!localTtsQueueRef.current.textChunks[chunkIdx] && currentReqId === ttsPlaybackRequestIdRef.current && localTtsQueueRef.current) {
+              await new Promise((r) => setTimeout(r, 80));
+            }
+            if (currentReqId !== ttsPlaybackRequestIdRef.current || !localTtsQueueRef.current) return;
+            const chunk = localTtsQueueRef.current.textChunks[chunkIdx];
+            if (!chunk) {
+              cleanupUtterance();
+              return;
+            }
+
+            localTtsQueueRef.current.currentIndex = chunkIdx;
+            setTtsTranslationState((prev) => {
+              if (!prev[messageId]) return prev;
+              return {
+                ...prev,
+                [messageId]: {
+                  ...prev[messageId],
+                  activeChunkIndex: chunkIdx,
+                },
+              };
+            });
+
+            const u = new SpeechSynthesisUtterance(chunk);
+            u.rate = ttsSpeed || 1.0;
+            u.pitch = 1.0;
+            if (selectedVoice) {
+              u.voice = selectedVoice;
+              u.lang = selectedVoice.lang || targetLang;
+            } else {
+              u.lang = targetLang;
+            }
+
+            u.onstart = () => {
+              if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
+              if (ttsProgressTimerRef.current) {
+                clearInterval(ttsProgressTimerRef.current);
+                ttsProgressTimerRef.current = null;
+              }
+              setTtsSpeakingProgressRatio(0);
+
+              const startTime = Date.now();
+              const isZh = targetLang.startsWith("zh") || targetLang.startsWith("yue");
+              const charsPerSec = isZh ? 4.2 : 16;
+              const currentSpeed = ttsSpeed || 1.0;
+              const estimatedDurationMs = Math.max(600, (chunk.length / (charsPerSec * currentSpeed)) * 1000);
+
+              ttsProgressTimerRef.current = setInterval(() => {
+                if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
+                const elapsed = Date.now() - startTime;
+                const ratio = Math.min(0.98, elapsed / estimatedDurationMs);
+                setTtsSpeakingProgressRatio(ratio);
+              }, 50);
+            };
+
+            u.onboundary = (e) => {
+              if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
+              if (e.charIndex !== undefined && chunk.length > 0) {
+                setTtsSpeakingProgressRatio(Math.min(1, Math.max(0, e.charIndex / chunk.length)));
+              }
+            };
+
+            u.onend = () => {
+              if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
+              if (ttsProgressTimerRef.current) {
+                clearInterval(ttsProgressTimerRef.current);
+                ttsProgressTimerRef.current = null;
+              }
+              setTtsSpeakingProgressRatio(1.0);
+              playLocalChunk(chunkIdx + 1);
+            };
+
+            u.onerror = (e) => {
+              if (currentReqId !== ttsPlaybackRequestIdRef.current) return;
+              if (e.error === "canceled" || e.error === "interrupted") return;
+              console.warn("Local TTS error on chunk", chunkIdx, e);
+              cleanupUtterance();
+            };
+
+            activeUtteranceRef.current = u;
+            activeUtteranceQueueRef.current = [u];
+            try {
+              window.speechSynthesis.cancel();
+              window.speechSynthesis.speak(u);
+            } catch (speakErr) {
+              console.error("speechSynthesis.speak error:", speakErr);
+              cleanupUtterance();
+            }
+          };
+
+          playLocalChunk(startIndex);
+          return;
+        }
 
         const remainingChunks = localTtsQueueRef.current.textChunks.slice(startIndex);
         if (remainingChunks.length === 0) {
@@ -3671,14 +3799,15 @@ export function App() {
 
     // Mode 2: MiniMax Speech-2.8-HD Neural Voice API
     const minimaxChunks = customChunksToUse && customChunksToUse.length > 0 ? customChunksToUse : splitForMiniMax(textToSpeak);
-    const totalChunks = minimaxChunks.length;
+    const totalChunks = options?.totalExpectedChunks || minimaxChunks.length;
 
     const abortController = new AbortController();
     ttsAbortControllerRef.current = abortController;
 
     const queueState = {
       chunks: minimaxChunks,
-      currentIndex: 0,
+      totalChunks,
+      currentIndex: options?.startChunkIndex || 0,
       audioBlobs: new Map<number, string>(),
       isFetching: new Set<number>(),
       messageId,
@@ -3686,7 +3815,7 @@ export function App() {
     };
     ttsAudioQueueRef.current = queueState;
     setPlayingMessageId(messageId);
-    setTtsCurrentChunkInfo({ current: 1, total: totalChunks });
+    setTtsCurrentChunkInfo({ current: (options?.startChunkIndex || 0) + 1, total: totalChunks });
 
     // 單段音訊請求輔助函數
     const fetchChunkAudio = async (index: number): Promise<string | null> => {
@@ -3702,6 +3831,12 @@ export function App() {
         return queueState.audioBlobs.get(index) || null;
       }
 
+      // ⏳ 若該段落仍在串流轉譯中（Streaming Translation），等待文字轉譯產出
+      while (!queueState.chunks[index] && !queueState.abortController?.signal.aborted) {
+        await new Promise((r) => setTimeout(r, 80));
+      }
+      if (!queueState.chunks[index] || queueState.abortController?.signal.aborted) return null;
+
       queueState.isFetching.add(index);
       try {
         const res = await fetch("/api/tts", {
@@ -3710,7 +3845,7 @@ export function App() {
           credentials: "include",
           signal: queueState.abortController?.signal,
           body: JSON.stringify({
-            text: minimaxChunks[index],
+            text: queueState.chunks[index],
             voiceId: ttsVoiceId || "Cantonese_CuteGirl",
             speed: ttsSpeed || 1.0,
             vol: 1.0,
@@ -3767,6 +3902,18 @@ export function App() {
 
       queueState.currentIndex = index;
       setTtsCurrentChunkInfo({ current: index + 1, total: totalChunks });
+
+      // ⏳ 若當前段落文字仍在串流轉譯中，在 UI 顯示等待並等待轉譯產出
+      if (!queueState.chunks[index]) {
+        setIsTtsLoading(true);
+        while (!queueState.chunks[index] && !queueState.abortController?.signal.aborted && currentReqId === ttsPlaybackRequestIdRef.current) {
+          await new Promise((r) => setTimeout(r, 80));
+        }
+        setIsTtsLoading(false);
+      }
+      if (!queueState.chunks[index] || queueState.abortController?.signal.aborted || currentReqId !== ttsPlaybackRequestIdRef.current) {
+        return;
+      }
 
       const cleanRemaining = queueState.chunks ? queueState.chunks.slice(index).join("\n\n") : "";
       setTtsMessageProgress((prev) => ({
