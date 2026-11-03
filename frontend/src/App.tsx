@@ -5298,11 +5298,7 @@ export function App() {
                   title={
                     playingMessageId
                       ? isTtsPaused ? "Resume Playback" : "Currently Playing"
-                      : ttsLang === "cantonese"
-                      ? `播放最新回答 (粵語 | ${ttsSpeed}x)`
-                      : ttsLang === "mandarin"
-                      ? `播放最新回答 (國語 | ${ttsSpeed}x)`
-                      : `Play latest answer (English | ${ttsSpeed}x)`
+                      : `Play latest answer (${ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"} | ${ttsSpeed}x)`
                   }
                   style={{
                     height: 30,
@@ -5342,8 +5338,8 @@ export function App() {
                     !playingMessageId
                       ? "No active audio playback"
                       : isTtsPaused
-                      ? "點擊繼續播放 (Resume)"
-                      : "點擊暫停保留 (On-Hold)"
+                      ? "Click to Resume"
+                      : "Click to Pause (On-Hold)"
                   }
                   style={{
                     height: 30,
@@ -5371,13 +5367,7 @@ export function App() {
                 <button
                   type="button"
                   onClick={repeatTtsPlayback}
-                  title={
-                    ttsLang === "cantonese"
-                      ? "重播 (免重新生成)"
-                      : ttsLang === "mandarin"
-                      ? "重播 (免重新生成)"
-                      : "Repeat last speech (Instant zero-latency replay without regeneration)"
-                  }
+                  title="Repeat last speech (Instant zero-latency replay without regeneration)"
                   style={{
                     height: 30,
                     padding: "0 7px",
@@ -5408,7 +5398,7 @@ export function App() {
                       type="button"
                       disabled={ttsCurrentChunkInfo.current <= 1}
                       onClick={() => jumpToPrevChunk()}
-                      title="上一段 (快捷鍵: Alt + ←)"
+                      title="Previous chunk (Shortcut: Alt + ←)"
                       style={{
                         height: 30,
                         padding: "0 6px",
@@ -5440,7 +5430,7 @@ export function App() {
                         justifyContent: "center",
                         whiteSpace: "nowrap",
                       }}
-                      title={`正在朗讀第 ${ttsCurrentChunkInfo.current} 段 (共 ${ttsCurrentChunkInfo.total} 段)。可按 Alt + 左右方向鍵快速切換`}
+                      title={`Reading chunk ${ttsCurrentChunkInfo.current} of ${ttsCurrentChunkInfo.total}. Press Alt + Left/Right to jump`}
                     >
                       {ttsCurrentChunkInfo.current}/{ttsCurrentChunkInfo.total}
                     </span>
@@ -5449,7 +5439,7 @@ export function App() {
                       type="button"
                       disabled={ttsCurrentChunkInfo.current >= ttsCurrentChunkInfo.total}
                       onClick={() => jumpToNextChunk()}
-                      title="下一段 (快捷鍵: Alt + →)"
+                      title="Next chunk (Shortcut: Alt + →)"
                       style={{
                         height: 30,
                         padding: "0 6px",
@@ -5475,7 +5465,7 @@ export function App() {
                   type="button"
                   disabled={!playingMessageId && !isTtsLoading}
                   onClick={() => stopTtsPlayback()}
-                  title="點擊停止播放 (Stop)"
+                  title="Click to stop playback (Stop)"
                   style={{
                     height: 30,
                     padding: "0 7px",
@@ -5498,13 +5488,7 @@ export function App() {
                 <button
                   type="button"
                   onClick={() => setShowTtsMenu(!showTtsMenu)}
-                  title={
-                    ttsLang === "cantonese"
-                      ? `語音設定 (語言: 粵語 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | 限時: ${ttsTimeout}s | ${ttsSpeed}x)`
-                      : ttsLang === "mandarin"
-                      ? `語音設定 (語言: 國語 | ${ttsEngine === "local" ? "本機語音" : "MiniMax 雲端"} | 限時: ${ttsTimeout}s | ${ttsSpeed}x)`
-                      : `Voice Setup (Language: English | ${ttsEngine === "local" ? "Local" : "MiniMax"} | Timeout: ${ttsTimeout}s | ${ttsSpeed}x)`
-                  }
+                  title={`Voice Settings (Lang: ${ttsLang === "cantonese" ? "Cantonese" : ttsLang === "mandarin" ? "Mandarin" : "English"} | ${ttsEngine === "local" ? "Local" : "MiniMax"} | Timeout: ${ttsTimeout}s | ${ttsSpeed}x)`}
                   style={{
                     height: 30,
                     padding: "0 7px",
@@ -6256,7 +6240,7 @@ export function App() {
                       setShowCantoneseFloatingWindow(!showCantoneseFloatingWindow);
                       setIsCantoneseFloatingMinimized(false);
                     }}
-                    title="開啟/收起粵語翻譯對照懸浮視窗"
+                    title="Toggle Cantonese/English Spoken Translation Window"
                     style={{
                       height: 30,
                       padding: "0 10px",
@@ -6279,7 +6263,7 @@ export function App() {
                     }}
                   >
                     <Languages size={13} color="#10b981" />
-                    <span>粵語對照</span>
+                    <span>Cantonese View</span>
                     {activeTranslationData?.translatedChunks?.length ? (
                       <span
                         style={{
@@ -6306,7 +6290,7 @@ export function App() {
                           pauseTtsPlayback();
                         }
                       }}
-                      title={isTtsPaused ? "繼續播放語音" : "暫停播放語音"}
+                      title={isTtsPaused ? "Resume Voice Playback" : "Pause Voice Playback"}
                       style={{
                         height: 30,
                         padding: "0 8px",
@@ -6323,7 +6307,7 @@ export function App() {
                       }}
                     >
                       {isTtsPaused ? <Play size={10} fill="#10b981" /> : <Pause size={10} fill="#f59e0b" />}
-                      <span>{isTtsPaused ? "繼續" : "暫停"}</span>
+                      <span>{isTtsPaused ? "Resume" : "Pause"}</span>
                     </button>
                   ) : null}
                 </div>
@@ -9166,10 +9150,10 @@ export function App() {
                               disabled={(isTtsLoading && playingMessageId === m.id) || Boolean(ttsTranslationProgress && ttsTranslationProgress.messageId === m.id)}
                               title={
                                 ttsTranslationProgress && ttsTranslationProgress.messageId === m.id
-                                  ? `粵語轉譯中 (${ttsTranslationProgress.percent}%)`
+                                  ? `Translating (${ttsTranslationProgress.percent}%)`
                                   : playingMessageId === m.id
-                                  ? "停止朗讀"
-                                  : "朗讀此回答"
+                                  ? "Stop Speech"
+                                  : "Read this response aloud"
                               }
                               style={{
                                 background: ttsTranslationProgress && ttsTranslationProgress.messageId === m.id
@@ -9215,15 +9199,15 @@ export function App() {
                               {ttsTranslationProgress && ttsTranslationProgress.messageId === m.id ? (
                                 <>
                                   <Loader2 size={11} className="spin" color="#eab308" />
-                                  <span style={{ color: "#eab308" }}>轉譯 {ttsTranslationProgress.percent}%</span>
+                                  <span style={{ color: "#eab308" }}>Trans {ttsTranslationProgress.percent}%</span>
                                 </>
                               ) : isTtsLoading && playingMessageId === m.id ? (
                                 <>
                                   <Loader2 size={11} className="spin" color="#10b981" />
                                   <span style={{ color: "#10b981" }}>
                                     {ttsCurrentChunkInfo && ttsCurrentChunkInfo.total > 1
-                                      ? `合成 ${Math.round((ttsCurrentChunkInfo.current / ttsCurrentChunkInfo.total) * 100)}%`
-                                      : "合成中..."}
+                                      ? `Synth ${Math.round((ttsCurrentChunkInfo.current / ttsCurrentChunkInfo.total) * 100)}%`
+                                      : "Synth..."}
                                   </span>
                                 </>
                               ) : playingMessageId === m.id ? (
@@ -13506,7 +13490,7 @@ export function App() {
                 <GripVertical size={14} color="#10b981" style={{ opacity: 0.65, cursor: "grab" }} />
                 <Languages size={16} color="#10b981" />
                 <span style={{ fontWeight: 700, fontSize: 13, color: "#10b981", whiteSpace: "nowrap" }}>
-                  {activeTranslationData?.isOriginalChinese ? "廣東話朗讀" : "粵語對照"}
+                  {activeTranslationData?.isOriginalChinese ? "Cantonese Voice" : "Cantonese / English View"}
                 </span>
                 <span
                   style={{
@@ -13520,20 +13504,20 @@ export function App() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {activeTranslationData?.isOriginalChinese ? "直接朗讀" : "技術 Term 保留英文"}
+                  {activeTranslationData?.isOriginalChinese ? "Direct Playback" : "Technical Terms in English"}
                 </span>
                 {activeTranslationData.isTranslating && (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#eab308", fontWeight: 600 }}>
                     <Loader2 size={11} className="spin" />
                     {ttsTranslationProgress && ttsTranslationProgress.messageId === activeFloatingMsgId
-                      ? `轉譯中 ${ttsTranslationProgress.percent}% (${ttsTranslationProgress.current}/${ttsTranslationProgress.total})`
-                      : "轉譯中..."}
+                      ? `Translating ${ttsTranslationProgress.percent}% (${ttsTranslationProgress.current}/${ttsTranslationProgress.total})`
+                      : "Translating..."}
                   </span>
                 )}
                 {exportingAudioProgress && exportingAudioProgress.messageId === activeFloatingMsgId && (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#3b82f6", fontWeight: 600 }}>
                     <Loader2 size={11} className="spin" />
-                    匯出中 {exportingAudioProgress.percent}% ({exportingAudioProgress.current}/${exportingAudioProgress.total})
+                    Exporting {exportingAudioProgress.percent}% ({exportingAudioProgress.current}/${exportingAudioProgress.total})
                   </span>
                 )}
               </div>
@@ -13559,7 +13543,7 @@ export function App() {
                     display: "inline-flex",
                     alignItems: "center",
                   }}
-                  title={isCantoneseFloatingMinimized ? "展開懸浮視窗" : "最小化至底部"}
+                  title={isCantoneseFloatingMinimized ? "Expand Window" : "Minimize to Bottom"}
                 >
                   {isCantoneseFloatingMinimized ? <Maximize2 size={13} /> : <Minimize2 size={13} />}
                 </button>
@@ -13578,7 +13562,7 @@ export function App() {
                     display: "inline-flex",
                     alignItems: "center",
                   }}
-                  title="關閉懸浮視窗"
+                  title="Close Window"
                 >
                   <X size={14} />
                 </button>
@@ -13868,7 +13852,7 @@ export function App() {
                         gap: 3,
                       }}
                     >
-                      <SkipBack size={10} /> 上一段
+                      <SkipBack size={10} /> Prev
                     </button>
 
                     <button
@@ -13888,7 +13872,7 @@ export function App() {
                         gap: 3,
                       }}
                     >
-                      下一段 <SkipForward size={10} />
+                      Next <SkipForward size={10} />
                     </button>
 
                     {playingMessageId ? (
@@ -13909,7 +13893,7 @@ export function App() {
                         }}
                       >
                         {isTtsPaused ? <Play size={10} fill="#10b981" /> : <Pause size={10} fill="#eab308" />}
-                        <span>{isTtsPaused ? "繼續" : "暫停"}</span>
+                        <span>{isTtsPaused ? "Resume" : "Pause"}</span>
                       </button>
                     ) : null}
                   </div>
@@ -13936,7 +13920,7 @@ export function App() {
                           }
                         }
                       }}
-                      title="重頭開始播放第 1 段"
+                      title="Restart from beginning (Chunk 1)"
                       style={{
                         background: "transparent",
                         border: "1px solid rgba(255,255,255,0.1)",
@@ -13950,7 +13934,7 @@ export function App() {
                         gap: 3,
                       }}
                     >
-                      <RotateCcw size={10} /> 重頭
+                      <RotateCcw size={10} /> Restart
                     </button>
 
                     {/* 📥 匯出語音 MP3 按鈕 */}
@@ -13962,7 +13946,7 @@ export function App() {
                           exportVoiceToMp3(activeFloatingMsgId);
                         }
                       }}
-                      title="匯出此回答語音為完整 MP3 檔案"
+                      title="Export speech as full MP3 audio file"
                       style={{
                         background: "transparent",
                         border: "1px solid rgba(255,255,255,0.1)",
@@ -13981,13 +13965,13 @@ export function App() {
                           <Loader2 size={10} className="spin" color="#3b82f6" />
                           <span>
                             {exportingAudioProgress && exportingAudioProgress.messageId === activeFloatingMsgId
-                              ? `匯出 ${exportingAudioProgress.percent}%`
-                              : "匯出中..."}
+                              ? `Exporting ${exportingAudioProgress.percent}%`
+                              : "Exporting..."}
                           </span>
                         </>
                       ) : (
                         <>
-                          <Download size={10} /> 匯出 MP3
+                          <Download size={10} /> Export MP3
                         </>
                       )}
                     </button>
