@@ -548,6 +548,15 @@ export function App() {
       return true;
     }
   });
+  // 🔕 是否彈出全螢幕遮罩的轉譯進度視窗（預設 false，避免遮擋聊天畫面與視線）
+  const [ttsShowTranslationAlert, setTtsShowTranslationAlert] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("minibot_tts_show_trans_alert");
+      return saved !== null ? saved === "true" : false;
+    } catch {
+      return false;
+    }
+  });
   // 🌐 粵語翻譯視覺化狀態（顯示對照卡片、段落切換、載入狀態）
   const [ttsTranslationState, setTtsTranslationState] = useState<{
     [messageId: string]: {
@@ -2979,11 +2988,14 @@ export function App() {
       },
     }));
 
-    showAlert(
-      `🌐 正在將英文內容轉為道地香港粵語口語 (0% - 共 ${totalSegments} 段)...`,
-      "info",
-      "粵語語音轉譯中 (Translating)"
-    );
+    // 僅在使用者開啟「顯示轉譯進度彈窗」選項時才彈出全螢幕遮罩視窗
+    if (ttsShowTranslationAlert) {
+      showAlert(
+        `🌐 正在將英文內容轉為道地香港粵語口語 (0% - 共 ${totalSegments} 段)...`,
+        "info",
+        "粵語語音轉譯中 (Translating)"
+      );
+    }
 
     const translatedChunks: string[] = [];
     let hasStartedStreamingPlayback = false;
@@ -3090,8 +3102,8 @@ export function App() {
             });
           }
 
-          // 若使用者已經主動關閉進度彈窗，則不再重複彈出遮擋 Mini Board 畫面
-          if (!isTranslationAlertDismissedRef.current) {
+          // 僅在使用者開啟「顯示轉譯進度彈窗」且未主動關閉時才更新彈窗
+          if (ttsShowTranslationAlert && !isTranslationAlertDismissedRef.current) {
             showAlert(
               `🌐 正在將英文內容轉為道地香港粵語口語 (${currentPercent}% - 第 ${i + 1}/${totalSegments} 段)...`,
               "info",
@@ -3116,7 +3128,7 @@ export function App() {
       }));
       setTtsTranslationProgress(null);
 
-      if (!isTranslationAlertDismissedRef.current) {
+      if (ttsShowTranslationAlert && !isTranslationAlertDismissedRef.current) {
         showAlert("✅ 粵語口語翻譯已完成 (100%)，已為您在懸浮視窗中展開對照！", "success", "轉譯完成");
       }
 
@@ -5747,6 +5759,66 @@ export function App() {
                       {ttsLang === "cantonese" || ttsLang === "mandarin"
                         ? "遇英文內容時自動轉為地道香港口語粵語朗讀，技術 Term、Code 與專有名詞維持英文"
                         : "Automatically converts English text into spoken Cantonese while keeping technical terms in English"}
+                    </span>
+                  </div>
+
+                  {/* 🔕 顯示轉譯進度彈窗開關 (Show Translation Progress Modal Toggle) */}
+                  <div
+                    onClick={() => {
+                      const next = !ttsShowTranslationAlert;
+                      setTtsShowTranslationAlert(next);
+                      try {
+                        localStorage.setItem("minibot_tts_show_trans_alert", String(next));
+                      } catch {}
+                    }}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      background: ttsShowTranslationAlert ? "rgba(59, 130, 246, 0.12)" : "var(--bg-card)",
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      border: ttsShowTranslationAlert ? "1px solid #3b82f6" : "1px solid var(--border-color)",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <Info size={13} color={ttsShowTranslationAlert ? "#3b82f6" : "var(--text-muted)"} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: ttsShowTranslationAlert ? "#3b82f6" : "var(--text-main)" }}>
+                          {ttsLang === "cantonese" || ttsLang === "mandarin" ? "顯示轉譯進度遮罩彈窗" : "Show Translation Progress Modal"}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          width: 30,
+                          height: 16,
+                          borderRadius: 9999,
+                          background: ttsShowTranslationAlert ? "#3b82f6" : "var(--border-color)",
+                          position: "relative",
+                          transition: "background 0.2s ease",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 12,
+                            height: 12,
+                            borderRadius: 9999,
+                            background: "#ffffff",
+                            position: "absolute",
+                            top: 2,
+                            left: ttsShowTranslationAlert ? 16 : 2,
+                            transition: "left 0.2s ease",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.3)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.35 }}>
+                      {ttsLang === "cantonese" || ttsLang === "mandarin"
+                        ? "關閉後（建議）轉譯將在背景靜默處理，不彈出中央遮罩阻擋對話視線"
+                        : "When disabled (recommended), translation runs quietly in background without obscuring chat view"}
                     </span>
                   </div>
 
