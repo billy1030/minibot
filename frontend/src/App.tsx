@@ -662,6 +662,8 @@ export function App() {
   const playLocalChunkAtRef = useRef<((index: number) => void) | null>(null);
   // 🛡️ 單調遞增請求序號，徹底防止快速跳段時因非同步網路或音訊回調導致的重複聲音重疊 (Audio overlap prevention)
   const ttsPlaybackRequestIdRef = useRef<number>(0);
+  // 🚫 記錄使用者是否關閉了轉譯進度彈窗（若關閉，後續百分比更新不再自動彈出遮擋畫面）
+  const isTranslationAlertDismissedRef = useRef<boolean>(false);
   // 記憶每則訊息最後播放或中斷的段落進度
   const [_ttsMessageProgress, setTtsMessageProgress] = useState<
     Record<string, { chunkIndex: number; totalChunks: number; cleanText: string }>
@@ -2957,6 +2959,7 @@ export function App() {
     setActiveFloatingCantoneseMessageId(messageId);
     setShowCantoneseFloatingWindow(true);
     setIsCantoneseFloatingMinimized(false);
+    isTranslationAlertDismissedRef.current = false;
     setTtsTranslationProgress({
       messageId,
       percent: 0,
@@ -3087,11 +3090,14 @@ export function App() {
             });
           }
 
-          showAlert(
-            `🌐 正在將英文內容轉為道地香港粵語口語 (${currentPercent}% - 第 ${i + 1}/${totalSegments} 段)...`,
-            "info",
-            "粵語語音轉譯中 (Translating)"
-          );
+          // 若使用者已經主動關閉進度彈窗，則不再重複彈出遮擋 Mini Board 畫面
+          if (!isTranslationAlertDismissedRef.current) {
+            showAlert(
+              `🌐 正在將英文內容轉為道地香港粵語口語 (${currentPercent}% - 第 ${i + 1}/${totalSegments} 段)...`,
+              "info",
+              "粵語語音轉譯中 (Translating)"
+            );
+          }
         }
       }
 
@@ -3110,7 +3116,9 @@ export function App() {
       }));
       setTtsTranslationProgress(null);
 
-      showAlert("✅ 粵語口語翻譯已完成 (100%)，已為您在懸浮視窗中展開對照！", "success", "轉譯完成");
+      if (!isTranslationAlertDismissedRef.current) {
+        showAlert("✅ 粵語口語翻譯已完成 (100%)，已為您在懸浮視窗中展開對照！", "success", "轉譯完成");
+      }
 
       if (options?.autoPlay && !hasStartedStreamingPlayback) {
         playCantoneseTts(fullTranslatedText, messageId, {
@@ -12617,7 +12625,13 @@ export function App() {
       {alertPrompt && (
         <AlertModal
           {...alertPrompt}
-          onClose={() => setAlertPrompt(null)}
+          onClose={() => {
+            // 若關閉的是轉譯進度彈窗，標記為已關閉，避免後續段落轉譯時再度反覆彈出遮擋畫面
+            if (alertPrompt.title === "粵語語音轉譯中 (Translating)") {
+              isTranslationAlertDismissedRef.current = true;
+            }
+            setAlertPrompt(null);
+          }}
         />
       )}
 
