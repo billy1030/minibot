@@ -1,47 +1,52 @@
 [
   {
     "id": "custom-1791275407963",
-    "title": "1. 核心思維模",
+    "title": "核心思維模",
     "prompt": "公認 5 個核心思維模型係咩？"
   },
   {
     "id": "custom-1791275421255",
-    "title": "2. 爭論點",
+    "title": "爭論點",
     "prompt": "專家最激辯嘅 3 大爭論點同核心論據？"
   },
   {
     "id": "custom-1791275433390",
-    "title": "3. 地獄及問題",
+    "title": "地獄級問題",
     "prompt": "出 10 條一睇就知「真明定死背」嘅地獄級問題。"
   },
   {
     "id": "custom-learn-feynman",
-    "title": "4. 費曼幼童解構",
+    "title": "費曼幼童解構",
     "prompt": "用 10 歲明嘅生活比喻解釋，禁行話，並指明比喻嘅失效極限。"
   },
   {
     "id": "custom-learn-misconceptions",
-    "title": "5. 九成中伏位",
+    "title": "九成中伏位",
     "prompt": "最易中伏嘅 3 大似是而非誤區、點解錯同正確認知？"
   },
   {
     "id": "custom-learn-first-principles",
-    "title": "6. 第一性原理",
+    "title": "第一性原理",
     "prompt": "由物理/邏輯本質推導：點解存在？從零發明最小架構係咩？"
   },
   {
     "id": "custom-learn-socratic",
-    "title": "7. 蘇格拉底拷問",
+    "title": "蘇格拉底拷問",
     "prompt": "咪畀答案，扮蘇格拉底每次出 1 題追問引導我自推答案，先出第 1 題："
   },
   {
-    "id": "custom-learn-pareto",
-    "title": "8. 80/20 槓桿點",
-    "prompt": "邊 20% 核心概念支撐咗 80% 應用？列出高槓桿清單及場景。"
+    "id": "custom-learn-edge-cases",
+    "title": "極端邊界崩潰",
+    "prompt": "乜嘢極端邊界條件下會最先崩潰？頂級架構點做 Trade-off 防護？"
   },
   {
-    "id": "custom-learn-edge-cases",
-    "title": "9. 極端邊界崩潰",
-    "prompt": "乜嘢極端邊界條件下會最先崩潰？頂級架構點做 Trade-off 防護？"
+    "id": "custom-1793940927742",
+    "title": "反問句",
+    "prompt": "你是否肯定這個已是你能夠最好給我的答案嗎？"
+  },
+  {
+    "id": "custom-learn-pareto",
+    "title": "80/20 槓桿點",
+    "prompt": "邊 20% 核心概念支撐咗 80% 應用？列出高槓桿清單及場景。"
   }
 ]

@@ -415,7 +415,10 @@ export function App() {
   const mermaidMenuRef = useRef<HTMLDivElement>(null);
   const [showPresetPromptsMenu, setShowPresetPromptsMenu] = useState<boolean>(false);
   const [presetPrompts, setPresetPrompts] = useState<{ id: string; title: string; prompt: string }[]>([]);
+  const [draggedPresetId, setDraggedPresetId] = useState<string | null>(null);
+  const [dragOverPresetId, setDragOverPresetId] = useState<string | null>(null);
   const [isAddingNewPreset, setIsAddingNewPreset] = useState<boolean>(false);
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
   const [newPresetTitle, setNewPresetTitle] = useState<string>("");
   const [newPresetPrompt, setNewPresetPrompt] = useState<string>("");
   const presetPromptsMenuRef = useRef<HTMLDivElement>(null);
@@ -821,19 +824,39 @@ export function App() {
     }, 50);
   };
 
+  const handleStartEditPresetPrompt = (item: { id: string; title: string; prompt: string }, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingPresetId(item.id);
+    setNewPresetTitle(item.title);
+    setNewPresetPrompt(item.prompt);
+    setIsAddingNewPreset(true);
+  };
+
   const handleSaveNewPresetPrompt = async () => {
     if (!newPresetTitle.trim() || !newPresetPrompt.trim()) {
       showAlert("Please enter both a title and prompt text.", "info", "Missing Fields");
       return;
     }
-    const newEntry = {
-      id: `custom-${Date.now()}`,
-      title: newPresetTitle.trim(),
-      prompt: newPresetPrompt.trim(),
-    };
-    const updated = [...presetPrompts, newEntry];
+
+    let updated: { id: string; title: string; prompt: string }[];
+    if (editingPresetId) {
+      updated = presetPrompts.map((p) =>
+        p.id === editingPresetId
+          ? { ...p, title: newPresetTitle.trim(), prompt: newPresetPrompt.trim() }
+          : p
+      );
+    } else {
+      const newEntry = {
+        id: `custom-${Date.now()}`,
+        title: newPresetTitle.trim(),
+        prompt: newPresetPrompt.trim(),
+      };
+      updated = [...presetPrompts, newEntry];
+    }
+
     setPresetPrompts(updated);
     setIsAddingNewPreset(false);
+    setEditingPresetId(null);
     setNewPresetTitle("");
     setNewPresetPrompt("");
 
@@ -870,6 +893,23 @@ export function App() {
     } catch (err: any) {
       console.error("Failed to save preset prompt to disk:", err);
       showAlert(err.message, "error", "Network Error");
+    }
+  };
+
+  const handleReorderPresetPrompts = async (newOrdered: { id: string; title: string; prompt: string }[]) => {
+    setPresetPrompts(newOrdered);
+    try {
+      const res = await fetch("/api/preset-prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ prompts: newOrdered }),
+      });
+      if (!res.ok) {
+        console.warn(`Failed to save reordered preset prompts: HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.error("Failed to reorder preset prompts on disk:", err);
     }
   };
 
@@ -10643,8 +10683,20 @@ export function App() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setIsAddingNewPreset((v) => !v)}
-                    title={isAddingNewPreset ? "Cancel adding" : "Add custom prompt preset to local disk"}
+                    onClick={() => {
+                      if (isAddingNewPreset) {
+                        setIsAddingNewPreset(false);
+                        setEditingPresetId(null);
+                        setNewPresetTitle("");
+                        setNewPresetPrompt("");
+                      } else {
+                        setEditingPresetId(null);
+                        setNewPresetTitle("");
+                        setNewPresetPrompt("");
+                        setIsAddingNewPreset(true);
+                      }
+                    }}
+                    title={isAddingNewPreset ? "Cancel" : "Add custom prompt preset to local disk"}
                     style={{
                       background: isAddingNewPreset ? "rgba(239, 68, 68, 0.12)" : "rgba(2, 132, 199, 0.12)",
                       border: "none",
@@ -10666,6 +10718,9 @@ export function App() {
 
                 {isAddingNewPreset && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 8, background: "var(--bg-card)", borderRadius: 8, border: "1px solid var(--border-color)", marginTop: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--accent, #0284c7)" }}>
+                      {editingPresetId ? "✏️ Edit Preset Prompt" : "✨ Create New Preset Prompt"}
+                    </div>
                     <input
                       type="text"
                       placeholder="Title (e.g. ⚡ Optimize Query)"
@@ -10700,7 +10755,12 @@ export function App() {
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
                       <button
                         type="button"
-                        onClick={() => setIsAddingNewPreset(false)}
+                        onClick={() => {
+                          setIsAddingNewPreset(false);
+                          setEditingPresetId(null);
+                          setNewPresetTitle("");
+                          setNewPresetPrompt("");
+                        }}
                         style={{
                           padding: "4px 10px",
                           fontSize: 11.5,
@@ -10727,7 +10787,7 @@ export function App() {
                           cursor: "pointer",
                         }}
                       >
-                        Save to Disk
+                        {editingPresetId ? "Update Preset" : "Save to Disk"}
                       </button>
                     </div>
                   </div>
@@ -10739,78 +10799,167 @@ export function App() {
                       No preset prompts found. Click "Add New" to create one.
                     </div>
                   ) : (
-                    presetPrompts.map((item, idx) => (
-                      <div
-                        key={item.id}
-                        onClick={() => handleSelectPresetPrompt(item.prompt)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "7px 10px",
-                          borderRadius: 6,
-                          cursor: "pointer",
-                          background: "transparent",
-                          border: "1px solid transparent",
-                          transition: "all 0.15s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = "var(--bg-card)";
-                          e.currentTarget.style.borderColor = "var(--border-color)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = "transparent";
-                          e.currentTarget.style.borderColor = "transparent";
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0, flex: 1, marginRight: 8 }}>
-                          <span
-                            style={{
-                              fontSize: 10.5,
-                              fontWeight: 700,
-                              color: "var(--accent, #0284c7)",
-                              background: "rgba(2, 132, 199, 0.1)",
-                              padding: "1px 5px",
-                              borderRadius: 4,
-                              flexShrink: 0,
-                              marginTop: 1,
-                              lineHeight: "14px",
-                            }}
-                          >
-                            #{idx + 1}
-                          </span>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
-                            <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {item.title}
+                    presetPrompts.map((item, idx) => {
+                      const isDraggingThis = draggedPresetId === item.id;
+                      const isDragOverThis = dragOverPresetId === item.id;
+
+                      return (
+                        <div
+                          key={item.id}
+                          draggable
+                          onDragStart={(e) => {
+                            setDraggedPresetId(item.id);
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", item.id);
+                          }}
+                          onDragOver={(e) => {
+                            if (!draggedPresetId || draggedPresetId === item.id) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            if (dragOverPresetId !== item.id) {
+                              setDragOverPresetId(item.id);
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverPresetId === item.id) {
+                              setDragOverPresetId(null);
+                            }
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            if (!draggedPresetId || draggedPresetId === item.id) {
+                              setDraggedPresetId(null);
+                              setDragOverPresetId(null);
+                              return;
+                            }
+                            const currentList = [...presetPrompts];
+                            const sourceIdx = currentList.findIndex((p) => p.id === draggedPresetId);
+                            const targetIdx = currentList.findIndex((p) => p.id === item.id);
+
+                            if (sourceIdx !== -1 && targetIdx !== -1) {
+                              const [movedItem] = currentList.splice(sourceIdx, 1);
+                              currentList.splice(targetIdx, 0, movedItem);
+                              handleReorderPresetPrompts(currentList);
+                            }
+                            setDraggedPresetId(null);
+                            setDragOverPresetId(null);
+                          }}
+                          onClick={() => handleSelectPresetPrompt(item.prompt)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "7px 10px",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                            background: isDragOverThis
+                              ? "rgba(2, 132, 199, 0.12)"
+                              : isDraggingThis
+                              ? "var(--bg-secondary)"
+                              : "transparent",
+                            border: isDragOverThis
+                              ? "1px dashed var(--accent, #0284c7)"
+                              : "1px solid transparent",
+                            opacity: isDraggingThis ? 0.45 : 1,
+                            transition: "all 0.15s ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!draggedPresetId) {
+                              e.currentTarget.style.background = "var(--bg-card)";
+                              e.currentTarget.style.borderColor = "var(--border-color)";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!draggedPresetId) {
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.borderColor = "transparent";
+                            }
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: 7, minWidth: 0, flex: 1, marginRight: 8 }}>
+                            <span
+                              title="Drag to reorder"
+                              style={{
+                                cursor: "grab",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                color: "var(--text-muted)",
+                                marginTop: 2,
+                                opacity: 0.65,
+                                flexShrink: 0,
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                              onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.65")}
+                            >
+                              <GripVertical size={13} />
                             </span>
-                            <span style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {item.prompt.split("\n")[0]}
+                            <span
+                              style={{
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                color: "var(--accent, #0284c7)",
+                                background: "rgba(2, 132, 199, 0.1)",
+                                padding: "1px 5px",
+                                borderRadius: 4,
+                                flexShrink: 0,
+                                marginTop: 1,
+                                lineHeight: "14px",
+                              }}
+                            >
+                              #{idx + 1}
                             </span>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: 1 }}>
+                              <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {item.title}
+                              </span>
+                              <span style={{ fontSize: 11, color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {item.prompt.split("\n")[0]}
+                              </span>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              onClick={(e) => handleStartEditPresetPrompt(item, e)}
+                              title="Edit this preset prompt"
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "var(--text-muted)",
+                                cursor: "pointer",
+                                padding: 2,
+                                borderRadius: 4,
+                                display: "flex",
+                                alignItems: "center",
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent, #0284c7)")}
+                              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                            >
+                              <Edit2 size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeletePresetPrompt(item.id, e)}
+                              title="Delete this preset from disk"
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "var(--text-muted)",
+                                cursor: "pointer",
+                                padding: 2,
+                                borderRadius: 4,
+                                display: "flex",
+                                alignItems: "center",
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.color = "#ef4444")}
+                              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                            >
+                              <Trash2 size={12} />
+                            </button>
                           </div>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeletePresetPrompt(item.id, e)}
-                            title="Delete this preset from disk"
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: "var(--text-muted)",
-                              cursor: "pointer",
-                              padding: 2,
-                              borderRadius: 4,
-                              display: "flex",
-                              alignItems: "center",
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.color = "#ef4444")}
-                            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
