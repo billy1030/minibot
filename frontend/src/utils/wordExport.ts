@@ -544,6 +544,164 @@ function extractSpecialBlocks(markdown: string) {
 }
 
 /**
+ * Helper: Splits cell inline tokens into logical paragraph groups (handling <br>, newlines, and inline bullets)
+ */
+function splitCellTokensIntoParagraphs(tokens: Tokens.Generic[]): Tokens.Generic[][] {
+  const paragraphTokenGroups: Tokens.Generic[][] = [];
+  let currentGroup: Tokens.Generic[] = [];
+
+  for (const token of tokens) {
+    if (token.type === 'html' && /<br\s*\/?>/i.test((token as Tokens.HTML).text || '')) {
+      if (currentGroup.length > 0) {
+        paragraphTokenGroups.push(currentGroup);
+        currentGroup = [];
+      }
+    } else if (token.type === 'text') {
+      const textVal = (token as Tokens.Text).text || '';
+      // Split on:
+      // 1. Explicit <br> tags or newlines
+      // 2. Sentence terminal punctuation (.!?;\u3002\uFF1B) followed by bullet or ordered number: • - * ◦ or 1.
+      // 3. Inline bullet sequence preceded by whitespace (e.g. " • ")
+      const parts = textVal.split(/(?:<br\s*\/?>|\r?\n|(?<=[.!?;\u3002\uFF1B])\s*(?=[•\-\*\u2022\u25E6\u2043\u2219]|\d+[\.\)]\s)|\s+(?=[•\u2022\u25E6\u2043\u2219]\s))/gi);
+      if (parts.length > 1) {
+        for (let i = 0; i < parts.length; i++) {
+          const part = parts[i].trim();
+          if (!part) continue;
+          if (i > 0 && currentGroup.length > 0) {
+            paragraphTokenGroups.push(currentGroup);
+            currentGroup = [];
+          }
+          currentGroup.push({
+            ...token,
+            text: part,
+            raw: part,
+          } as Tokens.Text);
+        }
+      } else {
+        currentGroup.push(token);
+      }
+    } else {
+      currentGroup.push(token);
+    }
+  }
+
+  if (currentGroup.length > 0) {
+    paragraphTokenGroups.push(currentGroup);
+  }
+
+  return paragraphTokenGroups.length > 0 ? paragraphTokenGroups : [tokens];
+}
+
+/**
+ * Helper: Converts token groups into Paragraph objects for a table cell,
+ * automatically detecting bullet points (•, -, *) and numbered lists within cells.
+ */
+function renderCellParagraphs(
+  tokens: Tokens.Generic[],
+  alignment: (typeof AlignmentType)[keyof typeof AlignmentType],
+  isHeader = false
+): Paragraph[] {
+  const groups = splitCellTokensIntoParagraphs(tokens);
+  const paragraphs: Paragraph[] = [];
+
+  const bulletRegex = /^[\s\uFEFF\xA0]*[•\-\*\u2022\u25E6\u2043\u2219]\s*/;
+  const numRegex = /^[\s\uFEFF\xA0]*(\d+)[\.\)]\s*/;
+
+  for (let gIdx = 0; gIdx < groups.length; gIdx++) {
+    const group = groups[gIdx];
+    let isBullet = false;
+    let isNumbered = false;
+    let numPrefix = '';
+
+    // Inspect the first token if it has bullet or numbered list indicators
+    if (!isHeader && group.length > 0 && group[0].type === 'text') {
+      const firstText = (group[0] as Tokens.Text).text || '';
+      if (bulletRegex.test(firstText)) {
+        isBullet = true;
+        group[0] = {
+          ...group[0],
+          text: firstText.replace(bulletRegex, ''),
+          raw: ((group[0] as Tokens.Text).raw || '').replace(bulletRegex, ''),
+        } as Tokens.Text;
+      } else {
+        const numMatch = numRegex.exec(firstText);
+        if (numMatch) {
+          isNumbered = true;
+          numPrefix = numMatch[0];
+          group[0] = {
+            ...group[0],
+            text: firstText.replace(numRegex, ''),
+            raw: ((group[0] as Tokens.Text).raw || '').replace(numRegex, ''),
+          } as Tokens.Text;
+        }
+      }
+    }
+
+    const runs = buildRunsFromTokens(group, {
+      bold: isHeader,
+      color: isHeader ? '0f172a' : undefined,
+      size: 20, // 10pt
+    });
+
+    if (isBullet) {
+      // Custom refined bullet dot (•) with proportional typography and tight gap:
+      // - Stepped up one size to 18 half-pts (9pt) to match 10pt text naturally
+      // - Slate color ('334155') for clear readability
+      // - Hanging indent so multi-line wrapped text aligns perfectly with the first letter
+      runs.unshift(
+        new TextRun({
+          text: '•\t',
+          size: 18,
+          color: '334155',
+          font: 'Arial',
+        })
+      );
+    } else if (isNumbered) {
+      runs.unshift(
+        new TextRun({
+          text: `${numPrefix}\t`,
+          bold: true,
+          color: '0284c7',
+          size: 20,
+        })
+      );
+    }
+
+    paragraphs.push(
+      new Paragraph({
+        children: runs,
+        alignment,
+        // Using hanging indent with tab stops gives clean, tight, professional spacing in table cells
+        indent: isBullet
+          ? { left: 240, hanging: 240 }
+          : isNumbered
+          ? { left: 320, hanging: 320 }
+          : undefined,
+        spacing: {
+          before: isHeader ? 60 : gIdx === 0 ? 40 : 20,
+          after: isHeader ? 60 : gIdx === groups.length - 1 ? 40 : 20,
+          line: 260,
+        },
+      })
+    );
+  }
+
+  return paragraphs.length > 0
+    ? paragraphs
+    : [
+        new Paragraph({
+          children: buildRunsFromTokens(tokens, {
+            bold: isHeader,
+            color: isHeader ? '0f172a' : undefined,
+            size: 20,
+          }),
+          alignment,
+          spacing: { before: isHeader ? 60 : 40, after: isHeader ? 60 : 40 },
+        }),
+      ];
+}
+
+/**
  * Recursively processes list tokens and handles arbitrary nested levels (bullet / ordered)
  */
 function processList(
@@ -868,17 +1026,7 @@ export async function generateDocxDocument(markdownContent: string, title: strin
               : AlignmentType.LEFT;
 
           return new TableCell({
-            children: [
-              new Paragraph({
-                children: buildRunsFromTokens(headCell.tokens, {
-                  bold: true,
-                  color: '0f172a',
-                  size: 20, // 10pt
-                }),
-                alignment,
-                spacing: { before: 60, after: 60 },
-              }),
-            ],
+            children: renderCellParagraphs(headCell.tokens, alignment, true),
             shading: { fill: 'f1f5f9' },
             borders: {
               top: { style: BorderStyle.SINGLE, size: 6, color: 'cbd5e1' },
@@ -905,15 +1053,7 @@ export async function generateDocxDocument(markdownContent: string, title: strin
                 : AlignmentType.LEFT;
 
             return new TableCell({
-              children: [
-                new Paragraph({
-                  children: buildRunsFromTokens(cell.tokens, {
-                    size: 20, // 10pt
-                  }),
-                  alignment,
-                  spacing: { before: 40, after: 40 },
-                }),
-              ],
+              children: renderCellParagraphs(cell.tokens, alignment, false),
               shading: { fill: isEven ? 'ffffff' : 'f8fafc' },
               borders: {
                 top: { style: BorderStyle.SINGLE, size: 4, color: 'e2e8f0' },

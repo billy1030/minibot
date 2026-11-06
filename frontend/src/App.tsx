@@ -6359,7 +6359,7 @@ export function App() {
                     boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
                   }}
                 >
-                  {currentUser?.username.slice(0, 1).toUpperCase()}
+                  {currentUser?.username ? currentUser.username.slice(0, 1).toUpperCase() : "U"}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.1 }}>
                   <span style={{ fontWeight: 600, fontSize: 12 }}>
@@ -8748,7 +8748,7 @@ export function App() {
                                       <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--bg-primary)", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border-color)" }}>
                                         {t.subAgentEvents.map((evt, eIdx) => (
                                           <div key={eIdx} style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 6, color: "var(--text-main)" }}>
-                                            <span style={{ color: "#8b5cf6", fontWeight: 600 }}>[{evt.role.toUpperCase()}]</span>
+                                            <span style={{ color: "#8b5cf6", fontWeight: 600 }}>[{(evt.role || "sub-agent").toUpperCase()}]</span>
                                             {evt.type === "subagent_start" && <span>🚀 Started task: {evt.instruction?.slice(0, 90)}</span>}
                                             {evt.type === "subagent_step" && <span style={{ color: "var(--text-muted)" }}>🔄 Iteration #{evt.iteration}</span>}
                                             {evt.type === "subagent_tool_call" && <span>🛠️ Invoked tool <code style={{ color: "var(--accent-amber)" }}>{evt.toolName}</code></span>}
@@ -10921,7 +10921,7 @@ export function App() {
                 <Sparkles size={13} color="#10b981" />
                 <span>Skill: {selectedSkillBadge.name}</span>
                 <span style={{ fontSize: 10, opacity: 0.8, background: "rgba(16, 185, 129, 0.15)", padding: "1px 5px", borderRadius: 4 }}>
-                  {selectedSkillBadge.scope.toUpperCase()}
+                  {(selectedSkillBadge.scope || "global").toUpperCase()}
                 </span>
                 <button
                   type="button"
@@ -10963,7 +10963,7 @@ export function App() {
                       item: s,
                       name: s.name,
                       desc: s.description || "",
-                      badge: s.scope.toUpperCase(),
+                      badge: (s.scope || "global").toUpperCase(),
                       isWorkspace: s.scope === "workspace",
                       score: 0,
                     };
@@ -10987,7 +10987,7 @@ export function App() {
                     item: s,
                     name: s.name,
                     desc: s.description || "",
-                    badge: s.scope.toUpperCase(),
+                    badge: (s.scope || "global").toUpperCase(),
                     isWorkspace: s.scope === "workspace",
                     score,
                   };
